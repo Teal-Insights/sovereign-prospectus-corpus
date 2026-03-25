@@ -1,0 +1,138 @@
+{
+  "extraction_date": "2026-03-24",
+  "extraction_method": "Regex pattern matching + manual validation of cover pages",
+  "documents": {
+    "ghana_2018-05-14_prospectus_171818118": {
+      "isins": [
+        "US374422AG84",
+        "US374422AH67",
+        "XS1821416234",
+        "XS1821416408"
+      ],
+      "country": "Ghana",
+      "issue_date": "2018-05-14",
+      "joint_managers": [
+        "BofA Merrill Lynch",
+        "Citigroup",
+        "Standard Chartered"
+      ],
+      "law_firms_english": [
+        "White & Case"
+      ],
+      "governing_law": "English Law",
+      "fiscal_agent": "Citibank",
+      "listing_exchange": "London Stock Exchange",
+      "currency": "USD",
+      "principal_amount": "1,000",
+      "coupon_rate": "6.375%",
+      "maturity_date": "16 May 2029"
+    },
+    "ghana_2019-03-18_base_prospectus_215283187": {
+      "isins": [],
+      "country": "Ghana",
+      "issue_date": "2019-03-18",
+      "document_type": "Base Prospectus (Framework)",
+      "joint_managers": [],
+      "law_firms_english": [],
+      "governing_law": "English Law",
+      "fiscal_agent": "Citibank",
+      "listing_exchange": "London Stock Exchange",
+      "currency": null,
+      "principal_amount": null,
+      "coupon_rate": null,
+      "maturity_date": null
+    },
+    "ghana_2020-02-05_base_prospectus_262895144": {
+      "isins": [],
+      "country": "Ghana",
+      "issue_date": "2020-02-05",
+      "document_type": "Base Prospectus (Framework)",
+      "joint_managers": [],
+      "law_firms_english": [],
+      "governing_law": "English Law",
+      "fiscal_agent": "Citibank",
+      "listing_exchange": "London Stock Exchange",
+      "currency": "EUR",
+      "principal_amount": null,
+      "coupon_rate": null,
+      "maturity_date": null
+    },
+    "ghana_2021-03-24_base_prospectus_NI-000022044": {
+      "isins": [],
+      "country": "Ghana",
+      "issue_date": "2021-03-24",
+      "document_type": "Base Prospectus (Framework)",
+      "joint_managers": [],
+      "law_firms_english": [],
+      "governing_law": "English Law",
+      "fiscal_agent": null,
+      "listing_exchange": "Ghana Stock Exchange",
+      "currency": null,
+      "principal_amount": null,
+      "coupon_rate": null,
+      "maturity_date": null
+    },
+    "senegal_2017-05_standalone_prospectus_USD2033": {
+      "isins": [
+        "US81720TAB17",
+        "XS1090161875"
+      ],
+      "country": "Senegal",
+      "issue_date": "2017-05",
+      "joint_managers": [
+        "Citigroup",
+        "J.P. Morgan",
+        "Soci\u00e9t\u00e9 G\u00e9n\u00e9rale",
+        "Standard Chartered"
+      ],
+      "law_firms_english": [
+        "Cleary Gottlieb"
+      ],
+      "law_firms_us": [
+        "Cleary Gottlieb"
+      ],
+      "law_firms_senegalese": [
+        "Agent Judiciaire de l'Etat"
+      ],
+      "managers_counsel_english": [
+        "Allen & Overy"
+      ],
+      "governing_law": "English Law",
+      "fiscal_agent": "Citibank, N.A., London Branch",
+      "listing_exchange": "Irish Stock Exchange",
+      "currency": "USD",
+      "principal_amount": "1,100",
+      "coupon_rate": "6.250%",
+      "maturity_date": "30 July 2024"
+    },
+    "senegal_2018-03-09_final_prospectus_EUR2028_USD2048": {
+      "isins": [
+        "US81720TAC99",
+        "XS1619155564"
+      ],
+      "country": "Senegal",
+      "issue_date": "2018-03-09",
+      "joint_managers": [
+        "Citigroup",
+        "J.P. Morgan",
+        "Natixis",
+        "Soci\u00e9t\u00e9 G\u00e9n\u00e9rale",
+        "Standard Chartered"
+      ],
+      "law_firms_english": [
+        "Cleary Gottlieb",
+        "Allen & Overy"
+      ],
+      "law_firms_senegalese": [
+        "S.C.P Fran\u00e7ois Sarr & Associ\u00e9"
+      ],
+      "governing_law": "English Law",
+      "fiscal_agent": "Citibank, N.A., London Branch",
+      "listing_exchange": "Irish Stock Exchange",
+      "currency": "USD/EUR",
+      "principal_amount": "USD 1,100 / EUR 900",
+      "coupon_rate": "6.250%",
+      "maturity_date": "23 May 2033"
+    }
+  }
+}

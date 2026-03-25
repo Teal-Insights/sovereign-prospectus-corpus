@@ -1,0 +1,34 @@
+[nsm]
+delay_api = 1.0
+delay_download = 1.0
+max_retries = 5
+backoff_factor = 0.5
+timeout = 60
+user_agent = "Teal Insights Research Pipeline/1.0 (lte@tealinsights.com; sovereign debt policy research)"
+
+[nsm.circuit_breaker]
+consecutive_failures_skip_country = 5
+rate_limit_sleep_seconds = 660
+total_failures_abort = 10
+
+[edgar]
+delay = 0.2
+max_retries = 3
+timeout = 60
+user_agent = "Teal Insights lte@tealinsights.com"
+
+[edgar.circuit_breaker]
+consecutive_failures_skip_country = 5
+rate_limit_sleep_seconds = 660
+total_failures_abort = 10
+
+[paths]
+pdf_dir = "data/pdfs"
+text_dir = "data/text"
+db_dir = "data/db"
+telemetry_dir = "data/telemetry"
+knowledge_dir = "data/knowledge"
+exports_dir = "data/exports"
+
+[tiers]
+download_order = [1, 2, 3, 4]

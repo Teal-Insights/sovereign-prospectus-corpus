@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Data (large files - track structure, not content)
+data/pdfs/
+data/text/
+data/db/*.db
+data/db/*.db-wal
+data/db/*.db-shm
+data/telemetry/*.jsonl
+*.part
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.key
+
+# Logs (keep structure, not content)
+logs/*.log
