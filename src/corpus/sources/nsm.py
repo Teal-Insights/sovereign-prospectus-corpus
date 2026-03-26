@@ -25,23 +25,95 @@ NSM_API_URL = "https://api.data.fca.org.uk/search?index=fca-nsm-searchdata"
 NSM_ARTEFACT_BASE = "https://data.fca.org.uk/artefacts"
 PDF_HEADER = b"%PDF"
 
+_UK_GILT_LEI = "ECTRVYYCEF89VWYS6K36"
+
+_NAME_PATTERNS = [
+    "Republic of",
+    "Kingdom of",
+    "State of",
+    "Government of",
+    "Sultanate of",
+    "Emirate of",
+]
+
+_EDGE_CASE_NAMES = ["Georgia", "Min of Finance"]
+
+
+def _lei_criteria(lei: str) -> list[dict[str, Any]]:
+    """Build NSM API criteria for a single LEI lookup."""
+    return [
+        {"name": "company_lei", "value": ["", lei, "disclose_org", ""]},
+        {"name": "latest_flag", "value": "Y"},
+    ]
+
+
+def _name_criteria(name: str) -> list[dict[str, Any]]:
+    """Build NSM API criteria for a name-pattern search."""
+    return [
+        {"name": "company_lei", "value": [name, "", "disclose_org", "related_org"]},
+        {"name": "latest_flag", "value": "Y"},
+    ]
+
+
+def build_sovereign_queries(
+    *,
+    reference_csv: Path | None = None,
+) -> list[tuple[str, list[dict[str, Any]]]]:
+    """Build a list of (label, criteria) tuples for sovereign-scoped NSM queries.
+
+    Three categories:
+    A) Name patterns (Republic of, Kingdom of, etc.)
+    B) LEI queries parsed from reference CSV
+    C) Edge cases (Georgia, Min of Finance)
+    """
+    import csv as csv_mod
+
+    queries: list[tuple[str, list[dict[str, Any]]]] = []
+
+    # A) Name patterns
+    for pattern in _NAME_PATTERNS:
+        queries.append((f"name:{pattern}", _name_criteria(pattern)))
+
+    # B) LEI queries from reference CSV
+    if reference_csv is not None and reference_csv.exists():
+        with reference_csv.open() as f:
+            reader = csv_mod.DictReader(f)
+            for row in reader:
+                lei_str = row.get("leis", "").strip()
+                if not lei_str:
+                    continue
+                for lei in lei_str.split(";"):
+                    lei = lei.strip()
+                    if len(lei) == 20 and lei.isalnum() and lei != _UK_GILT_LEI:
+                        queries.append((f"lei:{lei}", _lei_criteria(lei)))
+
+    # C) Edge cases
+    for name in _EDGE_CASE_NAMES:
+        queries.append((f"name:{name}", _name_criteria(name)))
+
+    return queries
+
 
 def query_nsm_api(
     client: CorpusHTTPClient,
     *,
+    criteria: list[dict[str, Any]] | None = None,
     from_offset: int = 0,
     size: int = 10000,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Query NSM API for all latest filings. Returns (hits, total_count)."""
+    """Query NSM API for filings. Returns (hits, total_count).
+
+    If criteria is None, defaults to latest_flag=Y only (breadth-first).
+    """
+    if criteria is None:
+        criteria = [{"name": "latest_flag", "value": "Y"}]
     payload = {
         "from": from_offset,
         "size": size,
         "sort": "submitted_date",
         "sortorder": "desc",
         "criteriaObj": {
-            "criteria": [
-                {"name": "latest_flag", "value": "Y"},
-            ],
+            "criteria": criteria,
             "dateCriteria": [],
         },
     }
@@ -50,6 +122,51 @@ def query_nsm_api(
     hits = data.get("hits", {}).get("hits", [])
     total = data.get("hits", {}).get("total", {}).get("value", 0)
     return hits, total
+
+
+def discover_nsm(
+    *,
+    client: CorpusHTTPClient,
+    queries: list[tuple[str, list[dict[str, Any]]]],
+    output_path: Path,
+    delay: float = 1.0,
+) -> dict[str, Any]:
+    """Run multiple NSM queries and deduplicate results into a JSONL file.
+
+    Returns stats dict with queries_run, total_hits_raw, unique_filings,
+    and per_query breakdown.
+    """
+    seen_ids: set[str] = set()
+    all_records: list[dict[str, Any]] = []
+    per_query: list[dict[str, Any]] = []
+    total_hits_raw = 0
+
+    for label, crit in queries:
+        hits, _total = query_nsm_api(client, criteria=crit, size=10000)
+        total_hits_raw += len(hits)
+        new_count = 0
+        for hit in hits:
+            src = hit.get("_source", {})
+            disc_id = src.get("disclosure_id", hit.get("_id", ""))
+            if disc_id and disc_id not in seen_ids:
+                seen_ids.add(disc_id)
+                all_records.append(src)
+                new_count += 1
+        per_query.append({"label": label, "hits": len(hits), "new": new_count})
+        if delay > 0:
+            time.sleep(delay)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w") as f:
+        for record in all_records:
+            f.write(json.dumps(record) + "\n")
+
+    return {
+        "queries_run": len(queries),
+        "total_hits_raw": total_hits_raw,
+        "unique_filings": len(seen_ids),
+        "per_query": per_query,
+    }
 
 
 def parse_hits(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:

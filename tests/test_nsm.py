@@ -503,3 +503,164 @@ class TestNsmCli:
 
         assert result.exit_code == 0
         assert "42" in result.output
+
+
+class TestBuildSovereignQueries:
+    def test_includes_name_patterns(self) -> None:
+        from corpus.sources.nsm import build_sovereign_queries
+
+        queries = build_sovereign_queries(reference_csv=None)
+        labels = [q[0] for q in queries]
+        assert "name:Republic of" in labels
+        assert "name:Kingdom of" in labels
+        assert "name:State of" in labels
+        assert "name:Government of" in labels
+        assert "name:Sultanate of" in labels
+        assert "name:Emirate of" in labels
+
+    def test_includes_edge_cases(self) -> None:
+        from corpus.sources.nsm import build_sovereign_queries
+
+        queries = build_sovereign_queries(reference_csv=None)
+        labels = [q[0] for q in queries]
+        assert "name:Georgia" in labels
+        assert "name:Min of Finance" in labels
+
+    def test_parses_leis_from_csv(self, tmp_path: Path) -> None:
+        from corpus.sources.nsm import build_sovereign_queries
+
+        csv_path = tmp_path / "ref.csv"
+        csv_path.write_text(
+            "country,issuer_types,filing_count,name_variant_count,name_variants,leis,doc_types,earliest,latest\n"
+            "Kenya,sovereign,19,1,REPUBLIC OF KENYA,549300VVURQQYU45PR87,,2021-06-29,2026-02-26\n"
+            "Uzbekistan,sovereign,63,1,Republic of Uzbekistan,253400TZJ7T1YULTGN68; 213800L6VDKUM3TCM927,,2019-02-04,2025-10-09\n"
+        )
+        queries = build_sovereign_queries(reference_csv=csv_path)
+        labels = [q[0] for q in queries]
+        assert "lei:549300VVURQQYU45PR87" in labels
+        assert "lei:253400TZJ7T1YULTGN68" in labels
+        assert "lei:213800L6VDKUM3TCM927" in labels
+
+    def test_excludes_uk_gilt_lei(self, tmp_path: Path) -> None:
+        from corpus.sources.nsm import build_sovereign_queries
+
+        csv_path = tmp_path / "ref.csv"
+        csv_path.write_text(
+            "country,issuer_types,filing_count,name_variant_count,name_variants,leis,doc_types,earliest,latest\n"
+            "United Kingdom,uk_sovereign,560,2,HIS MAJESTY'S TREASURY,ECTRVYYCEF89VWYS6K36,Issue of Debt,2023-07-05,2026-03-18\n"
+        )
+        queries = build_sovereign_queries(reference_csv=csv_path)
+        labels = [q[0] for q in queries]
+        assert "lei:ECTRVYYCEF89VWYS6K36" not in labels
+
+    def test_query_criteria_format(self) -> None:
+        from corpus.sources.nsm import build_sovereign_queries
+
+        queries = build_sovereign_queries(reference_csv=None)
+        for label, criteria in queries:
+            assert isinstance(label, str)
+            assert isinstance(criteria, list)
+            names = [c["name"] for c in criteria]
+            assert "latest_flag" in names
+            assert "company_lei" in names
+
+
+class TestQueryWithCriteria:
+    def test_query_with_lei_criteria(self) -> None:
+        from corpus.sources.nsm import _lei_criteria, query_nsm_api
+
+        fixture = _load_fixture("nsm_api_response.json")
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = fixture
+        mock_client.post.return_value = mock_response
+        criteria = _lei_criteria("549300VVURQQYU45PR87")
+        hits, _total = query_nsm_api(mock_client, criteria=criteria, from_offset=0, size=100)
+        call_kwargs = mock_client.post.call_args
+        payload = call_kwargs.kwargs.get("json") or call_kwargs[1].get("json")
+        sent_criteria = payload["criteriaObj"]["criteria"]
+        names = [c["name"] for c in sent_criteria]
+        assert "company_lei" in names
+        assert "latest_flag" in names
+        assert len(hits) == 2
+
+
+class TestDiscoverNsm:
+    def test_deduplicates_by_disclosure_id(self, tmp_path: Path) -> None:
+        from corpus.sources.nsm import discover_nsm
+
+        fixture = _load_fixture("nsm_api_response.json")
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = fixture
+        mock_client.post.return_value = mock_response
+        queries = [
+            (
+                "test:q1",
+                [
+                    {"name": "latest_flag", "value": "Y"},
+                    {"name": "company_lei", "value": ["test", "", "disclose_org", ""]},
+                ],
+            ),
+            (
+                "test:q2",
+                [
+                    {"name": "latest_flag", "value": "Y"},
+                    {"name": "company_lei", "value": ["test2", "", "disclose_org", ""]},
+                ],
+            ),
+        ]
+        output = tmp_path / "discovery.jsonl"
+        stats = discover_nsm(client=mock_client, queries=queries, output_path=output, delay=0.0)
+        lines = [json.loads(line) for line in output.read_text().strip().split("\n")]
+        assert len(lines) == 2  # 2 unique, not 4
+        assert stats["unique_filings"] == 2
+        assert stats["total_hits_raw"] == 4
+        assert stats["queries_run"] == 2
+
+    def test_writes_discovery_jsonl(self, tmp_path: Path) -> None:
+        from corpus.sources.nsm import discover_nsm
+
+        fixture = _load_fixture("nsm_api_response.json")
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = fixture
+        mock_client.post.return_value = mock_response
+        queries = [
+            (
+                "test:q1",
+                [
+                    {"name": "latest_flag", "value": "Y"},
+                    {"name": "company_lei", "value": ["test", "", "disclose_org", ""]},
+                ],
+            )
+        ]
+        output = tmp_path / "discovery.jsonl"
+        discover_nsm(client=mock_client, queries=queries, output_path=output, delay=0.0)
+        lines = [json.loads(line) for line in output.read_text().strip().split("\n")]
+        assert len(lines) == 2
+        assert "disclosure_id" in lines[0]
+        assert "company" in lines[0]
+
+    def test_logs_per_query_stats(self, tmp_path: Path) -> None:
+        from corpus.sources.nsm import discover_nsm
+
+        fixture = _load_fixture("nsm_api_response.json")
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = fixture
+        mock_client.post.return_value = mock_response
+        queries = [
+            (
+                "test:q1",
+                [
+                    {"name": "latest_flag", "value": "Y"},
+                    {"name": "company_lei", "value": ["t", "", "disclose_org", ""]},
+                ],
+            )
+        ]
+        output = tmp_path / "discovery.jsonl"
+        stats = discover_nsm(client=mock_client, queries=queries, output_path=output, delay=0.0)
+        assert len(stats["per_query"]) == 1
+        assert stats["per_query"][0]["label"] == "test:q1"
+        assert stats["per_query"][0]["hits"] == 2
