@@ -133,3 +133,161 @@ class TestBuildFilingList:
         }
         filings = build_filing_list(sparse)
         assert len(filings) == 0
+
+
+class TestFetchSubmissions:
+    """Tests for fetching submissions JSON from EDGAR API."""
+
+    def test_fetches_and_returns_json(self) -> None:
+        from unittest.mock import MagicMock
+
+        from corpus.sources.edgar import fetch_submissions
+
+        fixture = _load_fixture("edgar_submissions_response.json")
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = fixture
+        mock_client.get.return_value = mock_resp
+
+        result = fetch_submissions(mock_client, cik="0000914021")
+
+        assert result is not None
+        assert result["name"] == "REPUBLIC OF ARGENTINA"
+        mock_client.get.assert_called_once()
+        url = mock_client.get.call_args[0][0]
+        assert "CIK0000914021" in url
+
+    def test_returns_none_on_error(self) -> None:
+        from unittest.mock import MagicMock
+
+        from corpus.sources.edgar import fetch_submissions
+
+        mock_client = MagicMock()
+        mock_client.get.side_effect = Exception("network error")
+
+        result = fetch_submissions(mock_client, cik="0000914021")
+        assert result is None
+
+
+class TestDiscoverEdgar:
+    """Tests for the full discovery pipeline."""
+
+    def test_discovers_filings_for_cik_entries(self, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+
+        from corpus.sources.edgar import discover_edgar
+
+        fixture = _load_fixture("edgar_submissions_response.json")
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = fixture
+        mock_client.get.return_value = mock_resp
+
+        cik_entries = [
+            {"cik": "0000914021", "country": "Argentina", "name": "REPUBLIC OF ARGENTINA"},
+        ]
+        output = tmp_path / "discovery.jsonl"
+
+        stats = discover_edgar(
+            client=mock_client,
+            cik_entries=cik_entries,
+            output_path=output,
+            delay=0.0,
+        )
+
+        assert stats["ciks_queried"] == 1
+        assert stats["total_filings"] == 4
+        assert output.exists()
+        lines = [json.loads(line) for line in output.read_text().strip().split("\n")]
+        assert len(lines) == 4
+
+    def test_deduplicates_across_ciks(self, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+
+        from corpus.sources.edgar import discover_edgar
+
+        fixture = _load_fixture("edgar_submissions_response.json")
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = fixture
+        mock_client.get.return_value = mock_resp
+
+        cik_entries = [
+            {"cik": "0000914021", "country": "Argentina", "name": "REPUBLIC OF ARGENTINA"},
+            {"cik": "0000914021", "country": "Argentina", "name": "REPUBLIC OF ARGENTINA"},
+        ]
+        output = tmp_path / "discovery.jsonl"
+
+        stats = discover_edgar(
+            client=mock_client,
+            cik_entries=cik_entries,
+            output_path=output,
+            delay=0.0,
+        )
+
+        assert stats["ciks_queried"] == 2
+        assert stats["total_filings"] == 4
+        lines = [json.loads(line) for line in output.read_text().strip().split("\n")]
+        assert len(lines) == 4
+
+    def test_paginates_older_filings(self, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+
+        from corpus.sources.edgar import discover_edgar
+
+        fixture = _load_fixture("edgar_submissions_response.json")
+        older_page = {
+            "accessionNumber": ["0000914021-15-000999"],
+            "filingDate": ["2015-06-01"],
+            "form": ["424B5"],
+            "primaryDocument": ["older.htm"],
+            "primaryDocDescription": ["Old Prospectus"],
+        }
+
+        mock_client = MagicMock()
+        main_resp = MagicMock()
+        main_resp.json.return_value = fixture
+        older_resp = MagicMock()
+        older_resp.json.return_value = older_page
+        mock_client.get.side_effect = [main_resp, older_resp]
+
+        cik_entries = [
+            {"cik": "0000914021", "country": "Argentina", "name": "REPUBLIC OF ARGENTINA"},
+        ]
+        output = tmp_path / "discovery.jsonl"
+
+        stats = discover_edgar(
+            client=mock_client,
+            cik_entries=cik_entries,
+            output_path=output,
+            delay=0.0,
+        )
+
+        assert stats["total_filings"] == 5
+        lines = [json.loads(line) for line in output.read_text().strip().split("\n")]
+        native_ids = {line["native_id"] for line in lines}
+        assert "0000914021-15-000999" in native_ids
+
+    def test_handles_failed_cik(self, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+
+        from corpus.sources.edgar import discover_edgar
+
+        mock_client = MagicMock()
+        mock_client.get.side_effect = Exception("network error")
+
+        cik_entries = [
+            {"cik": "0000914021", "country": "Argentina", "name": "REPUBLIC OF ARGENTINA"},
+        ]
+        output = tmp_path / "discovery.jsonl"
+
+        stats = discover_edgar(
+            client=mock_client,
+            cik_entries=cik_entries,
+            output_path=output,
+            delay=0.0,
+        )
+
+        assert stats["ciks_queried"] == 1
+        assert stats["ciks_failed"] == 1
+        assert stats["total_filings"] == 0
