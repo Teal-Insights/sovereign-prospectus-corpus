@@ -13,6 +13,9 @@ planning/council-of-experts/
 planning/backlog/
 **/BRAINSTORM.md
 
+# === WORKTREES ===
+.worktrees/
+
 # === RUNTIME / BUILD ===
 .specstory/
 *.duckdb
