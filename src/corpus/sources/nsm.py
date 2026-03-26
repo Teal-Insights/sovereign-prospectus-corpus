@@ -115,32 +115,33 @@ def download_nsm_document(
     *,
     client: CorpusHTTPClient,
     output_dir: Path,
-) -> dict[str, Any] | None:
-    """Download a single NSM document. Returns enriched record or None on skip/fail.
+) -> tuple[dict[str, Any] | None, str]:
+    """Download a single NSM document.
 
-    Skips if the file already exists on disk. Resolves HTML->PDF two-hop links.
-    Validates that downloaded content starts with %PDF header.
+    Returns (enriched_record, status) where status is one of:
+    "downloaded", "skipped_exists", "skipped_no_url", "failed_no_pdf_link",
+    "failed_invalid_pdf".
     """
     storage_key = record.get("storage_key", "")
     target = output_dir / f"{storage_key}.pdf"
 
     if target.exists():
-        return None
+        return None, "skipped_exists"
 
     download_url = record.get("download_url", "")
     if not download_url:
-        return None
+        return None, "skipped_no_url"
 
     # Resolve two-hop HTML links
     pdf_url = resolve_pdf_url(download_url, client=client)
     if pdf_url is None:
-        return None
+        return None, "failed_no_pdf_link"
 
     resp = client.get(pdf_url)
     content = resp.content
 
     if not content.startswith(PDF_HEADER):
-        return None
+        return None, "failed_invalid_pdf"
 
     safe_write(target, content)
     file_hash = hashlib.sha256(content).hexdigest()
@@ -149,7 +150,7 @@ def download_nsm_document(
     enriched["file_path"] = str(target)
     enriched["file_hash"] = file_hash
     enriched["file_size_bytes"] = len(content)
-    return enriched
+    return enriched, "downloaded"
 
 
 def run_nsm_download(
@@ -194,7 +195,12 @@ def run_nsm_download(
 
         if api_responses_dir is not None:
             api_responses_dir.mkdir(parents=True, exist_ok=True)
-            page_data = {"total": total, "from": from_offset, "hit_count": len(hits)}
+            page_data = {
+                "total": total,
+                "from": from_offset,
+                "hit_count": len(hits),
+                "hits": hits,
+            }
             resp_file = api_responses_dir / f"nsm_page_{from_offset:06d}.json"
             resp_file.write_text(json.dumps(page_data, indent=2))
 
@@ -215,7 +221,9 @@ def run_nsm_download(
 
             try:
                 with logger.timed(doc_id, "download"):
-                    result = download_nsm_document(record, client=client, output_dir=output_dir)
+                    result, dl_status = download_nsm_document(
+                        record, client=client, output_dir=output_dir
+                    )
             except Exception as exc:
                 logger.log(
                     document_id=doc_id,
@@ -224,21 +232,23 @@ def run_nsm_download(
                     status="error",
                     error_message=str(exc),
                 )
-                result = None
+                result, dl_status = None, "error"
 
-            if result is not None:
+            if dl_status == "downloaded" and result is not None:
                 with manifest_path.open("a") as f:
                     f.write(json.dumps(result) + "\n")
                 stats["downloaded"] += 1
-            elif record.get("download_url"):
-                # Only count as failure if we actually tried (not a skip)
-                target = output_dir / f"{record.get('storage_key', '')}.pdf"
-                if not target.exists():
-                    stats["failed"] += 1
-                else:
-                    stats["skipped"] += 1
-            else:
+            elif dl_status.startswith("skipped"):
                 stats["skipped"] += 1
+            else:
+                stats["failed"] += 1
+                logger.log(
+                    document_id=doc_id,
+                    step="download",
+                    duration_ms=0,
+                    status=dl_status,
+                    error_message=f"Download failed: {dl_status}",
+                )
 
             if stats["failed"] >= total_failures_abort:
                 stats["aborted"] = True

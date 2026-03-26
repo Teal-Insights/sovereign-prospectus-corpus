@@ -201,8 +201,9 @@ class TestDownloadNsmDocument:
             "download_url": "https://data.fca.org.uk/artefacts/NSM/Portal/doc.pdf",
         }
 
-        result = download_nsm_document(record, client=mock_client, output_dir=tmp_path)
+        result, status = download_nsm_document(record, client=mock_client, output_dir=tmp_path)
 
+        assert status == "downloaded"
         assert result is not None
         assert result["file_path"] == str(tmp_path / "nsm__abc-123-pdf.pdf")
         assert result["file_hash"] == hashlib.sha256(pdf_bytes).hexdigest()
@@ -222,8 +223,9 @@ class TestDownloadNsmDocument:
             "download_url": "https://data.fca.org.uk/artefacts/NSM/Portal/doc.pdf",
         }
 
-        result = download_nsm_document(record, client=MagicMock(), output_dir=tmp_path)
+        result, status = download_nsm_document(record, client=MagicMock(), output_dir=tmp_path)
         assert result is None
+        assert status == "skipped_exists"
 
     def test_html_link_resolves_then_downloads(self, tmp_path: Path) -> None:
         """HTML download URL triggers resolution before downloading."""
@@ -246,8 +248,9 @@ class TestDownloadNsmDocument:
             "download_url": "https://data.fca.org.uk/artefacts/NSM/RNS/def-456.html",
         }
 
-        result = download_nsm_document(record, client=mock_client, output_dir=tmp_path)
+        result, status = download_nsm_document(record, client=mock_client, output_dir=tmp_path)
 
+        assert status == "downloaded"
         assert result is not None
         assert (tmp_path / "nsm__def-456-html.pdf").exists()
 
@@ -267,8 +270,9 @@ class TestDownloadNsmDocument:
             "download_url": "https://data.fca.org.uk/artefacts/NSM/Portal/doc.pdf",
         }
 
-        result = download_nsm_document(record, client=mock_client, output_dir=tmp_path)
+        result, status = download_nsm_document(record, client=mock_client, output_dir=tmp_path)
         assert result is None
+        assert status == "failed_invalid_pdf"
 
 
 class TestRunNsmDownload:

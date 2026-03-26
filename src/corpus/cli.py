@@ -20,10 +20,14 @@ def _load_config() -> dict:
     """Load config.toml from the project root. Returns empty dict if missing."""
     import tomllib
 
-    config_path = Path("config.toml")
-    if config_path.exists():
-        with config_path.open("rb") as f:
-            return tomllib.load(f)
+    # Try CWD first, then resolve relative to the package location
+    for candidate in [
+        Path("config.toml"),
+        Path(__file__).resolve().parent.parent.parent / "config.toml",
+    ]:
+        if candidate.exists():
+            with candidate.open("rb") as f:
+                return tomllib.load(f)
     return {}
 
 
