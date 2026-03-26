@@ -27,7 +27,7 @@ Diffs discovery JSONL native_ids against manifest JSONL native_ids. Returns dict
     "source": "edgar",
     "discovery_count": 3306,
     "manifest_count": 3301,
-    "on_disk_count": 3306,
+    "outstanding_count": 5,
     "outstanding": [
         {"native_id": "...", "title": "...", "last_error": "..."},
     ],

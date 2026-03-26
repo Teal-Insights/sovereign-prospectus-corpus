@@ -421,12 +421,12 @@ def ingest(manifest_dir: Path, db_path: Path, run_id: str | None) -> None:
 def status(source: str | None) -> None:
     """Show download status. Optionally filter by SOURCE (nsm, edgar, pdip)."""
     from corpus.reporting import (
-        _DISCOVERY_PATHS,
+        DISCOVERY_PATHS,
         format_status_summary,
         get_source_status,
     )
 
-    sources = [source] if source else list(_DISCOVERY_PATHS.keys())
+    sources = [source] if source else list(DISCOVERY_PATHS.keys())
 
     if source:
         # Detailed per-source view
@@ -448,7 +448,7 @@ def status(source: str | None) -> None:
                 click.echo(f"    {item['native_id']:40s}  {item['title'][:40]:40s}{error}")
 
             click.echo("")
-            discovery_path = _DISCOVERY_PATHS.get(source, f"data/{source}_discovery.jsonl")
+            discovery_path = DISCOVERY_PATHS.get(source, f"data/{source}_discovery.jsonl")
             click.echo(f"  To retry: corpus download {source} --discovery-file {discovery_path}")
     else:
         # Cross-source summary

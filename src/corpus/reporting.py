@@ -15,14 +15,14 @@ from typing import Any
 # Discovery file ID extractors per source.
 # NSM discovery stores raw _source dicts (key: disclosure_id).
 # EDGAR discovery stores manifest-shaped records (key: native_id).
-_DISCOVERY_ID_KEYS: dict[str, str] = {
+DISCOVERY_ID_KEYS: dict[str, str] = {
     "nsm": "disclosure_id",
     "edgar": "native_id",
     "pdip": "native_id",
 }
 
 # Discovery file paths by convention
-_DISCOVERY_PATHS: dict[str, str] = {
+DISCOVERY_PATHS: dict[str, str] = {
     "nsm": "data/nsm_discovery.jsonl",
     "edgar": "data/edgar_discovery.jsonl",
     "pdip": "data/pdip_discovery.jsonl",
@@ -68,7 +68,7 @@ def write_run_report(
     lines.append("  To retry failed downloads:")
     lines.append(
         f"    corpus download {source}"
-        f" --discovery-file {_DISCOVERY_PATHS.get(source, f'data/{source}_discovery.jsonl')}"
+        f" --discovery-file {DISCOVERY_PATHS.get(source, f'data/{source}_discovery.jsonl')}"
     )
     lines.append("")
 
@@ -76,31 +76,36 @@ def write_run_report(
     return report_path
 
 
+_NON_FAILURE_STATUSES = frozenset({"success", "success_after_429", "rate_limited"})
+
+
 def _extract_failures(
     telemetry_dir: Path,
     source: str,
     run_id: str,
 ) -> list[dict[str, Any]]:
-    """Parse telemetry JSONL for non-success download entries."""
+    """Parse telemetry JSONL for terminal failure download entries."""
     failures: list[dict[str, Any]] = []
 
-    for pattern in [f"{source}_{run_id}.jsonl", f"{source}_*.jsonl"]:
-        for log_file in telemetry_dir.glob(pattern):
-            try:
-                with log_file.open() as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
+    for log_file in telemetry_dir.glob(f"{source}_*.jsonl"):
+        try:
+            with log_file.open() as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
                         entry = json.loads(line)
-                        if (
-                            entry.get("run_id") == run_id
-                            and entry.get("step") == "download"
-                            and entry.get("status") not in ("success", "success_after_429")
-                        ):
-                            failures.append(entry)
-            except (json.JSONDecodeError, OSError):
-                continue
+                    except json.JSONDecodeError:
+                        continue
+                    if (
+                        entry.get("run_id") == run_id
+                        and entry.get("step") == "download"
+                        and entry.get("status") not in _NON_FAILURE_STATUSES
+                    ):
+                        failures.append(entry)
+        except OSError:
+            continue
 
     # Deduplicate by document_id (keep last entry per doc)
     seen: dict[str, dict[str, Any]] = {}
@@ -118,12 +123,12 @@ def get_source_status(
 ) -> dict[str, Any]:
     """Diff discovery vs manifest for a source. Returns status dict."""
     if discovery_path is None:
-        discovery_path = Path(_DISCOVERY_PATHS.get(source, f"data/{source}_discovery.jsonl"))
+        discovery_path = Path(DISCOVERY_PATHS.get(source, f"data/{source}_discovery.jsonl"))
 
     if not discovery_path.exists():
         return {"source": source, "status": "not_discovered"}
 
-    id_key = _DISCOVERY_ID_KEYS.get(source, "native_id")
+    id_key = DISCOVERY_ID_KEYS.get(source, "native_id")
     manifest_path = manifest_dir / f"{source}_manifest.jsonl"
 
     # Read discovery IDs and titles
@@ -164,14 +169,17 @@ def get_source_status(
                     line = line.strip()
                     if not line:
                         continue
-                    entry = json.loads(line)
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
                     doc_id = entry.get("document_id", "")
-                    if doc_id in outstanding_ids and entry.get("status") not in (
-                        "success",
-                        "success_after_429",
+                    if (
+                        doc_id in outstanding_ids
+                        and entry.get("status") not in _NON_FAILURE_STATUSES
                     ):
                         last_errors[doc_id] = entry.get("error_message", entry.get("status", ""))
-        except (json.JSONDecodeError, OSError):
+        except OSError:
             continue
 
     outstanding = [
