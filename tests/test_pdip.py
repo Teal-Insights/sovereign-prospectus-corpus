@@ -413,6 +413,7 @@ class TestRunPdipDownload:
         assert not stats["aborted"]
 
     def test_telemetry_logs_download(self, tmp_path: Path) -> None:
+
         from corpus.logging import CorpusLogger
         from corpus.sources.pdip import run_pdip_download
 
@@ -460,3 +461,52 @@ class TestRunPdipDownload:
         assert log_entries[0]["status"] == "success"
         assert log_entries[0]["document_id"] == "VEN85"
         assert log_entries[0]["step"] == "download"
+
+
+class TestPdipCli:
+    """Tests for PDIP CLI commands."""
+
+    def test_discover_pdip_help(self) -> None:
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["discover", "pdip", "--help"])
+        assert result.exit_code == 0
+        assert "--run-id" in result.output
+        assert "--output" in result.output
+
+    def test_download_pdip_help(self) -> None:
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["download", "pdip", "--help"])
+        assert result.exit_code == 0
+        assert "--run-id" in result.output
+        assert "--discovery-file" in result.output
+
+    def test_discover_pdip_runs(self, tmp_path: Path) -> None:
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        fixture = _load_fixture("pdip_search_response.json")
+        output = tmp_path / "discovery.jsonl"
+
+        with patch("corpus.sources.pdip.requests") as mock_requests:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = fixture
+            mock_resp.raise_for_status = MagicMock()
+            mock_session = MagicMock()
+            mock_session.post.return_value = mock_resp
+            mock_requests.Session.return_value = mock_session
+
+            runner = CliRunner()
+            result = runner.invoke(cli, ["discover", "pdip", "--output", str(output)])
+
+        assert result.exit_code == 0
+        assert "3" in result.output

@@ -223,9 +223,81 @@ def edgar(
 
 @download.command()
 @click.option("--run-id", default=None, help="Pipeline run identifier.")
-def pdip(run_id: str | None) -> None:
-    """Download documents from World Bank PDIP."""
-    click.echo("PDIP download not yet implemented (see Task 6).")
+@click.option(
+    "--discovery-file",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/pdip_discovery.jsonl",
+    help="Path to discovery JSONL from 'corpus discover pdip'.",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default="data/original",
+    help="Directory for downloaded PDFs.",
+)
+@click.option(
+    "--manifest-dir",
+    type=click.Path(path_type=Path),
+    default="data/manifests",
+    help="Directory for manifest JSONL files.",
+)
+@click.option(
+    "--log-dir",
+    type=click.Path(path_type=Path),
+    default="data/telemetry",
+    help="Directory for structured log files.",
+)
+def pdip(
+    run_id: str | None,
+    discovery_file: Path,
+    output_dir: Path,
+    manifest_dir: Path,
+    log_dir: Path,
+) -> None:
+    """Download documents from Georgetown PDIP (reads discovery file)."""
+    import uuid
+
+    from corpus.logging import CorpusLogger
+    from corpus.sources.pdip import run_pdip_download
+
+    cfg = _load_config().get("pdip", {})
+    cb_cfg = cfg.get("circuit_breaker", {})
+
+    if run_id is None:
+        run_id = f"pdip-{uuid.uuid4().hex[:12]}"
+
+    log_file = log_dir / f"pdip_{run_id}.jsonl"
+    logger = CorpusLogger(log_file, run_id=run_id)
+
+    click.echo(f"Starting PDIP download from {discovery_file} (run_id={run_id})...")
+    stats = run_pdip_download(
+        discovery_file=discovery_file,
+        output_dir=output_dir,
+        manifest_dir=manifest_dir,
+        logger=logger,
+        run_id=run_id,
+        delay=float(cfg.get("delay", 1.0)),
+        total_failures_abort=int(cb_cfg.get("total_failures_abort", 10)),
+    )
+
+    from corpus.reporting import write_run_report
+
+    report_path = write_run_report(
+        source="pdip",
+        run_id=run_id,
+        stats=stats,
+        telemetry_dir=log_dir,
+    )
+
+    click.echo(
+        f"PDIP download complete: {stats['downloaded']} downloaded, "
+        f"{stats['skipped']} skipped, {stats['not_found']} not found, "
+        f"{stats['failed']} failed "
+        f"(of {stats['total_in_discovery']} in discovery)."
+    )
+    if stats["aborted"]:
+        click.echo("WARNING: Download aborted due to too many failures.")
+    click.echo(f"Report: {report_path}")
 
 
 # ── Discover group ─────────────────────────────────────────────────
@@ -341,6 +413,39 @@ def discover_edgar_cmd(run_id: str | None, output: Path, tiers: str) -> None:
         f"Discovery complete: {stats['total_filings']} filings from "
         f"{stats['ciks_queried']} CIKs ({stats['ciks_failed']} failed)."
     )
+    click.echo(f"Output: {output}")
+
+
+@discover.command("pdip")
+@click.option("--run-id", default=None, help="Pipeline run identifier.")
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default="data/pdip_discovery.jsonl",
+    help="Output path for discovery JSONL.",
+)
+def discover_pdip_cmd(run_id: str | None, output: Path) -> None:
+    """Discover sovereign debt documents from Georgetown PDIP (metadata only)."""
+    import uuid
+
+    from corpus.sources.pdip import discover_pdip
+
+    cfg = _load_config().get("pdip", {})
+
+    if run_id is None:
+        run_id = f"discover-pdip-{uuid.uuid4().hex[:8]}"
+
+    click.echo(f"Discovering PDIP documents (run_id={run_id})...")
+
+    stats = discover_pdip(
+        output_path=output,
+        delay=float(cfg.get("delay", 1.0)),
+    )
+
+    if stats.get("error"):
+        click.echo(f"WARNING: Discovery encountered an error: {stats['error']}")
+
+    click.echo(f"Discovery complete: {stats['total_documents']} documents found.")
     click.echo(f"Output: {output}")
 
 
