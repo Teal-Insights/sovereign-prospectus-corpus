@@ -1,0 +1,48 @@
+{
+    "total": 3,
+    "results": [
+        {
+            "id": "VEN85",
+            "score": null,
+            "document_title": "Loan Agreement between the Republic of Venezuela and International Bank for Reconstruction and Development dated December 14, 1990",
+            "tag_status": "Annotated",
+            "metadata": {
+                "DebtorCountry": ["Venezuela"],
+                "CreditorCountry": ["Multilateral; Regional; or Plurilateral Lenders"],
+                "CreditorType": ["Multilateral Official"],
+                "InstrumentType": ["Loan"],
+                "BorrowerDebttoGDPRatio": null,
+                "BorrowerSizeofEconomy": ["To be filled. "],
+                "OtherMultilateralRegionalPlurilateralLenders": ["International Bank for Reconstruction and Development (IBRD / World Bank)"],
+                "CreditorSizeofEconomy": ["To be filled. "],
+                "InstrumentMaturityDate": ["December 15, 2005"],
+                "CommitmentSize": ["To be filled. "],
+                "InstrumentMaturityYear": ["2005"]
+            }
+        },
+        {
+            "id": "BRA1",
+            "score": null,
+            "document_title": "Offering Memorandum Federal Republic of Brazil Bonds Due 2037/2041/2045",
+            "tag_status": "Not Annotated",
+            "metadata": {
+                "DebtorCountry": ["Brazil"],
+                "InstrumentType": ["Bond"]
+            }
+        },
+        {
+            "id": "ARG23",
+            "score": null,
+            "document_title": "Indenture between the Republic of Argentina and The Bank of New York Mellon",
+            "tag_status": "Annotated",
+            "metadata": {
+                "DebtorCountry": ["Argentina"],
+                "CreditorCountry": ["United States"],
+                "CreditorType": ["Private Creditor(s)"],
+                "InstrumentType": ["Bond"],
+                "InstrumentMaturityDate": ["January 15, 2038"],
+                "InstrumentMaturityYear": ["2038"]
+            }
+        }
+    ]
+}
