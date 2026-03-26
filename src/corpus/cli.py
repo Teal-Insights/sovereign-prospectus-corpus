@@ -443,7 +443,9 @@ def discover_pdip_cmd(run_id: str | None, output: Path) -> None:
     )
 
     if stats.get("error"):
-        click.echo(f"WARNING: Discovery encountered an error: {stats['error']}")
+        click.echo(f"ERROR: Discovery failed: {stats['error']}", err=True)
+        if stats["total_documents"] == 0:
+            raise SystemExit(1)
 
     click.echo(f"Discovery complete: {stats['total_documents']} documents found.")
     click.echo(f"Output: {output}")

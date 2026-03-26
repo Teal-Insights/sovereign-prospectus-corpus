@@ -132,18 +132,21 @@ def discover_pdip(
                 seen_ids.add(record["native_id"])
                 all_records.append(record)
 
-        # Stop if we got fewer results than requested, or if we've seen
-        # all documents (API may ignore pageSize and return everything)
+        # Stop if no results, fewer than requested, or all documents seen
+        # (API may ignore pageSize and return everything in one response)
         total = data.get("total", 0)
-        if len(results) < page_size or len(all_records) >= total:
+        if not results or len(results) < page_size or len(all_records) >= total:
             break
 
         page += 1
         if delay > 0:
             time.sleep(delay)
 
-    content = "".join(json.dumps(r) + "\n" for r in all_records).encode()
-    safe_write(output_path, content, overwrite=True)
+    # Only write discovery file if we got results — avoid clobbering a
+    # previous successful discovery with an empty file on API failure.
+    if all_records:
+        content = "".join(json.dumps(r) + "\n" for r in all_records).encode()
+        safe_write(output_path, content, overwrite=True)
 
     return {
         "total_documents": len(all_records),
