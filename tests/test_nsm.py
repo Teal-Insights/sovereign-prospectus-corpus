@@ -507,7 +507,7 @@ class TestBuildSovereignQueries:
 
         queries = build_sovereign_queries(reference_csv=None)
         labels = [q[0] for q in queries]
-        assert "name:Georgia" in labels
+        assert "name:Georgia(acting through MoF" in labels
         assert "name:Min of Finance" in labels
 
     def test_parses_leis_from_csv(self, tmp_path: Path) -> None:

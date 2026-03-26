@@ -36,7 +36,7 @@ _NAME_PATTERNS = [
     "Emirate of",
 ]
 
-_EDGE_CASE_NAMES = ["Georgia", "Min of Finance"]
+_EDGE_CASE_NAMES = ["Georgia(acting through MoF", "Min of Finance"]
 
 
 def _lei_criteria(lei: str) -> list[dict[str, Any]]:
