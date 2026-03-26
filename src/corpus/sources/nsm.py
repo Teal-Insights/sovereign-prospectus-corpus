@@ -273,20 +273,18 @@ def download_nsm_document(
 def run_nsm_download(
     *,
     client: CorpusHTTPClient,
+    discovery_file: Path,
     output_dir: Path,
     manifest_dir: Path,
     logger: CorpusLogger,
     run_id: str,
-    delay_api: float = 1.0,
     delay_download: float = 1.0,
-    page_size: int = 10000,
     total_failures_abort: int = 10,
-    api_responses_dir: Path | None = None,
 ) -> dict[str, Any]:
-    """Run the full NSM download pipeline.
+    """Download PDFs from a discovery JSONL file.
 
-    Paginates through all NSM results, downloads PDFs, writes manifest JSONL.
-    Circuit breaker aborts after total_failures_abort failures.
+    Reads discovery results, converts to manifest records via parse_hits,
+    downloads each document, writes nsm_manifest.jsonl.
     """
     manifest_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -296,89 +294,60 @@ def run_nsm_download(
         "downloaded": 0,
         "skipped": 0,
         "failed": 0,
-        "api_pages_fetched": 0,
-        "total_hits": 0,
+        "total_in_discovery": 0,
         "aborted": False,
     }
 
-    from_offset = 0
+    with discovery_file.open() as f:
+        raw_records = [json.loads(line) for line in f if line.strip()]
 
-    while True:
+    stats["total_in_discovery"] = len(raw_records)
+
+    hits = [{"_id": r.get("disclosure_id", ""), "_source": r} for r in raw_records]
+    records = parse_hits(hits)
+
+    for record in records:
         if stats["aborted"]:
             break
 
-        with logger.timed("nsm-api", "query", page=from_offset):
-            hits, total = query_nsm_api(client, from_offset=from_offset, size=page_size)
+        doc_id = record.get("native_id", "unknown")
 
-        if api_responses_dir is not None:
-            api_responses_dir.mkdir(parents=True, exist_ok=True)
-            page_data = {
-                "total": total,
-                "from": from_offset,
-                "hit_count": len(hits),
-                "hits": hits,
-            }
-            resp_file = api_responses_dir / f"nsm_page_{from_offset:06d}.json"
-            resp_file.write_text(json.dumps(page_data, indent=2))
+        try:
+            with logger.timed(doc_id, "download"):
+                result, dl_status = download_nsm_document(
+                    record, client=client, output_dir=output_dir
+                )
+        except Exception as exc:
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=0,
+                status="error",
+                error_message=str(exc),
+            )
+            result, dl_status = None, "error"
 
-        stats["api_pages_fetched"] += 1
-        if stats["total_hits"] == 0:
-            stats["total_hits"] = total
+        if dl_status == "downloaded" and result is not None:
+            with manifest_path.open("a") as f:
+                f.write(json.dumps(result) + "\n")
+            stats["downloaded"] += 1
+        elif dl_status.startswith("skipped"):
+            stats["skipped"] += 1
+        else:
+            stats["failed"] += 1
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=0,
+                status=dl_status,
+                error_message=f"Download failed: {dl_status}",
+            )
 
-        if not hits:
+        if stats["failed"] >= total_failures_abort:
+            stats["aborted"] = True
             break
 
-        records = parse_hits(hits)
-
-        for record in records:
-            if stats["aborted"]:
-                break
-
-            doc_id = record.get("native_id", "unknown")
-
-            try:
-                with logger.timed(doc_id, "download"):
-                    result, dl_status = download_nsm_document(
-                        record, client=client, output_dir=output_dir
-                    )
-            except Exception as exc:
-                logger.log(
-                    document_id=doc_id,
-                    step="download",
-                    duration_ms=0,
-                    status="error",
-                    error_message=str(exc),
-                )
-                result, dl_status = None, "error"
-
-            if dl_status == "downloaded" and result is not None:
-                with manifest_path.open("a") as f:
-                    f.write(json.dumps(result) + "\n")
-                stats["downloaded"] += 1
-            elif dl_status.startswith("skipped"):
-                stats["skipped"] += 1
-            else:
-                stats["failed"] += 1
-                logger.log(
-                    document_id=doc_id,
-                    step="download",
-                    duration_ms=0,
-                    status=dl_status,
-                    error_message=f"Download failed: {dl_status}",
-                )
-
-            if stats["failed"] >= total_failures_abort:
-                stats["aborted"] = True
-                break
-
-            if delay_download > 0:
-                time.sleep(delay_download)
-
-        from_offset += page_size
-        if from_offset >= total:
-            break
-
-        if delay_api > 0:
-            time.sleep(delay_api)
+        if delay_download > 0:
+            time.sleep(delay_download)
 
     return stats
