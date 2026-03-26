@@ -1,7 +1,7 @@
 # SESSION-HANDOFF.md — Current Task
 
 **Last updated:** 2026-03-26
-**Status:** Phase 1 tasks 1-5 complete. NSM + EDGAR downloading done. Ready for Task 6 (PDIP).
+**Status:** Phase 1 tasks 1-5 complete + shared reporting infra. NSM + EDGAR downloading done. Ready for Task 6 (PDIP).
 
 ## Completed
 
@@ -14,21 +14,33 @@
 - **Task 5:** EDGAR source adapter — sovereign discovery + download ✅
   - 3,306 filings discovered from 27 sovereign CIKs, 3,301 downloaded (587 MB)
   - Two-phase: `corpus discover edgar` → `corpus download edgar`
-  - PR #10: `feature/source-edgar`
+  - PR #10
+- **Shared infra:** Run reports + `corpus status` command ✅
+  - `corpus status` shows cross-source download progress
+  - `corpus status <source>` shows outstanding items with last errors
+  - Automatic run reports after every download
+  - PR #15
 
 ## Next Tasks
 
 See `planning/specs/2026-03-25_clean-architecture/TASKS.md` for full task list.
 
 **Phase 1 remaining:**
-- **Task 6:** PDIP source adapter + migration (PARALLEL)
+- **Task 6:** PDIP source adapter + migration
 
 **Phase 2:**
 - **Task 7:** Grep-first CAC extraction
 - **Task 8:** CAC visualization notebook
 - **Task 9:** Integration test + overnight run
 
-**Before starting a new source adapter:** Read "Lessons Learned from NSM Adapter" in CLAUDE.md. Key patterns: two-phase discover/download, sovereign-scoped queries, explicit telemetry logging, circuit breaker testing.
+**Follow-up issues:**
+- #9: NSM HTML-only filings download
+- #11: consecutive_failures_skip circuit breaker
+- #12: Log pagination errors in EDGAR discovery
+- #13: Manifest append atomicity
+- #16: Retry all outstanding downloads across sources
+
+**Before starting a new source adapter:** Read BOTH "Lessons Learned" sections in CLAUDE.md (NSM + EDGAR). Key additions from EDGAR: use `native_id` in discovery format, broad Exception in downloads, rate-limit sleep config, run reports integration.
 
 ## Quick Reference
 
