@@ -10,6 +10,7 @@ import hashlib
 import json
 import re
 import time
+import warnings
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin
 
@@ -141,13 +142,21 @@ def discover_nsm(
     per_query: list[dict[str, Any]] = []
     total_hits_raw = 0
 
+    _page_size = 10000
     for label, crit in queries:
         query_hits = 0
         new_count = 0
         from_offset = 0
 
         while True:
-            hits, total = query_nsm_api(client, criteria=crit, from_offset=from_offset, size=10000)
+            hits, total = query_nsm_api(
+                client, criteria=crit, from_offset=from_offset, size=_page_size
+            )
+            if from_offset == 0 and total > _page_size:
+                warnings.warn(
+                    f"Query '{label}' has {total} total hits — paginating.",
+                    stacklevel=2,
+                )
             query_hits += len(hits)
             for hit in hits:
                 src = hit.get("_source", {})
@@ -168,10 +177,8 @@ def discover_nsm(
         if delay > 0:
             time.sleep(delay)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w") as f:
-        for record in all_records:
-            f.write(json.dumps(record) + "\n")
+    content = "".join(json.dumps(r) + "\n" for r in all_records).encode()
+    safe_write(output_path, content, overwrite=True)
 
     return {
         "queries_run": len(queries),
@@ -326,12 +333,11 @@ def run_nsm_download(
 
         doc_id = record.get("native_id", "unknown")
 
-        start = time.monotonic()
+        _start = time.monotonic()
         try:
             result, dl_status = download_nsm_document(record, client=client, output_dir=output_dir)
         except Exception as exc:
-            result, dl_status = None, "error"
-            elapsed_ms = int((time.monotonic() - start) * 1000)
+            elapsed_ms = int((time.monotonic() - _start) * 1000)
             logger.log(
                 document_id=doc_id,
                 step="download",
@@ -339,8 +345,9 @@ def run_nsm_download(
                 status="error",
                 error_message=str(exc),
             )
-
-        elapsed_ms = int((time.monotonic() - start) * 1000)
+            result, dl_status = None, "error"
+        else:
+            elapsed_ms = int((time.monotonic() - _start) * 1000)
 
         if dl_status == "downloaded" and result is not None:
             with manifest_path.open("a") as f:
@@ -353,7 +360,7 @@ def run_nsm_download(
             stats["skipped_no_pdf"] += 1
         elif dl_status.startswith("skipped"):
             stats["skipped"] += 1
-        else:
+        elif dl_status != "error":  # error already logged above
             stats["failed"] += 1
             logger.log(
                 document_id=doc_id,

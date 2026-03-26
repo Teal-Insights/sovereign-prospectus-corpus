@@ -434,6 +434,124 @@ class TestRunNsmDownloadFromDiscovery:
         assert stats["aborted"]
         assert stats["failed"] <= 6
 
+    def test_telemetry_logs_failure_status_not_success(self, tmp_path: Path) -> None:
+        """Non-exception download failures log the actual status, not 'success'."""
+        from corpus.logging import CorpusLogger
+        from corpus.sources.nsm import run_nsm_download
+
+        discovery = tmp_path / "discovery.jsonl"
+        record = {
+            "disclosure_id": "invalid-pdf-doc",
+            "download_link": "NSM/Portal/bad.pdf",
+            "company": "BADCORP",
+            "lei": "",
+            "type_code": "PDI",
+            "type": "Test",
+            "headline": "Bad PDF",
+            "submitted_date": "2024-01-01T00:00:00Z",
+            "publication_date": "2024-01-01T00:00:00Z",
+            "source": "FCA",
+            "seq_id": "invalid-pdf-doc",
+            "hist_seq": "1",
+            "classifications": "",
+            "classifications_code": "",
+            "tag_esef": "",
+            "lei_remediation_flag": "N",
+            "last_updated_date": "2024-01-01T00:00:00Z",
+        }
+        discovery.write_text(json.dumps(record) + "\n")
+
+        mock_client = MagicMock()
+        bad_resp = MagicMock()
+        bad_resp.content = b"not a pdf"
+        mock_client.get.return_value = bad_resp
+
+        log_file = tmp_path / "test.jsonl"
+        logger = CorpusLogger(log_file, run_id="test-run")
+
+        stats = run_nsm_download(
+            client=mock_client,
+            discovery_file=discovery,
+            output_dir=tmp_path / "original",
+            manifest_dir=tmp_path / "manifests",
+            logger=logger,
+            run_id="test-run",
+            delay_download=0.0,
+        )
+
+        assert stats["failed"] == 1
+        log_entries = [json.loads(line) for line in log_file.read_text().strip().split("\n")]
+        # Exactly one log entry, with the correct failure status (not 'success')
+        assert len(log_entries) == 1
+        assert log_entries[0]["status"] == "failed_invalid_pdf"
+        assert log_entries[0]["duration_ms"] >= 0
+
+
+class TestDiscoverNsmSizeCeiling:
+    """Tests for the size-ceiling warning in discover_nsm."""
+
+    def test_warns_when_query_exceeds_page_size(self, tmp_path: Path) -> None:
+        """A query with total > page_size triggers a pagination warning."""
+        import warnings
+
+        from corpus.sources.nsm import discover_nsm
+
+        mock_client = MagicMock()
+        # First page: 10000 hits, total=15000 (triggers warning + pagination)
+        page1 = MagicMock()
+        page1.json.return_value = {
+            "hits": {
+                "total": {"value": 15000},
+                "hits": [
+                    {"_id": f"id-{i}", "_source": {"disclosure_id": f"id-{i}"}}
+                    for i in range(10000)
+                ],
+            }
+        }
+        # Second page: remaining 5000
+        page2 = MagicMock()
+        page2.json.return_value = {
+            "hits": {
+                "total": {"value": 15000},
+                "hits": [
+                    {"_id": f"id-{i}", "_source": {"disclosure_id": f"id-{i}"}}
+                    for i in range(10000, 15000)
+                ],
+            }
+        }
+        mock_client.post.side_effect = [page1, page2]
+
+        output = tmp_path / "discovery.jsonl"
+        queries = [("name:Republic of", [{"name": "latest_flag", "value": "Y"}])]
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            discover_nsm(client=mock_client, queries=queries, output_path=output, delay=0.0)
+
+        assert any("paginat" in str(w.message).lower() for w in caught)
+
+    def test_no_warning_below_size_limit(self, tmp_path: Path) -> None:
+        """A query returning fewer hits than the page size triggers no warning."""
+        import warnings
+
+        from corpus.sources.nsm import discover_nsm
+
+        fixture = _load_fixture("nsm_api_response.json")
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = fixture
+        mock_client.post.return_value = mock_response
+
+        output = tmp_path / "discovery.jsonl"
+        queries = [("name:Republic of", [{"name": "latest_flag", "value": "Y"}])]
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            discover_nsm(client=mock_client, queries=queries, output_path=output, delay=0.0)
+
+        pagination_warnings = [w for w in caught if "paginat" in str(w.message).lower()]
+        assert len(pagination_warnings) == 0
+
 
 class TestRelatedOrgParsing:
     """Tests for parsing related_org field from NSM API hits."""
