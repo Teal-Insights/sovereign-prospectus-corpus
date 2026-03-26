@@ -382,6 +382,81 @@ class TestRunNsmDownload:
         assert stats["failed"] <= 6  # abort triggers at threshold, may overshoot by 1
 
 
+class TestApiResponseSaving:
+    """Tests for saving raw API responses to disk."""
+
+    def test_saves_api_response_to_file(self, tmp_path: Path) -> None:
+        """run_nsm_download saves raw API response pages to api_responses_dir."""
+        from corpus.logging import CorpusLogger
+        from corpus.sources.nsm import run_nsm_download
+
+        fixture = _load_fixture("nsm_api_response.json")
+        pdf_bytes = b"%PDF-1.4 test content"
+
+        mock_client = MagicMock()
+        api_resp = MagicMock()
+        api_resp.json.return_value = fixture
+        mock_client.post.return_value = api_resp
+        pdf_resp = MagicMock()
+        pdf_resp.content = pdf_bytes
+        mock_client.get.return_value = pdf_resp
+
+        output_dir = tmp_path / "original"
+        manifest_dir = tmp_path / "manifests"
+        api_dir = tmp_path / "api_responses"
+        log_file = tmp_path / "test.jsonl"
+        logger = CorpusLogger(log_file, run_id="test-run")
+
+        run_nsm_download(
+            client=mock_client,
+            output_dir=output_dir,
+            manifest_dir=manifest_dir,
+            logger=logger,
+            run_id="test-run",
+            delay_api=0.0,
+            delay_download=0.0,
+            api_responses_dir=api_dir,
+        )
+
+        assert api_dir.exists()
+        response_files = list(api_dir.glob("nsm_page_*.json"))
+        assert len(response_files) == 1
+
+
+class TestRelatedOrgParsing:
+    """Tests for parsing related_org field from NSM API hits."""
+
+    def test_related_org_included_in_source_metadata(self) -> None:
+        """Related organisations are included in source_metadata."""
+        hit = {
+            "_id": "rel-org-test",
+            "_source": {
+                "disclosure_id": "rel-org-test",
+                "download_link": "NSM/Portal/test.pdf",
+                "company": "REPUBLIC OF KENYA",
+                "lei": "549300VVURQQYU45PR87",
+                "type_code": "PDI",
+                "type": "Publication of a Prospectus",
+                "headline": "Test doc",
+                "submitted_date": "2024-01-01T00:00:00Z",
+                "publication_date": "2024-01-01T00:00:00Z",
+                "source": "RNS",
+                "seq_id": "rel-org-test",
+                "hist_seq": "1",
+                "classifications": "",
+                "classifications_code": "",
+                "tag_esef": "",
+                "lei_remediation_flag": "N",
+                "last_updated_date": "2024-01-01T00:00:00Z",
+                "related_org": [{"lei": "ABC123", "company": "Some Bank Ltd"}],
+            },
+        }
+
+        records = parse_hits([hit])
+        meta = records[0]["source_metadata"]
+        assert meta["related_org"] == [{"lei": "ABC123", "company": "Some Bank Ltd"}]
+
+
 class TestNsmCli:
     """Tests for the CLI download nsm command."""
 

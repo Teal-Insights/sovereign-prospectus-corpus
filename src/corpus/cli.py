@@ -51,12 +51,19 @@ def download() -> None:
     help="Directory for structured log files.",
 )
 @click.option("--dry-run", is_flag=True, help="Query API and report count without downloading.")
+@click.option(
+    "--api-responses-dir",
+    type=click.Path(path_type=Path),
+    default="data/api_responses",
+    help="Directory for raw API response JSON files.",
+)
 def nsm(
     run_id: str | None,
     output_dir: Path,
     manifest_dir: Path,
     log_dir: Path,
     dry_run: bool,
+    api_responses_dir: Path,
 ) -> None:
     """Download documents from FCA National Storage Mechanism."""
     import uuid
@@ -85,6 +92,7 @@ def nsm(
         manifest_dir=manifest_dir,
         logger=logger,
         run_id=run_id,
+        api_responses_dir=api_responses_dir,
     )
 
     click.echo(

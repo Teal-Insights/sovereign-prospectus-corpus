@@ -81,6 +81,7 @@ def parse_hits(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "hist_seq": src.get("hist_seq", ""),
                 "tag_esef": src.get("tag_esef", ""),
                 "lei_remediation_flag": src.get("lei_remediation_flag", ""),
+                "related_org": src.get("related_org", []),
             },
         }
         records.append(record)
@@ -162,6 +163,7 @@ def run_nsm_download(
     page_size: int = 10000,
     consecutive_failures_skip: int = 5,
     total_failures_abort: int = 10,
+    api_responses_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Run the full NSM download pipeline.
 
@@ -190,6 +192,12 @@ def run_nsm_download(
 
         with logger.timed("nsm-api", "query", page=from_offset):
             hits, total = query_nsm_api(client, from_offset=from_offset, size=page_size)
+
+        if api_responses_dir is not None:
+            api_responses_dir.mkdir(parents=True, exist_ok=True)
+            page_data = {"total": total, "from": from_offset, "hit_count": len(hits)}
+            resp_file = api_responses_dir / f"nsm_page_{from_offset:06d}.json"
+            resp_file.write_text(json.dumps(page_data, indent=2))
 
         stats["api_pages_fetched"] += 1
         if stats["total_hits"] == 0:
