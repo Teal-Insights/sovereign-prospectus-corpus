@@ -58,7 +58,7 @@ def parse_hits(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "issuer_name": src.get("company", ""),
             "lei": src.get("lei", ""),
             "doc_type": src.get("type_code", ""),
-            "publication_date": (src.get("publication_date", "") or "")[:10] or None,
+            "publication_date": src.get("publication_date"),
             "submitted_date": src.get("submitted_date"),
             "download_url": download_url,
             "source_metadata": {

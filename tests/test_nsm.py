@@ -110,3 +110,30 @@ class TestParseHits:
         assert meta["nsm_source"] == "FCA"
         assert meta["type_name"] == "Publication of a Prospectus"
         assert meta["classifications_code"] == "3.1"
+
+    def test_parse_hit_missing_download_link(self) -> None:
+        """Hit without download_link produces empty download_url."""
+        hit = {
+            "_id": "no-link",
+            "_source": {
+                "disclosure_id": "no-link",
+                "download_link": "",
+                "company": "TEST CORP",
+                "lei": "",
+                "type_code": "PDI",
+                "type": "Test",
+                "headline": "No link doc",
+                "submitted_date": "2024-01-01T00:00:00Z",
+                "publication_date": "2024-01-01T00:00:00Z",
+                "source": "FCA",
+                "seq_id": "no-link",
+                "hist_seq": "1",
+                "classifications": "",
+                "classifications_code": "",
+                "tag_esef": "",
+                "lei_remediation_flag": "N",
+                "last_updated_date": "2024-01-01T00:00:00Z",
+            },
+        }
+        records = parse_hits([hit])
+        assert records[0]["download_url"] == ""
