@@ -148,6 +148,7 @@ def download_nsm_document(
     enriched = dict(record)
     enriched["file_path"] = str(target)
     enriched["file_hash"] = file_hash
+    enriched["file_size_bytes"] = len(content)
     return enriched
 
 
@@ -161,7 +162,6 @@ def run_nsm_download(
     delay_api: float = 1.0,
     delay_download: float = 1.0,
     page_size: int = 10000,
-    consecutive_failures_skip: int = 5,
     total_failures_abort: int = 10,
     api_responses_dir: Path | None = None,
 ) -> dict[str, Any]:
@@ -184,7 +184,6 @@ def run_nsm_download(
     }
 
     from_offset = 0
-    consecutive_failures = 0
 
     while True:
         if stats["aborted"]:
@@ -231,13 +230,11 @@ def run_nsm_download(
                 with manifest_path.open("a") as f:
                     f.write(json.dumps(result) + "\n")
                 stats["downloaded"] += 1
-                consecutive_failures = 0
             elif record.get("download_url"):
                 # Only count as failure if we actually tried (not a skip)
                 target = output_dir / f"{record.get('storage_key', '')}.pdf"
                 if not target.exists():
                     stats["failed"] += 1
-                    consecutive_failures += 1
                 else:
                     stats["skipped"] += 1
             else:
@@ -246,9 +243,6 @@ def run_nsm_download(
             if stats["failed"] >= total_failures_abort:
                 stats["aborted"] = True
                 break
-
-            if consecutive_failures >= consecutive_failures_skip:
-                consecutive_failures = 0  # Reset after skip window
 
             if delay_download > 0:
                 time.sleep(delay_download)
