@@ -304,6 +304,7 @@ def run_nsm_download(
 
     stats["total_in_discovery"] = len(raw_records)
 
+    # Discovery stores raw _source dicts; re-wrap as hits for parse_hits
     hits = [{"_id": r.get("disclosure_id", ""), "_source": r} for r in raw_records]
     records = parse_hits(hits)
 
@@ -318,14 +319,8 @@ def run_nsm_download(
                 result, dl_status = download_nsm_document(
                     record, client=client, output_dir=output_dir
                 )
-        except Exception as exc:
-            logger.log(
-                document_id=doc_id,
-                step="download",
-                duration_ms=0,
-                status="error",
-                error_message=str(exc),
-            )
+        except Exception:
+            # logger.timed already logged the error with duration
             result, dl_status = None, "error"
 
         if dl_status == "downloaded" and result is not None:

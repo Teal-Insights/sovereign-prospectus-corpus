@@ -378,6 +378,62 @@ class TestRunNsmDownloadFromDiscovery:
         assert stats["downloaded"] == 0
         assert stats["skipped"] == 1
 
+    def test_circuit_breaker_aborts(self, tmp_path: Path) -> None:
+        """Pipeline aborts after total_failures_abort threshold."""
+        from corpus.logging import CorpusLogger
+        from corpus.sources.nsm import run_nsm_download
+
+        # Create discovery file with many docs that will fail (invalid PDF content)
+        discovery = tmp_path / "discovery.jsonl"
+        lines = []
+        for i in range(15):
+            lines.append(
+                json.dumps(
+                    {
+                        "disclosure_id": f"fail-{i}",
+                        "download_link": f"NSM/Portal/fail-{i}.pdf",
+                        "company": "BADCORP",
+                        "lei": "",
+                        "type_code": "PDI",
+                        "type": "Test",
+                        "headline": f"Fail doc {i}",
+                        "submitted_date": "2024-01-01T00:00:00Z",
+                        "publication_date": "2024-01-01T00:00:00Z",
+                        "source": "FCA",
+                        "seq_id": f"fail-{i}",
+                        "hist_seq": "1",
+                        "classifications": "",
+                        "classifications_code": "",
+                        "tag_esef": "",
+                        "lei_remediation_flag": "N",
+                        "last_updated_date": "2024-01-01T00:00:00Z",
+                    }
+                )
+            )
+        discovery.write_text("\n".join(lines) + "\n")
+
+        mock_client = MagicMock()
+        bad_resp = MagicMock()
+        bad_resp.content = b"not a pdf"
+        mock_client.get.return_value = bad_resp
+
+        log_file = tmp_path / "test.jsonl"
+        logger = CorpusLogger(log_file, run_id="test-run")
+
+        stats = run_nsm_download(
+            client=mock_client,
+            discovery_file=discovery,
+            output_dir=tmp_path / "original",
+            manifest_dir=tmp_path / "manifests",
+            logger=logger,
+            run_id="test-run",
+            delay_download=0.0,
+            total_failures_abort=5,
+        )
+
+        assert stats["aborted"]
+        assert stats["failed"] <= 6
+
 
 class TestRelatedOrgParsing:
     """Tests for parsing related_org field from NSM API hits."""
