@@ -4,8 +4,15 @@
 
 1. Read `SESSION-HANDOFF.md` for the current task
 2. Read the task spec linked from SESSION-HANDOFF.md
-3. Confirm understanding before writing code
-4. If stuck after 5 attempts: document the blocker, move on
+3. Check open GitHub issues (`gh issue list`) — incorporate any that overlap with the current task
+4. Confirm understanding before writing code
+5. If stuck after 5 attempts: document the blocker, move on
+
+## Code Review Process
+
+- Fix all reasonable issues from code review immediately — it usually doesn't take much time
+- Any issue not fixed immediately gets filed as a GitHub issue (don't let feedback disappear)
+- Use `gh issue create` with context about where the feedback came from
 
 ## Project
 
@@ -32,6 +39,29 @@ Build a structured, searchable corpus of sovereign bond prospectuses that surfac
 14. **Start clean.** Phase 1 scripts are reference only. Rewrite from scratch.
 
 Full rationale: `docs/RATIFIED-DECISIONS.md`
+
+## Lessons Learned from NSM Adapter (March 26, 2026)
+
+These patterns were validated during the NSM source adapter build and should be followed for EDGAR/PDIP:
+
+### Source adapter pattern
+1. **Two-phase: discover then download.** Separate CLI commands (`corpus discover <source>` → `corpus download <source>`). Discovery is fast metadata-only queries (minutes). Download is slow PDF retrieval (hours). This lets you inspect discovery results before committing to downloads, and re-run downloads without re-querying.
+2. **"Breadth over depth" means within sovereign issuers, not the entire exchange.** The NSM has 5.2M total filings but only ~900 are sovereign. Use sovereign-scoped queries (LEIs, name patterns), not unfiltered bulk queries.
+3. **Query each LEI separately.** Phase 0 AND'd multiple LEIs in one query → missed results. One API call per LEI.
+4. **Name searches produce false positives.** "Georgia" returned 3,366 corporate hits. Use specific strings like "Georgia(acting through MoF" or "Government of Canada" instead of bare country names.
+5. **Many HTML filings have no PDF.** ~28% of NSM sovereign filings are HTML-only (tender offers, notices). Treat `no_pdf_link` as a skip, not a failure — don't let it trigger circuit breakers.
+6. **Discovery file stores raw `_source` dicts.** Download phase re-wraps them as fake hits for `parse_hits`. This is intentional — keeps discovery output close to the API response for debugging.
+
+### Telemetry
+7. **Don't use `logger.timed()` when the function reports status via return values.** `logger.timed` logs "success" on any non-exception return, which is wrong for functions that return `(None, "failed_invalid_pdf")`. Use explicit `time.monotonic()` + `logger.log()` with the actual status.
+
+### Testing
+8. **Always test the circuit breaker.** It's a safety mechanism for overnight runs — verify it actually fires.
+9. **Run the actual download in the task, not just the code.** Building the adapter without running it misses real-world issues (5.2M unfiltered results, HTML-only filings, Georgia false positives).
+
+### Config
+10. **Read config.toml in the CLI layer, not hardcode defaults.** Pass configured values (retries, delays, thresholds) to HTTP client and pipeline functions.
+11. **Use relative file paths in manifests.** `str(target)` produces environment-specific absolute paths. Future work should normalize to relative paths under `data/`.
 
 ## Coding Standards
 
