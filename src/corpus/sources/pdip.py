@@ -18,8 +18,13 @@ if TYPE_CHECKING:
     from corpus.logging import CorpusLogger
 
 import requests
+import urllib3
 
 from corpus.io.safe_write import safe_write
+
+# Georgetown's SSL cert chain is incomplete on some systems (macOS/Anaconda).
+# Suppress the per-request InsecureRequestWarning since we set verify=False.
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 log = logging.getLogger(__name__)
 
