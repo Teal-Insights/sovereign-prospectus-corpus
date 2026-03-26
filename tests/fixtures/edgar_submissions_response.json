@@ -1,0 +1,56 @@
+{
+  "cik": "0000914021",
+  "entityType": "sovereignGovernment",
+  "sic": "8888",
+  "sicDescription": "Foreign Governments",
+  "name": "REPUBLIC OF ARGENTINA",
+  "tickers": [],
+  "exchanges": [],
+  "filings": {
+    "recent": {
+      "accessionNumber": [
+        "0000914021-24-000123",
+        "0000914021-23-000456",
+        "0000914021-22-000789",
+        "0000914021-21-000111",
+        "0000914021-20-000222"
+      ],
+      "filingDate": [
+        "2024-06-15",
+        "2023-03-20",
+        "2022-11-01",
+        "2021-08-10",
+        "2020-05-05"
+      ],
+      "form": [
+        "424B5",
+        "FWP",
+        "18-K",
+        "424B2",
+        "424B5"
+      ],
+      "primaryDocument": [
+        "d12345.htm",
+        "d67890.htm",
+        "annual-report.htm",
+        "d11111.pdf",
+        "d22222.htm"
+      ],
+      "primaryDocDescription": [
+        "Prospectus Supplement",
+        "Free Writing Prospectus",
+        "Annual Report",
+        "Prospectus Supplement",
+        "Prospectus Supplement"
+      ]
+    },
+    "files": [
+      {
+        "name": "CIK0000914021-submissions-001.json",
+        "filingCount": 50,
+        "filingFrom": "2005-01-12",
+        "filingTo": "2019-12-31"
+      }
+    ]
+  }
+}

@@ -1,7 +1,7 @@
 # SESSION-HANDOFF.md — Current Task
 
 **Last updated:** 2026-03-26
-**Status:** Phase 1 tasks 1-4 complete. NSM downloading done (642 PDFs). Ready for next task.
+**Status:** Phase 1 tasks 1-5 complete. NSM + EDGAR downloading done. Ready for Task 6 (PDIP).
 
 ## Completed
 
@@ -11,13 +11,16 @@
 - **Task 4:** NSM source adapter — sovereign discovery + download ✅
   - 899 sovereign filings discovered, 642 PDFs downloaded (591 MB)
   - Two-phase: `corpus discover nsm` → `corpus download nsm`
+- **Task 5:** EDGAR source adapter — sovereign discovery + download ✅
+  - 3,306 filings discovered from 27 sovereign CIKs, 3,301 downloaded (587 MB)
+  - Two-phase: `corpus discover edgar` → `corpus download edgar`
+  - PR #10: `feature/source-edgar`
 
 ## Next Tasks
 
 See `planning/specs/2026-03-25_clean-architecture/TASKS.md` for full task list.
 
 **Phase 1 remaining:**
-- **Task 5:** EDGAR source adapter + migration (PARALLEL)
 - **Task 6:** PDIP source adapter + migration (PARALLEL)
 
 **Phase 2:**

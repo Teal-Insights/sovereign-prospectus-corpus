@@ -124,9 +124,81 @@ def nsm(
 
 @download.command()
 @click.option("--run-id", default=None, help="Pipeline run identifier.")
-def edgar(run_id: str | None) -> None:
-    """Download documents from SEC EDGAR."""
-    click.echo("EDGAR download not yet implemented (see Task 5).")
+@click.option(
+    "--discovery-file",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/edgar_discovery.jsonl",
+    help="Path to discovery JSONL from 'corpus discover edgar'.",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default="data/original",
+    help="Directory for downloaded files.",
+)
+@click.option(
+    "--manifest-dir",
+    type=click.Path(path_type=Path),
+    default="data/manifests",
+    help="Directory for manifest JSONL files.",
+)
+@click.option(
+    "--log-dir",
+    type=click.Path(path_type=Path),
+    default="data/telemetry",
+    help="Directory for structured log files.",
+)
+def edgar(
+    run_id: str | None,
+    discovery_file: Path,
+    output_dir: Path,
+    manifest_dir: Path,
+    log_dir: Path,
+) -> None:
+    """Download documents from SEC EDGAR (reads discovery file)."""
+    import os
+    import uuid
+
+    from corpus.io.http import CorpusHTTPClient
+    from corpus.logging import CorpusLogger
+    from corpus.sources.edgar import run_edgar_download
+
+    cfg = _load_config().get("edgar", {})
+    cb_cfg = cfg.get("circuit_breaker", {})
+
+    if run_id is None:
+        run_id = f"edgar-{uuid.uuid4().hex[:12]}"
+
+    client = CorpusHTTPClient(
+        contact_email=os.environ.get("CONTACT_EMAIL"),
+        max_retries=int(cfg.get("max_retries", 3)),
+        backoff_factor=float(cfg.get("backoff_factor", 0.5)),
+        timeout=int(cfg.get("timeout", 60)),
+    )
+
+    log_file = log_dir / f"edgar_{run_id}.jsonl"
+    logger = CorpusLogger(log_file, run_id=run_id)
+
+    click.echo(f"Starting EDGAR download from {discovery_file} (run_id={run_id})...")
+    stats = run_edgar_download(
+        client=client,
+        discovery_file=discovery_file,
+        output_dir=output_dir,
+        manifest_dir=manifest_dir,
+        logger=logger,
+        run_id=run_id,
+        delay=float(cfg.get("delay", 0.25)),
+        total_failures_abort=int(cb_cfg.get("total_failures_abort", 10)),
+        rate_limit_sleep=int(cb_cfg.get("rate_limit_sleep_seconds", 660)),
+    )
+
+    click.echo(
+        f"EDGAR download complete: {stats['downloaded']} downloaded, "
+        f"{stats['skipped']} skipped, {stats['failed']} failed "
+        f"(of {stats['total_in_discovery']} in discovery)."
+    )
+    if stats["aborted"]:
+        click.echo("WARNING: Download aborted due to too many failures.")
 
 
 @download.command()
@@ -193,6 +265,63 @@ def discover_nsm_cmd(run_id: str | None, output: Path, reference_csv: Path) -> N
     click.echo(f"Output: {output}")
     for pq in stats["per_query"]:
         click.echo(f"  {pq['label']}: {pq['hits']} hits, {pq['new']} new")
+
+
+@discover.command("edgar")
+@click.option("--run-id", default=None, help="Pipeline run identifier.")
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default="data/edgar_discovery.jsonl",
+    help="Output path for discovery JSONL.",
+)
+@click.option(
+    "--tiers",
+    default="1,2,3,4",
+    help="Comma-separated tier numbers (default: all).",
+)
+def discover_edgar_cmd(run_id: str | None, output: Path, tiers: str) -> None:
+    """Discover sovereign filings from SEC EDGAR (metadata only)."""
+    import os
+    import uuid
+
+    from corpus.io.http import CorpusHTTPClient
+    from corpus.sources.edgar import SOVEREIGN_CIKS, discover_edgar
+
+    cfg = _load_config().get("edgar", {})
+
+    if run_id is None:
+        run_id = f"discover-edgar-{uuid.uuid4().hex[:8]}"
+
+    client = CorpusHTTPClient(
+        contact_email=os.environ.get("CONTACT_EMAIL"),
+        max_retries=int(cfg.get("max_retries", 3)),
+        backoff_factor=float(cfg.get("backoff_factor", 0.5)),
+        timeout=int(cfg.get("timeout", 60)),
+    )
+
+    requested_tiers = [int(t.strip()) for t in tiers.split(",")]
+    cik_entries: list[dict[str, str]] = []
+    for tier in sorted(requested_tiers):
+        cik_entries.extend(SOVEREIGN_CIKS.get(tier, []))
+
+    click.echo(
+        f"Discovering EDGAR filings for {len(cik_entries)} sovereign CIKs "
+        f"(tiers {tiers}, run_id={run_id})..."
+    )
+
+    stats = discover_edgar(
+        client=client,
+        cik_entries=cik_entries,
+        output_path=output,
+        delay=float(cfg.get("delay", 0.25)),
+    )
+
+    click.echo(
+        f"Discovery complete: {stats['total_filings']} filings from "
+        f"{stats['ciks_queried']} CIKs ({stats['ciks_failed']} failed)."
+    )
+    click.echo(f"Output: {output}")
 
 
 # ── Parse group ─────────────────────────────────────────────────────
