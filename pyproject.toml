@@ -3,26 +3,28 @@ name = "sovereign-prospectus-corpus"
 version = "0.2.0"
 description = "AI-enabled pipeline to download, process, and analyze sovereign bond prospectuses at scale"
 requires-python = ">=3.12"
-authors = [
-    { name = "Teal Emery", email = "lte@tealinsights.com" },
-]
 dependencies = [
-    "requests>=2.31",
-    "beautifulsoup4>=4.12",
+    "duckdb>=1.2,<1.3",
+    "polars>=1.0",
     "pymupdf>=1.24",
+    "requests>=2.31",
+    "click>=8.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.8",
+    "ruff>=0.9",
     "pyright>=1.1",
     "pytest>=8.0",
+    "pre-commit>=4.0",
 ]
+
+[project.scripts]
+corpus = "corpus.cli:main"
 
 [tool.ruff]
 target-version = "py312"
 line-length = 99
-
 [tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
@@ -36,18 +38,19 @@ select = [
     "TCH", # flake8-type-checking
     "RUF", # ruff-specific
 ]
-ignore = [
-    "E501",  # line too long (handled by formatter)
-]
+ignore = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["sovereign_corpus"]
+known-first-party = ["corpus"]
 
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
 reportMissingImports = true
 reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+markers = ["network: tests requiring network access"]
 
 [build-system]
 requires = ["hatchling"]

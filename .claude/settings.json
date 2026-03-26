@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "allow": [],
+    "deny": [
+      "Bash(git commit*--amend*)",
+      "Bash(git push*--force*)",
+      "Bash(git push*main*)",
+      "Bash(git checkout main && git commit*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'INPUT=$(cat); CMD=$(echo \"$INPUT\" | jq -r \".tool_input.command // empty\"); if echo \"$CMD\" | grep -qE \"git (push|commit).*(main|master)\"; then echo \"{\\\"decision\\\":\\\"block\\\",\\\"reason\\\":\\\"Direct commits to main blocked. Create a feature branch: git checkout -b feature/your-feature\\\"}\"; exit 2; fi; exit 0'",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [          {
+            "type": "command",
+            "command": "bash -c 'INPUT=$(cat); FILE=$(echo \"$INPUT\" | jq -r \".tool_input.file_path // empty\"); if [[ \"$FILE\" == *.py ]]; then uv run ruff check --fix \"$FILE\" 2>/dev/null; uv run ruff format \"$FILE\" 2>/dev/null; fi; exit 0'",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'PROMPT=$(cat | jq -r \".prompt // empty\"); if echo \"$PROMPT\" | grep -qiE \"^(implement|build|code|refactor|rewrite|create src)\"; then echo \"{\\\"continue\\\":true,\\\"additionalContext\\\":\\\"PLANNING CHECKPOINT: Before implementing, check that a spec exists in planning/specs/. If not, create one first. Use the brainstorm-spec-tasks workflow.\\\"}\"; fi; exit 0'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
