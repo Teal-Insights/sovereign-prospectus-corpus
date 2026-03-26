@@ -112,6 +112,15 @@ def nsm(
         total_failures_abort=int(cb_cfg.get("total_failures_abort", 10)),
     )
 
+    from corpus.reporting import write_run_report
+
+    report_path = write_run_report(
+        source="nsm",
+        run_id=run_id,
+        stats=stats,
+        telemetry_dir=log_dir,
+    )
+
     click.echo(
         f"NSM download complete: {stats['downloaded']} downloaded, "
         f"{stats['skipped']} skipped, {stats['skipped_no_pdf']} html-only, "
@@ -120,6 +129,7 @@ def nsm(
     )
     if stats["aborted"]:
         click.echo("WARNING: Download aborted due to too many failures.")
+    click.echo(f"Report: {report_path}")
 
 
 @download.command()
@@ -192,6 +202,15 @@ def edgar(
         rate_limit_sleep=int(cb_cfg.get("rate_limit_sleep_seconds", 660)),
     )
 
+    from corpus.reporting import write_run_report
+
+    report_path = write_run_report(
+        source="edgar",
+        run_id=run_id,
+        stats=stats,
+        telemetry_dir=log_dir,
+    )
+
     click.echo(
         f"EDGAR download complete: {stats['downloaded']} downloaded, "
         f"{stats['skipped']} skipped, {stats['failed']} failed "
@@ -199,6 +218,7 @@ def edgar(
     )
     if stats["aborted"]:
         click.echo("WARNING: Download aborted due to too many failures.")
+    click.echo(f"Report: {report_path}")
 
 
 @download.command()
