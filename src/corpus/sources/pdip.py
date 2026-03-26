@@ -6,7 +6,19 @@ and writes pdip_manifest.jsonl for downstream ingest.
 
 from __future__ import annotations
 
-from typing import Any
+import json
+import logging
+import time
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+import requests
+
+from corpus.io.safe_write import safe_write
+
+log = logging.getLogger(__name__)
 
 PDIP_BASE_URL = "https://publicdebtispublic.mdi.georgetown.edu"
 PDIP_SEARCH_URL = f"{PDIP_BASE_URL}/api/search/"
@@ -64,3 +76,65 @@ def parse_search_results(response: dict[str, Any]) -> list[dict[str, Any]]:
         records.append(record)
 
     return records
+
+
+def discover_pdip(
+    *,
+    output_path: Path,
+    page_size: int = 100,
+    delay: float = 1.0,
+) -> dict[str, Any]:
+    """Query PDIP search API for all documents.
+
+    Paginates through results, writes discovery JSONL. Returns stats dict.
+    """
+    session = requests.Session()
+    session.headers.update(PDIP_HEADERS)
+
+    seen_ids: set[str] = set()
+    all_records: list[dict[str, Any]] = []
+    page = 1
+    pages_fetched = 0
+    error: str | None = None
+
+    while True:
+        payload = {
+            "page": page,
+            "sortBy": "date",
+            "sortOrder": "asc",
+            "pageSize": page_size,
+        }
+
+        try:
+            resp = session.post(PDIP_SEARCH_URL, json=payload, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            log.error("PDIP search API failed on page %d: %s", page, exc)
+            error = str(exc)
+            break
+
+        pages_fetched += 1
+        results = data.get("results", [])
+        records = parse_search_results(data)
+
+        for record in records:
+            if record["native_id"] not in seen_ids:
+                seen_ids.add(record["native_id"])
+                all_records.append(record)
+
+        if len(results) < page_size:
+            break
+
+        page += 1
+        if delay > 0:
+            time.sleep(delay)
+
+    content = "".join(json.dumps(r) + "\n" for r in all_records).encode()
+    safe_write(output_path, content, overwrite=True)
+
+    return {
+        "total_documents": len(all_records),
+        "pages_fetched": pages_fetched,
+        "error": error,
+    }
