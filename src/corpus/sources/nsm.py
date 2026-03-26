@@ -236,7 +236,7 @@ def download_nsm_document(
     """Download a single NSM document.
 
     Returns (enriched_record, status) where status is one of:
-    "downloaded", "skipped_exists", "skipped_no_url", "failed_no_pdf_link",
+    "downloaded", "skipped_exists", "skipped_no_url", "skipped_no_pdf_link",
     "failed_invalid_pdf".
     """
     storage_key = record.get("storage_key", "")
@@ -249,10 +249,10 @@ def download_nsm_document(
     if not download_url:
         return None, "skipped_no_url"
 
-    # Resolve two-hop HTML links
+    # Resolve two-hop HTML links (HTML-only filings have no PDF)
     pdf_url = resolve_pdf_url(download_url, client=client)
     if pdf_url is None:
-        return None, "failed_no_pdf_link"
+        return None, "skipped_no_pdf_link"
 
     resp = client.get(pdf_url)
     content = resp.content
@@ -293,6 +293,7 @@ def run_nsm_download(
     stats: dict[str, Any] = {
         "downloaded": 0,
         "skipped": 0,
+        "skipped_no_pdf": 0,
         "failed": 0,
         "total_in_discovery": 0,
         "aborted": False,
@@ -331,6 +332,8 @@ def run_nsm_download(
             with manifest_path.open("a") as f:
                 f.write(json.dumps(result) + "\n")
             stats["downloaded"] += 1
+        elif dl_status == "skipped_no_pdf_link":
+            stats["skipped_no_pdf"] += 1
         elif dl_status.startswith("skipped"):
             stats["skipped"] += 1
         else:

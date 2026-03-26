@@ -114,7 +114,8 @@ def nsm(
 
     click.echo(
         f"NSM download complete: {stats['downloaded']} downloaded, "
-        f"{stats['skipped']} skipped, {stats['failed']} failed "
+        f"{stats['skipped']} skipped, {stats['skipped_no_pdf']} html-only, "
+        f"{stats['failed']} failed "
         f"(of {stats['total_in_discovery']} in discovery)."
     )
     if stats["aborted"]:
