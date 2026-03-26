@@ -6,6 +6,7 @@ and writes pdip_manifest.jsonl for downstream ingest.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
@@ -138,3 +139,62 @@ def discover_pdip(
         "pages_fetched": pages_fetched,
         "error": error,
     }
+
+
+def download_pdip_document(
+    record: dict[str, Any],
+    *,
+    session: Any,
+    output_dir: Path,
+) -> tuple[dict[str, Any] | None, str]:
+    """Download a single PDIP document.
+
+    Returns (enriched_record, status) where status is one of:
+    "success", "skipped_exists", "not_found", "invalid_pdf".
+    """
+    native_id = record["native_id"]
+    target = output_dir / f"pdip__{native_id}.pdf"
+
+    if target.exists():
+        return None, "skipped_exists"
+
+    url = PDIP_PDF_URL.format(doc_id=native_id)
+    resp = session.get(url, timeout=60)
+
+    if resp.status_code == 404:
+        return None, "not_found"
+
+    resp.raise_for_status()
+    content = resp.content
+
+    if not content[:5].startswith(b"%PDF"):
+        return None, "invalid_pdf"
+
+    safe_write(target, content)
+    file_hash = hashlib.sha256(content).hexdigest()
+
+    enriched: dict[str, Any] = {
+        "source": "pdip",
+        "native_id": native_id,
+        "storage_key": f"pdip__{native_id}",
+        "title": record.get("title", ""),
+        "issuer_name": record.get("country", ""),
+        "doc_type": record.get("instrument_type", ""),
+        "publication_date": None,
+        "download_url": url,
+        "file_ext": "pdf",
+        "file_path": str(target),
+        "file_hash": file_hash,
+        "file_size_bytes": len(content),
+        "source_metadata": {
+            "tag_status": record.get("tag_status", ""),
+            "country": record.get("country", ""),
+            "instrument_type": record.get("instrument_type", ""),
+            "creditor_country": record.get("creditor_country"),
+            "creditor_type": record.get("creditor_type"),
+            "maturity_date": record.get("maturity_date"),
+            "maturity_year": record.get("maturity_year"),
+        },
+    }
+
+    return enriched, "success"

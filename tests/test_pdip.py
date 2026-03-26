@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -180,3 +181,90 @@ class TestDiscoverPdip:
             discover_pdip(output_path=output, delay=0.0)
 
         mock_session.headers.update.assert_called_once_with(PDIP_HEADERS)
+
+
+class TestDownloadPdipDocument:
+    """Tests for single-document PDF download."""
+
+    def test_downloads_valid_pdf(self, tmp_path: Path) -> None:
+        from corpus.sources.pdip import download_pdip_document
+
+        pdf_bytes = b"%PDF-1.6\nfake pdf content"
+        mock_session = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.content = pdf_bytes
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_session.get.return_value = mock_resp
+
+        record = {
+            "native_id": "VEN85",
+            "source": "pdip",
+            "title": "Test Loan Agreement",
+            "tag_status": "Annotated",
+            "country": "Venezuela",
+            "instrument_type": "Loan",
+            "creditor_country": None,
+            "creditor_type": None,
+            "maturity_date": None,
+            "maturity_year": None,
+            "metadata": {},
+        }
+
+        result, status = download_pdip_document(record, session=mock_session, output_dir=tmp_path)
+
+        assert status == "success"
+        assert result is not None
+        assert result["file_path"] == str(tmp_path / "pdip__VEN85.pdf")
+        assert result["file_hash"] == hashlib.sha256(pdf_bytes).hexdigest()
+        assert result["file_size_bytes"] == len(pdf_bytes)
+        assert result["source"] == "pdip"
+        assert result["storage_key"] == "pdip__VEN85"
+        assert (
+            result["download_url"] == "https://publicdebtispublic.mdi.georgetown.edu/api/pdf/VEN85"
+        )
+        assert (tmp_path / "pdip__VEN85.pdf").exists()
+
+    def test_skips_already_downloaded(self, tmp_path: Path) -> None:
+        from corpus.sources.pdip import download_pdip_document
+
+        target = tmp_path / "pdip__VEN85.pdf"
+        target.write_bytes(b"already here")
+
+        record = {"native_id": "VEN85", "source": "pdip"}
+
+        result, status = download_pdip_document(record, session=MagicMock(), output_dir=tmp_path)
+        assert result is None
+        assert status == "skipped_exists"
+
+    def test_handles_404(self, tmp_path: Path) -> None:
+        from corpus.sources.pdip import download_pdip_document
+
+        mock_session = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        mock_session.get.return_value = mock_resp
+
+        record = {"native_id": "MISSING1", "source": "pdip"}
+
+        result, status = download_pdip_document(record, session=mock_session, output_dir=tmp_path)
+        assert result is None
+        assert status == "not_found"
+
+    def test_rejects_invalid_pdf(self, tmp_path: Path) -> None:
+        from corpus.sources.pdip import download_pdip_document
+
+        mock_session = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.content = b'{"error": "something went wrong"}'
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_session.get.return_value = mock_resp
+
+        record = {"native_id": "BAD1", "source": "pdip"}
+
+        result, status = download_pdip_document(record, session=mock_session, output_dir=tmp_path)
+        assert result is None
+        assert status == "invalid_pdf"
+
+
