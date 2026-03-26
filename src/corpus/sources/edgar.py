@@ -7,6 +7,7 @@ edgar_manifest.jsonl for downstream ingest.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from typing import TYPE_CHECKING, Any
@@ -119,7 +120,6 @@ def build_filing_list(
                 "title": desc or f"{form} - {issuer_name}",
                 "issuer_name": issuer_name,
                 "doc_type": form,
-                "form_type": form,
                 "publication_date": date,
                 "download_url": download_url,
                 "file_ext": ext,
@@ -221,7 +221,6 @@ def download_edgar_document(
     Returns (enriched_record, status) where status is one of:
     "downloaded", "skipped_exists", "skipped_no_url".
     """
-    import hashlib
 
     storage_key = record.get("storage_key", "")
     ext = record.get("file_ext", "htm")
@@ -304,6 +303,7 @@ def run_edgar_download(
             stats["failed"] += 1
             if stats["failed"] >= total_failures_abort:
                 stats["aborted"] = True
+                break
             if delay > 0:
                 time.sleep(delay)
             continue
@@ -322,17 +322,6 @@ def run_edgar_download(
             )
         elif dl_status.startswith("skipped"):
             stats["skipped"] += 1
-        else:
-            stats["failed"] += 1
-            logger.log(
-                document_id=doc_id,
-                step="download",
-                duration_ms=elapsed_ms,
-                status=dl_status,
-                error_message=f"Download failed: {dl_status}",
-            )
-            if stats["failed"] >= total_failures_abort:
-                stats["aborted"] = True
 
         if delay > 0:
             time.sleep(delay)

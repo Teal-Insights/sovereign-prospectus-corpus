@@ -50,7 +50,7 @@ class TestBuildFilingList:
         # Fixture has: 424B5, FWP, 18-K, 424B2, 424B5
         # 18-K is NOT a prospectus form, so it should be excluded
         assert len(filings) == 4
-        form_types = {f["form_type"] for f in filings}
+        form_types = {f["doc_type"] for f in filings}
         assert "18-K" not in form_types
         assert "424B5" in form_types
         assert "FWP" in form_types
