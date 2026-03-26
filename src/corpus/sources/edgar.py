@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from corpus.io.http import CorpusHTTPClient
+    from corpus.logging import CorpusLogger
 
 EDGAR_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 EDGAR_ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_nodash}/{filename}"
@@ -207,3 +208,133 @@ def discover_edgar(
         "ciks_failed": ciks_failed,
         "total_filings": len(all_records),
     }
+
+
+def download_edgar_document(
+    record: dict[str, Any],
+    *,
+    client: CorpusHTTPClient,
+    output_dir: Path,
+) -> tuple[dict[str, Any] | None, str]:
+    """Download a single EDGAR filing.
+
+    Returns (enriched_record, status) where status is one of:
+    "downloaded", "skipped_exists", "skipped_no_url".
+    """
+    import hashlib
+
+    storage_key = record.get("storage_key", "")
+    ext = record.get("file_ext", "htm")
+    target = output_dir / f"{storage_key}.{ext}"
+
+    if target.exists():
+        return None, "skipped_exists"
+
+    download_url = record.get("download_url", "")
+    if not download_url:
+        return None, "skipped_no_url"
+
+    resp = client.get(download_url)
+    content = resp.content
+
+    safe_write(target, content)
+    file_hash = hashlib.sha256(content).hexdigest()
+
+    enriched = dict(record)
+    enriched["file_path"] = str(target)
+    enriched["file_hash"] = file_hash
+    enriched["file_size_bytes"] = len(content)
+    return enriched, "downloaded"
+
+
+def run_edgar_download(
+    *,
+    client: CorpusHTTPClient,
+    discovery_file: Path,
+    output_dir: Path,
+    manifest_dir: Path,
+    logger: CorpusLogger,
+    run_id: str,
+    delay: float = 0.25,
+    total_failures_abort: int = 10,
+) -> dict[str, Any]:
+    """Download EDGAR filings from a discovery JSONL file.
+
+    Reads discovery results, downloads each document, writes edgar_manifest.jsonl.
+    """
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = manifest_dir / "edgar_manifest.jsonl"
+
+    stats: dict[str, Any] = {
+        "downloaded": 0,
+        "skipped": 0,
+        "failed": 0,
+        "total_in_discovery": 0,
+        "aborted": False,
+    }
+
+    with discovery_file.open() as f:
+        records = [json.loads(line) for line in f if line.strip()]
+
+    stats["total_in_discovery"] = len(records)
+
+    for record in records:
+        if stats["aborted"]:
+            break
+
+        doc_id = record.get("native_id", "unknown")
+        _start = time.monotonic()
+
+        try:
+            result, dl_status = download_edgar_document(
+                record,
+                client=client,
+                output_dir=output_dir,
+            )
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - _start) * 1000)
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status="error",
+                error_message=str(exc),
+            )
+            stats["failed"] += 1
+            if stats["failed"] >= total_failures_abort:
+                stats["aborted"] = True
+            if delay > 0:
+                time.sleep(delay)
+            continue
+
+        elapsed_ms = int((time.monotonic() - _start) * 1000)
+
+        if dl_status == "downloaded" and result is not None:
+            with manifest_path.open("a") as mf:
+                mf.write(json.dumps(result) + "\n")
+            stats["downloaded"] += 1
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status="success",
+            )
+        elif dl_status.startswith("skipped"):
+            stats["skipped"] += 1
+        else:
+            stats["failed"] += 1
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status=dl_status,
+                error_message=f"Download failed: {dl_status}",
+            )
+            if stats["failed"] >= total_failures_abort:
+                stats["aborted"] = True
+
+        if delay > 0:
+            time.sleep(delay)
+
+    return stats

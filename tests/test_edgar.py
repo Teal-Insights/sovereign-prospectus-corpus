@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -139,7 +141,6 @@ class TestFetchSubmissions:
     """Tests for fetching submissions JSON from EDGAR API."""
 
     def test_fetches_and_returns_json(self) -> None:
-        from unittest.mock import MagicMock
 
         from corpus.sources.edgar import fetch_submissions
 
@@ -158,7 +159,6 @@ class TestFetchSubmissions:
         assert "CIK0000914021" in url
 
     def test_returns_none_on_error(self) -> None:
-        from unittest.mock import MagicMock
 
         from corpus.sources.edgar import fetch_submissions
 
@@ -173,7 +173,6 @@ class TestDiscoverEdgar:
     """Tests for the full discovery pipeline."""
 
     def test_discovers_filings_for_cik_entries(self, tmp_path: Path) -> None:
-        from unittest.mock import MagicMock
 
         from corpus.sources.edgar import discover_edgar
 
@@ -202,7 +201,6 @@ class TestDiscoverEdgar:
         assert len(lines) == 4
 
     def test_deduplicates_across_ciks(self, tmp_path: Path) -> None:
-        from unittest.mock import MagicMock
 
         from corpus.sources.edgar import discover_edgar
 
@@ -231,7 +229,6 @@ class TestDiscoverEdgar:
         assert len(lines) == 4
 
     def test_paginates_older_filings(self, tmp_path: Path) -> None:
-        from unittest.mock import MagicMock
 
         from corpus.sources.edgar import discover_edgar
 
@@ -269,7 +266,6 @@ class TestDiscoverEdgar:
         assert "0000914021-15-000999" in native_ids
 
     def test_handles_failed_cik(self, tmp_path: Path) -> None:
-        from unittest.mock import MagicMock
 
         from corpus.sources.edgar import discover_edgar
 
@@ -291,3 +287,207 @@ class TestDiscoverEdgar:
         assert stats["ciks_queried"] == 1
         assert stats["ciks_failed"] == 1
         assert stats["total_filings"] == 0
+
+
+class TestDownloadEdgarDocument:
+    """Tests for single-document download."""
+
+    def test_downloads_and_returns_record(self, tmp_path: Path) -> None:
+        from corpus.sources.edgar import download_edgar_document
+
+        html_bytes = b"<html><body>Prospectus content</body></html>"
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.content = html_bytes
+        mock_client.get.return_value = mock_resp
+
+        record = {
+            "source": "edgar",
+            "native_id": "0000914021-24-000123",
+            "storage_key": "edgar__0000914021-24-000123",
+            "download_url": "https://www.sec.gov/Archives/edgar/data/914021/000091402124000123/d12345.htm",
+            "file_ext": "htm",
+        }
+
+        result, status = download_edgar_document(record, client=mock_client, output_dir=tmp_path)
+
+        assert status == "downloaded"
+        assert result is not None
+        assert result["file_path"] == str(tmp_path / "edgar__0000914021-24-000123.htm")
+        assert result["file_hash"] == hashlib.sha256(html_bytes).hexdigest()
+        assert result["file_size_bytes"] == len(html_bytes)
+        assert (tmp_path / "edgar__0000914021-24-000123.htm").exists()
+
+    def test_skips_already_downloaded(self, tmp_path: Path) -> None:
+        from corpus.sources.edgar import download_edgar_document
+
+        target = tmp_path / "edgar__0000914021-24-000123.htm"
+        target.write_bytes(b"already here")
+
+        record = {
+            "source": "edgar",
+            "native_id": "0000914021-24-000123",
+            "storage_key": "edgar__0000914021-24-000123",
+            "download_url": "https://example.com/doc.htm",
+            "file_ext": "htm",
+        }
+
+        result, status = download_edgar_document(record, client=MagicMock(), output_dir=tmp_path)
+        assert result is None
+        assert status == "skipped_exists"
+
+    def test_skips_no_url(self, tmp_path: Path) -> None:
+        from corpus.sources.edgar import download_edgar_document
+
+        record = {
+            "source": "edgar",
+            "native_id": "no-url",
+            "storage_key": "edgar__no-url",
+            "download_url": "",
+            "file_ext": "htm",
+        }
+
+        result, status = download_edgar_document(record, client=MagicMock(), output_dir=tmp_path)
+        assert result is None
+        assert status == "skipped_no_url"
+
+
+class TestRunEdgarDownload:
+    """Tests for the full download pipeline."""
+
+    def test_reads_discovery_and_downloads(self, tmp_path: Path) -> None:
+        from corpus.logging import CorpusLogger
+        from corpus.sources.edgar import run_edgar_download
+
+        discovery = tmp_path / "discovery.jsonl"
+        record = {
+            "source": "edgar",
+            "native_id": "0000914021-24-000123",
+            "storage_key": "edgar__0000914021-24-000123",
+            "title": "Prospectus Supplement",
+            "issuer_name": "REPUBLIC OF ARGENTINA",
+            "doc_type": "424B5",
+            "publication_date": "2024-06-15",
+            "download_url": "https://www.sec.gov/Archives/edgar/data/914021/000091402124000123/d12345.htm",
+            "file_ext": "htm",
+            "source_metadata": {
+                "cik": "0000914021",
+                "accession_number": "0000914021-24-000123",
+                "form_type": "424B5",
+                "primary_document": "d12345.htm",
+            },
+        }
+        discovery.write_text(json.dumps(record) + "\n")
+
+        html_bytes = b"<html>Prospectus</html>"
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.content = html_bytes
+        mock_client.get.return_value = mock_resp
+
+        output_dir = tmp_path / "original"
+        manifest_dir = tmp_path / "manifests"
+        log_file = tmp_path / "test.jsonl"
+        logger = CorpusLogger(log_file, run_id="test-run")
+
+        stats = run_edgar_download(
+            client=mock_client,
+            discovery_file=discovery,
+            output_dir=output_dir,
+            manifest_dir=manifest_dir,
+            logger=logger,
+            run_id="test-run",
+            delay=0.0,
+        )
+
+        assert stats["downloaded"] == 1
+        manifest = manifest_dir / "edgar_manifest.jsonl"
+        assert manifest.exists()
+        lines = [json.loads(line) for line in manifest.read_text().strip().split("\n")]
+        assert len(lines) == 1
+        assert lines[0]["native_id"] == "0000914021-24-000123"
+
+    def test_circuit_breaker_aborts(self, tmp_path: Path) -> None:
+        from corpus.logging import CorpusLogger
+        from corpus.sources.edgar import run_edgar_download
+
+        discovery = tmp_path / "discovery.jsonl"
+        lines = []
+        for i in range(15):
+            lines.append(
+                json.dumps(
+                    {
+                        "source": "edgar",
+                        "native_id": f"fail-{i:03d}",
+                        "storage_key": f"edgar__fail-{i:03d}",
+                        "title": f"Fail {i}",
+                        "issuer_name": "TEST",
+                        "doc_type": "424B5",
+                        "publication_date": "2024-01-01",
+                        "download_url": f"https://example.com/fail-{i}.htm",
+                        "file_ext": "htm",
+                        "source_metadata": {},
+                    }
+                )
+            )
+        discovery.write_text("\n".join(lines) + "\n")
+
+        mock_client = MagicMock()
+        mock_client.get.side_effect = Exception("connection refused")
+
+        log_file = tmp_path / "test.jsonl"
+        logger = CorpusLogger(log_file, run_id="test-run")
+
+        stats = run_edgar_download(
+            client=mock_client,
+            discovery_file=discovery,
+            output_dir=tmp_path / "original",
+            manifest_dir=tmp_path / "manifests",
+            logger=logger,
+            run_id="test-run",
+            delay=0.0,
+            total_failures_abort=5,
+        )
+
+        assert stats["aborted"]
+        assert stats["failed"] <= 6
+
+    def test_telemetry_logs_failure(self, tmp_path: Path) -> None:
+        from corpus.logging import CorpusLogger
+        from corpus.sources.edgar import run_edgar_download
+
+        discovery = tmp_path / "discovery.jsonl"
+        record = {
+            "source": "edgar",
+            "native_id": "err-doc",
+            "storage_key": "edgar__err-doc",
+            "title": "Error Doc",
+            "issuer_name": "TEST",
+            "doc_type": "424B5",
+            "publication_date": "2024-01-01",
+            "download_url": "https://example.com/err.htm",
+            "file_ext": "htm",
+            "source_metadata": {},
+        }
+        discovery.write_text(json.dumps(record) + "\n")
+
+        mock_client = MagicMock()
+        mock_client.get.side_effect = Exception("timeout")
+
+        log_file = tmp_path / "test.jsonl"
+        logger = CorpusLogger(log_file, run_id="test-run")
+
+        run_edgar_download(
+            client=mock_client,
+            discovery_file=discovery,
+            output_dir=tmp_path / "original",
+            manifest_dir=tmp_path / "manifests",
+            logger=logger,
+            run_id="test-run",
+            delay=0.0,
+        )
+
+        log_entries = [json.loads(line) for line in log_file.read_text().strip().split("\n")]
+        assert len(log_entries) == 1
+        assert log_entries[0]["status"] == "error"
+        assert log_entries[0]["duration_ms"] >= 0
