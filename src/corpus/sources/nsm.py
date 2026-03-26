@@ -6,7 +6,9 @@ downloads PDFs, and writes nsm_manifest.jsonl for downstream ingest.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urljoin
 
 if TYPE_CHECKING:
     from corpus.io.http import CorpusHTTPClient
@@ -74,3 +76,25 @@ def parse_hits(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
         }
         records.append(record)
     return records
+
+
+def resolve_pdf_url(url: str, *, client: CorpusHTTPClient) -> str | None:
+    """Resolve a download URL to a direct PDF link.
+
+    Direct .pdf URLs are returned unchanged. HTML metadata pages are
+    fetched and parsed to extract the PDF link (two-hop pattern).
+    Returns None if no PDF link can be found.
+    """
+    if url.lower().endswith(".pdf"):
+        return url
+
+    resp = client.get(url)
+    html = resp.text
+
+    # Look for <a> tags with href ending in .pdf
+    pdf_pattern = re.compile(r'href=["\']([^"\']*\.pdf)["\']', re.IGNORECASE)
+    match = pdf_pattern.search(html)
+    if match:
+        return urljoin(url, match.group(1))
+
+    return None

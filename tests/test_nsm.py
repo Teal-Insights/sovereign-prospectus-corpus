@@ -137,3 +137,44 @@ class TestParseHits:
         }
         records = parse_hits([hit])
         assert records[0]["download_url"] == ""
+
+
+class TestResolvePdfUrl:
+    """Tests for two-hop HTML->PDF URL resolution."""
+
+    def test_direct_pdf_url_returned_as_is(self) -> None:
+        """URL ending in .pdf is returned unchanged."""
+        from corpus.sources.nsm import resolve_pdf_url
+
+        url = "https://data.fca.org.uk/artefacts/NSM/Portal/doc.pdf"
+        result = resolve_pdf_url(url, client=MagicMock())
+        assert result == url
+
+    def test_html_url_extracts_pdf_link(self) -> None:
+        """HTML page with a PDF link returns the resolved PDF URL."""
+        from corpus.sources.nsm import resolve_pdf_url
+
+        html_content = (FIXTURES / "nsm_html_page.html").read_text()
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = html_content
+        mock_client.get.return_value = mock_response
+
+        url = "https://data.fca.org.uk/artefacts/NSM/RNS/def-456.html"
+        result = resolve_pdf_url(url, client=mock_client)
+
+        assert result == "https://data.fca.org.uk/artefacts/NSM/RNS/abc-123/prospectus.pdf"
+
+    def test_html_url_no_pdf_link_returns_none(self) -> None:
+        """HTML page without any PDF link returns None."""
+        from corpus.sources.nsm import resolve_pdf_url
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = "<html><body>No links here</body></html>"
+        mock_client.get.return_value = mock_response
+
+        url = "https://data.fca.org.uk/artefacts/NSM/RNS/no-pdf.html"
+        result = resolve_pdf_url(url, client=mock_client)
+
+        assert result is None
