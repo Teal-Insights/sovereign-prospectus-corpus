@@ -31,6 +31,7 @@ max_retries = 3
 timeout = 60
 
 [paths]
+manifests_dir = "data/manifests"
 original_dir = "data/original"
 parsed_dir = "data/parsed"
 extracted_dir = "data/extracted"
