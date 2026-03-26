@@ -1,20 +1,31 @@
 # SESSION-HANDOFF.md — Current Task
 
-**Last updated:** 2026-03-25 (post council round 3)
-**Status:** Council reviewed. Tasks revised. Ready for implementation.
+**Last updated:** 2026-03-26
+**Status:** Phase 1 tasks 1-4 complete. NSM downloading done (642 PDFs). Ready for next task.
 
-## Current Task
+## Completed
 
-Implement the clean architecture rebuild:
-- **Spec:** `planning/specs/2026-03-25_clean-architecture/SPEC.md`
-- **Tasks:** `planning/specs/2026-03-25_clean-architecture/TASKS.md`
-- **Council synthesis:** `planning/council-of-experts/round-3/2026-03-25_synthesis.md`
+- **Task 1:** Project scaffold, DuckDB schema, parser protocol ✅
+- **Task 2:** Core utilities (safe_write, logging, HTTP client) ✅
+- **Task 3:** Click CLI, JSONL manifest ingest, Makefile orchestration ✅
+- **Task 4:** NSM source adapter — sovereign discovery + download ✅
+  - 899 sovereign filings discovered, 642 PDFs downloaded (591 MB)
+  - Two-phase: `corpus discover nsm` → `corpus download nsm`
 
-**Phase 1 (tonight):** Tasks 1-4. Scaffold → core utils → CLI → NSM downloading overnight.
-**Phase 2 (later):** Gold corpus, CAC extraction, visualization. Separate planning needed.
+## Next Tasks
 
-**Critical:** Adapters write JSONL manifests, NOT directly to DuckDB. Serial
-`ingest` step loads manifests into DuckDB (avoids single-writer conflicts).
+See `planning/specs/2026-03-25_clean-architecture/TASKS.md` for full task list.
+
+**Phase 1 remaining:**
+- **Task 5:** EDGAR source adapter + migration (PARALLEL)
+- **Task 6:** PDIP source adapter + migration (PARALLEL)
+
+**Phase 2:**
+- **Task 7:** Grep-first CAC extraction
+- **Task 8:** CAC visualization notebook
+- **Task 9:** Integration test + overnight run
+
+**Before starting a new source adapter:** Read "Lessons Learned from NSM Adapter" in CLAUDE.md. Key patterns: two-phase discover/download, sovereign-scoped queries, explicit telemetry logging, circuit breaker testing.
 
 ## Quick Reference
 
@@ -23,6 +34,8 @@ Implement the clean architecture rebuild:
 - Directory structure: `docs/ARCHITECTURE.md`
 - NSM API: `docs/nsm_api_reference.md`
 - PDIP API: `docs/pdip_data_extraction_assessment.md`
+- NSM design spec: `docs/superpowers/specs/2026-03-26-nsm-sovereign-discovery-design.md`
+- NSM implementation plan: `docs/superpowers/plans/2026-03-26-nsm-sovereign-discovery.md`
 
 ## Do Not
 
