@@ -256,10 +256,12 @@ def run_edgar_download(
     run_id: str,
     delay: float = 0.25,
     total_failures_abort: int = 10,
+    rate_limit_sleep: int = 660,
 ) -> dict[str, Any]:
     """Download EDGAR filings from a discovery JSONL file.
 
     Reads discovery results, downloads each document, writes edgar_manifest.jsonl.
+    On SEC 429 rate-limit response, sleeps rate_limit_sleep seconds before retrying.
     """
     manifest_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -293,6 +295,42 @@ def run_edgar_download(
             )
         except Exception as exc:
             elapsed_ms = int((time.monotonic() - _start) * 1000)
+
+            # SEC 429 rate-limit: sleep and retry once before counting as failure
+            is_429 = hasattr(exc, "response") and getattr(exc.response, "status_code", 0) == 429
+            if is_429:
+                logger.log(
+                    document_id=doc_id,
+                    step="download",
+                    duration_ms=elapsed_ms,
+                    status="rate_limited",
+                    error_message=f"SEC 429 — sleeping {rate_limit_sleep}s",
+                )
+                time.sleep(rate_limit_sleep)
+                # Retry once after sleeping
+                try:
+                    result, dl_status = download_edgar_document(
+                        record,
+                        client=client,
+                        output_dir=output_dir,
+                    )
+                    if dl_status == "downloaded" and result is not None:
+                        retry_ms = int((time.monotonic() - _start) * 1000)
+                        with manifest_path.open("a") as mf:
+                            mf.write(json.dumps(result) + "\n")
+                        stats["downloaded"] += 1
+                        logger.log(
+                            document_id=doc_id,
+                            step="download",
+                            duration_ms=retry_ms,
+                            status="success_after_429",
+                        )
+                        if delay > 0:
+                            time.sleep(delay)
+                        continue
+                except Exception:
+                    pass  # fall through to normal failure handling
+
             logger.log(
                 document_id=doc_id,
                 step="download",

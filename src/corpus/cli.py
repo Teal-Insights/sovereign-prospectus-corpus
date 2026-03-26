@@ -189,6 +189,7 @@ def edgar(
         run_id=run_id,
         delay=float(cfg.get("delay", 0.25)),
         total_failures_abort=int(cb_cfg.get("total_failures_abort", 10)),
+        rate_limit_sleep=int(cb_cfg.get("rate_limit_sleep_seconds", 660)),
     )
 
     click.echo(
