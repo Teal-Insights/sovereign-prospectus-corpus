@@ -16,6 +16,17 @@ import corpus
 from corpus.db.ingest import ingest_manifests
 
 
+def _load_config() -> dict:
+    """Load config.toml from the project root. Returns empty dict if missing."""
+    import tomllib
+
+    config_path = Path("config.toml")
+    if config_path.exists():
+        with config_path.open("rb") as f:
+            return tomllib.load(f)
+    return {}
+
+
 @click.group()
 @click.version_option(version=corpus.__version__, prog_name="corpus")
 def cli() -> None:
@@ -72,10 +83,17 @@ def nsm(
     from corpus.logging import CorpusLogger
     from corpus.sources.nsm import query_nsm_api, run_nsm_download
 
+    cfg = _load_config().get("nsm", {})
+    cb_cfg = cfg.get("circuit_breaker", {})
+
     if run_id is None:
         run_id = f"nsm-{uuid.uuid4().hex[:12]}"
 
-    client = CorpusHTTPClient()
+    client = CorpusHTTPClient(
+        max_retries=int(cfg.get("max_retries", 5)),
+        backoff_factor=float(cfg.get("backoff_factor", 0.5)),
+        timeout=int(cfg.get("timeout", 60)),
+    )
 
     if dry_run:
         _, total = query_nsm_api(client, from_offset=0, size=1)
@@ -93,6 +111,9 @@ def nsm(
         logger=logger,
         run_id=run_id,
         api_responses_dir=api_responses_dir,
+        delay_api=float(cfg.get("delay_api", 1.0)),
+        delay_download=float(cfg.get("delay_download", 1.0)),
+        total_failures_abort=int(cb_cfg.get("total_failures_abort", 10)),
     )
 
     click.echo(
