@@ -1,0 +1,58 @@
+{
+  "took": 11,
+  "timed_out": false,
+  "_shards": {"failed": 0, "skipped": 0, "successful": 4, "total": 4},
+  "hits": {
+    "total": {"relation": "eq", "value": 2},
+    "hits": [
+      {
+        "_index": "fca-nsm-searchdata",
+        "_id": "abc-123-pdf",
+        "_source": {
+          "submitted_date": "2024-06-15T10:30:00Z",
+          "publication_date": "2024-06-15T10:22:00Z",
+          "company": "REPUBLIC OF KENYA",
+          "lei": "549300VVURQQYU45PR87",
+          "type": "Publication of a Prospectus",
+          "type_code": "PDI",
+          "headline": "Offering Circular for USD 1bn Notes",
+          "download_link": "NSM/Portal/NI-000131055/NI-000131055.pdf",
+          "disclosure_id": "abc-123-pdf",
+          "latest_flag": "Y",
+          "source": "FCA",
+          "seq_id": "abc-123-pdf",
+          "hist_seq": "1",
+          "classifications": "3.1",
+          "classifications_code": "3.1",
+          "tag_esef": "",
+          "lei_remediation_flag": "N",
+          "last_updated_date": "2024-06-15T10:30:00Z"
+        }
+      },
+      {
+        "_index": "fca-nsm-searchdata",
+        "_id": "def-456-html",
+        "_source": {
+          "submitted_date": "2024-03-01T08:00:00Z",
+          "publication_date": "2024-03-01T07:55:00Z",
+          "company": "THE FEDERAL REPUBLIC OF NIGERIA",
+          "lei": "549300GSBZD84TNEQ285",
+          "type": "Base Prospectus",
+          "type_code": "FCA01",
+          "headline": "Base Prospectus EMTN Programme",
+          "download_link": "NSM/RNS/def-456-html.html",
+          "disclosure_id": "def-456-html",
+          "latest_flag": "Y",
+          "source": "RNS",
+          "seq_id": "def-456-html",
+          "hist_seq": "1",
+          "classifications": "",
+          "classifications_code": "0.0",
+          "tag_esef": "",
+          "lei_remediation_flag": "N",
+          "last_updated_date": "2024-03-01T08:00:00Z"
+        }
+      }
+    ]
+  }
+}

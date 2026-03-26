@@ -10,11 +10,14 @@ export RUN_ID
 
 # ── Pipeline steps ──────────────────────────────────────────────────
 
-.PHONY: download-nsm download-edgar download-pdip download-all
+.PHONY: discover-nsm download-nsm download-edgar download-pdip download-all
 .PHONY: parse grep extract ingest
 .PHONY: pipeline lint test check help
 
-download-nsm: ## Download documents from FCA NSM
+discover-nsm: ## Discover sovereign filings from FCA NSM (metadata only)
+	uv run corpus discover nsm --run-id $(RUN_ID)
+
+download-nsm: ## Download NSM documents (requires discover-nsm first)
 	uv run corpus download nsm --run-id $(RUN_ID)
 
 download-edgar: ## Download documents from SEC EDGAR
@@ -39,7 +42,13 @@ ingest: ## Load JSONL manifests into DuckDB (serial)
 
 # ── Full pipeline ───────────────────────────────────────────────────
 
-pipeline: download-all ingest parse grep extract ## Run full pipeline end-to-end
+pipeline: ## Run full pipeline end-to-end (sequential)
+	$(MAKE) discover-nsm
+	$(MAKE) download-all
+	$(MAKE) ingest
+	$(MAKE) parse
+	$(MAKE) grep
+	$(MAKE) extract
 	@echo "Pipeline complete. RUN_ID=$(RUN_ID)"
 
 # ── Development ─────────────────────────────────────────────────────

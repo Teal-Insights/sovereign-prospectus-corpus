@@ -12,8 +12,6 @@ backoff_factor = 0.5
 timeout = 60
 
 [nsm.circuit_breaker]
-consecutive_failures_skip = 5
-rate_limit_sleep_seconds = 660
 total_failures_abort = 10
 
 [edgar]
