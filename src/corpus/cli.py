@@ -296,8 +296,10 @@ def pdip(
         f"(of {stats['total_in_discovery']} in discovery)."
     )
     if stats["aborted"]:
-        click.echo("WARNING: Download aborted due to too many failures.")
+        click.echo("ERROR: Download aborted due to too many failures.", err=True)
     click.echo(f"Report: {report_path}")
+    if stats["aborted"]:
+        raise SystemExit(1)
 
 
 # ── Discover group ─────────────────────────────────────────────────

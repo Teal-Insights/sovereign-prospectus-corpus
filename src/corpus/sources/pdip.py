@@ -17,16 +17,45 @@ if TYPE_CHECKING:
 
     from corpus.logging import CorpusLogger
 
+import tempfile
+from pathlib import Path as _Path
+
+import certifi
 import requests
-import urllib3
 
 from corpus.io.safe_write import safe_write
 
-# Georgetown's SSL cert chain is incomplete on some systems (macOS/Anaconda).
-# Suppress the per-request InsecureRequestWarning since we set verify=False.
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 log = logging.getLogger(__name__)
+
+# Georgetown's server sends only the leaf cert, missing the InCommon RSA
+# Server CA 2 intermediate.  We ship the intermediate in certs/ and build
+# a combined CA bundle (certifi roots + intermediate) so SSL verification
+# stays enabled.
+_INTERMEDIATE_CERT = (
+    _Path(__file__).resolve().parent.parent.parent.parent
+    / "certs"
+    / "incommon_rsa_server_ca_2.pem"
+)
+
+
+def _build_ca_bundle() -> str:
+    """Return path to a CA bundle that includes the InCommon intermediate."""
+    if not _INTERMEDIATE_CERT.exists():
+        log.warning(
+            "InCommon intermediate cert not found at %s — falling back to certifi only",
+            _INTERMEDIATE_CERT,
+        )
+        return certifi.where()
+
+    bundle = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        prefix="pdip_ca_bundle_", suffix=".pem", delete=False
+    )
+    bundle.write(_Path(certifi.where()).read_bytes())
+    bundle.write(b"\n")
+    bundle.write(_INTERMEDIATE_CERT.read_bytes())
+    bundle.close()
+    return bundle.name
+
 
 PDIP_BASE_URL = "https://publicdebtispublic.mdi.georgetown.edu"
 PDIP_SEARCH_URL = f"{PDIP_BASE_URL}/api/search/"
@@ -98,7 +127,7 @@ def discover_pdip(
     """
     session = requests.Session()
     session.headers.update(PDIP_HEADERS)
-    session.verify = False  # Georgetown cert chain incomplete on some systems
+    session.verify = _build_ca_bundle()
 
     seen_ids: set[str] = set()
     all_records: list[dict[str, Any]] = []
@@ -234,7 +263,7 @@ def run_pdip_download(
 
     session = requests.Session()
     session.headers.update(PDIP_HEADERS)
-    session.verify = False  # Georgetown cert chain incomplete on some systems
+    session.verify = _build_ca_bundle()
 
     stats: dict[str, Any] = {
         "downloaded": 0,
