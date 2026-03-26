@@ -142,17 +142,29 @@ def discover_nsm(
     total_hits_raw = 0
 
     for label, crit in queries:
-        hits, _total = query_nsm_api(client, criteria=crit, size=10000)
-        total_hits_raw += len(hits)
+        query_hits = 0
         new_count = 0
-        for hit in hits:
-            src = hit.get("_source", {})
-            disc_id = src.get("disclosure_id", hit.get("_id", ""))
-            if disc_id and disc_id not in seen_ids:
-                seen_ids.add(disc_id)
-                all_records.append(src)
-                new_count += 1
-        per_query.append({"label": label, "hits": len(hits), "new": new_count})
+        from_offset = 0
+
+        while True:
+            hits, total = query_nsm_api(client, criteria=crit, from_offset=from_offset, size=10000)
+            query_hits += len(hits)
+            for hit in hits:
+                src = hit.get("_source", {})
+                disc_id = src.get("disclosure_id", hit.get("_id", ""))
+                if disc_id and disc_id not in seen_ids:
+                    seen_ids.add(disc_id)
+                    all_records.append(src)
+                    new_count += 1
+
+            from_offset += len(hits)
+            if not hits or from_offset >= total:
+                break
+            if delay > 0:
+                time.sleep(delay)
+
+        total_hits_raw += query_hits
+        per_query.append({"label": label, "hits": query_hits, "new": new_count})
         if delay > 0:
             time.sleep(delay)
 
@@ -314,19 +326,29 @@ def run_nsm_download(
 
         doc_id = record.get("native_id", "unknown")
 
+        start = time.monotonic()
         try:
-            with logger.timed(doc_id, "download"):
-                result, dl_status = download_nsm_document(
-                    record, client=client, output_dir=output_dir
-                )
-        except Exception:
-            # logger.timed already logged the error with duration
+            result, dl_status = download_nsm_document(record, client=client, output_dir=output_dir)
+        except Exception as exc:
             result, dl_status = None, "error"
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status="error",
+                error_message=str(exc),
+            )
+
+        elapsed_ms = int((time.monotonic() - start) * 1000)
 
         if dl_status == "downloaded" and result is not None:
             with manifest_path.open("a") as f:
                 f.write(json.dumps(result) + "\n")
             stats["downloaded"] += 1
+            logger.log(
+                document_id=doc_id, step="download", duration_ms=elapsed_ms, status="success"
+            )
         elif dl_status == "skipped_no_pdf_link":
             stats["skipped_no_pdf"] += 1
         elif dl_status.startswith("skipped"):
@@ -336,7 +358,7 @@ def run_nsm_download(
             logger.log(
                 document_id=doc_id,
                 step="download",
-                duration_ms=0,
+                duration_ms=elapsed_ms,
                 status=dl_status,
                 error_message=f"Download failed: {dl_status}",
             )

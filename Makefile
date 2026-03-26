@@ -42,7 +42,13 @@ ingest: ## Load JSONL manifests into DuckDB (serial)
 
 # ── Full pipeline ───────────────────────────────────────────────────
 
-pipeline: download-all ingest parse grep extract ## Run full pipeline end-to-end
+pipeline: ## Run full pipeline end-to-end (sequential)
+	$(MAKE) discover-nsm
+	$(MAKE) download-all
+	$(MAKE) ingest
+	$(MAKE) parse
+	$(MAKE) grep
+	$(MAKE) extract
 	@echo "Pipeline complete. RUN_ID=$(RUN_ID)"
 
 # ── Development ─────────────────────────────────────────────────────
