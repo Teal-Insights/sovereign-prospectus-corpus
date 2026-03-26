@@ -278,6 +278,8 @@ def pdip(
         run_id=run_id,
         delay=float(cfg.get("delay", 1.0)),
         total_failures_abort=int(cb_cfg.get("total_failures_abort", 10)),
+        max_retries=int(cfg.get("max_retries", 3)),
+        timeout=int(cfg.get("timeout", 60)),
     )
 
     from corpus.reporting import write_run_report
@@ -442,6 +444,8 @@ def discover_pdip_cmd(run_id: str | None, output: Path) -> None:
     stats = discover_pdip(
         output_path=output,
         delay=float(cfg.get("delay", 1.0)),
+        max_retries=int(cfg.get("max_retries", 3)),
+        timeout=int(cfg.get("timeout", 60)),
     )
 
     if stats.get("error"):

@@ -16,6 +16,44 @@ def _load_fixture(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text())
 
 
+class TestBuildCaBundle:
+    """Tests for the CA bundle builder."""
+
+    def test_returns_valid_path(self) -> None:
+        import corpus.sources.pdip as pdip_mod
+
+        # Reset cache so we exercise the full path
+        pdip_mod._ca_bundle_path = None
+        path = pdip_mod._build_ca_bundle()
+        assert Path(path).exists()
+        content = Path(path).read_text()
+        # Should contain both certifi roots and the InCommon intermediate
+        assert "BEGIN CERTIFICATE" in content
+
+    def test_caches_result(self) -> None:
+        import corpus.sources.pdip as pdip_mod
+
+        pdip_mod._ca_bundle_path = None
+        path1 = pdip_mod._build_ca_bundle()
+        path2 = pdip_mod._build_ca_bundle()
+        assert path1 == path2
+
+    def test_falls_back_when_cert_missing(self) -> None:
+        import certifi
+
+        import corpus.sources.pdip as pdip_mod
+
+        pdip_mod._ca_bundle_path = None
+        original = pdip_mod._INTERMEDIATE_CERT
+        try:
+            pdip_mod._INTERMEDIATE_CERT = Path("/nonexistent/cert.pem")
+            path = pdip_mod._build_ca_bundle()
+            assert path == certifi.where()
+        finally:
+            pdip_mod._INTERMEDIATE_CERT = original
+            pdip_mod._ca_bundle_path = None
+
+
 class TestParseSearchResults:
     """Tests for parsing PDIP search API response into discovery records."""
 

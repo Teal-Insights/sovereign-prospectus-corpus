@@ -17,11 +17,15 @@ if TYPE_CHECKING:
 
     from corpus.logging import CorpusLogger
 
+import atexit
 import tempfile
 from pathlib import Path as _Path
 
 import certifi
 import requests
+from requests.exceptions import (
+    RequestException,
+)
 
 from corpus.io.safe_write import safe_write
 
@@ -31,21 +35,56 @@ log = logging.getLogger(__name__)
 # Server CA 2 intermediate.  We ship the intermediate in certs/ and build
 # a combined CA bundle (certifi roots + intermediate) so SSL verification
 # stays enabled.
+#
+# Cert provenance:
+#   Subject:     InCommon RSA Server CA 2
+#   Issuer:      USERTrust RSA Certification Authority
+#   Valid:       2022-11-16 to 2032-11-15
+#   SHA-256:     87:E0:1C:C4:DD:0C:9D:92:A3:DB:D4:90:92:FF:13:F9:
+#                CD:38:74:45:CD:C5:7E:5B:98:4E:1B:77:21:B5:B0:29
+#   Source URL:  http://crt.sectigo.com/InCommonRSAServerCA2.crt
+#   Downloaded:  2026-03-26 via AIA extension in Georgetown's leaf cert
 _INTERMEDIATE_CERT = (
     _Path(__file__).resolve().parent.parent.parent.parent
     / "certs"
     / "incommon_rsa_server_ca_2.pem"
 )
 
+# Module-level cache so we build the bundle at most once per process.
+_ca_bundle_path: str | None = None
+
 
 def _build_ca_bundle() -> str:
-    """Return path to a CA bundle that includes the InCommon intermediate."""
+    """Return path to a CA bundle that includes the InCommon intermediate.
+
+    Builds the bundle once, caches the path, and registers cleanup on exit.
+    Falls back to certifi-only if the intermediate cert is missing or expired.
+    """
+    global _ca_bundle_path
+    if _ca_bundle_path is not None:
+        return _ca_bundle_path
+
     if not _INTERMEDIATE_CERT.exists():
         log.warning(
-            "InCommon intermediate cert not found at %s — falling back to certifi only",
+            "InCommon intermediate cert not found at %s — using certifi only",
             _INTERMEDIATE_CERT,
         )
-        return certifi.where()
+        _ca_bundle_path = certifi.where()
+        return _ca_bundle_path
+
+    # Check if the cert has expired
+    try:
+        import ssl
+
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.load_verify_locations(_INTERMEDIATE_CERT)
+    except ssl.SSLError:
+        log.warning(
+            "InCommon intermediate cert at %s failed to load — using certifi only",
+            _INTERMEDIATE_CERT,
+        )
+        _ca_bundle_path = certifi.where()
+        return _ca_bundle_path
 
     bundle = tempfile.NamedTemporaryFile(  # noqa: SIM115
         prefix="pdip_ca_bundle_", suffix=".pem", delete=False
@@ -54,7 +93,10 @@ def _build_ca_bundle() -> str:
     bundle.write(b"\n")
     bundle.write(_INTERMEDIATE_CERT.read_bytes())
     bundle.close()
-    return bundle.name
+
+    _ca_bundle_path = bundle.name
+    atexit.register(lambda: _Path(bundle.name).unlink(missing_ok=True))
+    return _ca_bundle_path
 
 
 PDIP_BASE_URL = "https://publicdebtispublic.mdi.georgetown.edu"
@@ -115,19 +157,39 @@ def parse_search_results(response: dict[str, Any]) -> list[dict[str, Any]]:
     return records
 
 
+def _make_session(*, max_retries: int = 3) -> requests.Session:
+    """Create a requests session with PDIP headers, SSL bundle, and retry."""
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+
+    session = requests.Session()
+    session.headers.update(PDIP_HEADERS)
+    session.verify = _build_ca_bundle()
+
+    retry = Retry(
+        total=max_retries,
+        backoff_factor=0.5,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
 def discover_pdip(
     *,
     output_path: Path,
     page_size: int = 100,
     delay: float = 1.0,
+    max_retries: int = 3,
+    timeout: int = 60,
 ) -> dict[str, Any]:
     """Query PDIP search API for all documents.
 
     Paginates through results, writes discovery JSONL. Returns stats dict.
     """
-    session = requests.Session()
-    session.headers.update(PDIP_HEADERS)
-    session.verify = _build_ca_bundle()
+    session = _make_session(max_retries=max_retries)
 
     seen_ids: set[str] = set()
     all_records: list[dict[str, Any]] = []
@@ -144,10 +206,10 @@ def discover_pdip(
         }
 
         try:
-            resp = session.post(PDIP_SEARCH_URL, json=payload, timeout=60)
+            resp = session.post(PDIP_SEARCH_URL, json=payload, timeout=timeout)
             resp.raise_for_status()
             data = resp.json()
-        except Exception as exc:
+        except (RequestException, json.JSONDecodeError) as exc:
             log.error("PDIP search API failed on page %d: %s", page, exc)
             error = str(exc)
             break
@@ -189,6 +251,7 @@ def download_pdip_document(
     *,
     session: Any,
     output_dir: Path,
+    timeout: int = 60,
 ) -> tuple[dict[str, Any] | None, str]:
     """Download a single PDIP document.
 
@@ -202,7 +265,7 @@ def download_pdip_document(
         return None, "skipped_exists"
 
     url = PDIP_PDF_URL.format(doc_id=native_id)
-    resp = session.get(url, timeout=60)
+    resp = session.get(url, timeout=timeout)
 
     if resp.status_code == 404:
         return None, "not_found"
@@ -252,6 +315,8 @@ def run_pdip_download(
     run_id: str,
     delay: float = 1.0,
     total_failures_abort: int = 10,
+    max_retries: int = 3,
+    timeout: int = 60,
 ) -> dict[str, Any]:
     """Download PDIP documents from a discovery JSONL file.
 
@@ -261,9 +326,7 @@ def run_pdip_download(
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = manifest_dir / "pdip_manifest.jsonl"
 
-    session = requests.Session()
-    session.headers.update(PDIP_HEADERS)
-    session.verify = _build_ca_bundle()
+    session = _make_session(max_retries=max_retries)
 
     stats: dict[str, Any] = {
         "downloaded": 0,
@@ -288,7 +351,7 @@ def run_pdip_download(
 
         try:
             result, dl_status = download_pdip_document(
-                record, session=session, output_dir=output_dir
+                record, session=session, output_dir=output_dir, timeout=timeout
             )
         except Exception as exc:
             elapsed_ms = int((time.monotonic() - _start) * 1000)
