@@ -26,13 +26,13 @@ download-pdip: ## Download documents from World Bank PDIP
 download-all: download-nsm download-edgar download-pdip ## Download from all sources
 
 parse: ## Parse downloaded PDFs into text
-	uv run corpus parse all --run-id $(RUN_ID)
+	uv run corpus parse
 
 grep: ## Run grep-first pattern matching
-	uv run corpus grep all --run-id $(RUN_ID)
+	uv run corpus grep
 
 extract: ## Extract structured clause data
-	uv run corpus extract all --run-id $(RUN_ID)
+	uv run corpus extract
 
 ingest: ## Load JSONL manifests into DuckDB (serial)
 	uv run corpus ingest --run-id $(RUN_ID)

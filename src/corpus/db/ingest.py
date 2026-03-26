@@ -149,28 +149,29 @@ def _insert_document(conn: duckdb.DuckDBPyConnection, record: dict) -> bool:
     if "source_metadata" in record:
         existing_meta = record["source_metadata"]
         if isinstance(existing_meta, str):
-            existing_meta = json.loads(existing_meta)
-        extra_metadata.update(existing_meta)
+            try:
+                existing_meta = json.loads(existing_meta)
+            except json.JSONDecodeError:
+                existing_meta = {"_raw_source_metadata": existing_meta}
+        if isinstance(existing_meta, dict):
+            extra_metadata.update(existing_meta)
 
     if extra_metadata:
         doc_values["source_metadata"] = json.dumps(extra_metadata)
 
-    # Insert
+    # Insert and get the new document_id via RETURNING
     columns = list(doc_values.keys())
     placeholders = ", ".join(["?"] * len(columns))
     col_names = ", ".join(columns)
-    conn.execute(
-        f"INSERT INTO documents ({col_names}) VALUES ({placeholders})",
+    result = conn.execute(
+        f"INSERT INTO documents ({col_names}) VALUES ({placeholders}) RETURNING document_id",
         list(doc_values.values()),
     )
+    row = result.fetchone()
 
     # Handle countries if present
-    if "countries" in record:
-        doc_id = conn.execute(
-            "SELECT document_id FROM documents WHERE storage_key = ?", [storage_key]
-        ).fetchone()
-        if doc_id:
-            _insert_countries(conn, doc_id[0], record["countries"])
+    if row and "countries" in record:
+        _insert_countries(conn, row[0], record["countries"])
 
     return True
 

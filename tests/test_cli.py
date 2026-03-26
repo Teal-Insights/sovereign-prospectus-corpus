@@ -19,7 +19,9 @@ def test_cli_shows_version() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0.2.0" in result.output
+    import corpus
+
+    assert corpus.__version__ in result.output
 
 
 def test_download_group_exists() -> None:
@@ -58,6 +60,20 @@ def test_download_nsm_subcommand_exists() -> None:
     """``corpus download nsm --help`` works (placeholder for Task 4)."""
     runner = CliRunner()
     result = runner.invoke(cli, ["download", "nsm", "--help"])
+    assert result.exit_code == 0
+
+
+def test_download_edgar_subcommand_exists() -> None:
+    """``corpus download edgar --help`` works (placeholder for Task 5)."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["download", "edgar", "--help"])
+    assert result.exit_code == 0
+
+
+def test_download_pdip_subcommand_exists() -> None:
+    """``corpus download pdip --help`` works (placeholder for Task 6)."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["download", "pdip", "--help"])
     assert result.exit_code == 0
 
 

@@ -185,7 +185,7 @@ def test_ingest_country_missing_code_skipped(tmp_path: Path) -> None:
     assert len(countries) == 0
 
 
-def test_ingest_pipeline_run_records_failure(tmp_path: Path) -> None:
+def test_ingest_pipeline_run_records_completion(tmp_path: Path) -> None:
     """Pipeline run status is 'completed' on success."""
     conn = duckdb.connect(":memory:")
     create_schema(conn)

@@ -37,28 +37,51 @@ def nsm(run_id: str | None) -> None:
     click.echo("NSM download not yet implemented (see Task 4).")
 
 
+@download.command()
+@click.option("--run-id", default=None, help="Pipeline run identifier.")
+def edgar(run_id: str | None) -> None:
+    """Download documents from SEC EDGAR."""
+    click.echo("EDGAR download not yet implemented (see Task 5).")
+
+
+@download.command()
+@click.option("--run-id", default=None, help="Pipeline run identifier.")
+def pdip(run_id: str | None) -> None:
+    """Download documents from World Bank PDIP."""
+    click.echo("PDIP download not yet implemented (see Task 6).")
+
+
 # ── Parse group ─────────────────────────────────────────────────────
 
 
-@cli.group()
-def parse() -> None:
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def parse(ctx: click.Context) -> None:
     """Parse downloaded PDFs into text."""
+    if ctx.invoked_subcommand is None:
+        click.echo("Parse not yet implemented. Use --help for subcommands.")
 
 
 # ── Grep group ──────────────────────────────────────────────────────
 
 
-@cli.group()
-def grep() -> None:
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def grep(ctx: click.Context) -> None:
     """Run grep-first pattern matching on parsed text."""
+    if ctx.invoked_subcommand is None:
+        click.echo("Grep not yet implemented. Use --help for subcommands.")
 
 
 # ── Extract group ───────────────────────────────────────────────────
 
 
-@cli.group()
-def extract() -> None:
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def extract(ctx: click.Context) -> None:
     """Extract structured clause data from grep matches."""
+    if ctx.invoked_subcommand is None:
+        click.echo("Extract not yet implemented. Use --help for subcommands.")
 
 
 # ── Ingest command ──────────────────────────────────────────────────
@@ -67,7 +90,7 @@ def extract() -> None:
 @cli.command()
 @click.option(
     "--manifest-dir",
-    type=click.Path(exists=True, path_type=Path),
+    type=click.Path(path_type=Path),
     default="data/manifests",
     help="Directory containing *_manifest.jsonl files.",
 )
@@ -84,12 +107,12 @@ def ingest(manifest_dir: Path, db_path: Path, run_id: str | None) -> None:
 
     from corpus.db.schema import create_schema
 
+    manifest_dir.mkdir(parents=True, exist_ok=True)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = duckdb.connect(str(db_path))
-    create_schema(conn)
 
-    stats = ingest_manifests(conn, manifest_dir, run_id=run_id)
-    conn.close()
+    with duckdb.connect(str(db_path)) as conn:
+        create_schema(conn)
+        stats = ingest_manifests(conn, manifest_dir, run_id=run_id)
 
     click.echo(
         f"Ingest complete: {stats['documents_inserted']} inserted, "
