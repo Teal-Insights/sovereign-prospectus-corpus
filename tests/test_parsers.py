@@ -14,12 +14,6 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures"
 FIXTURE_PDF = FIXTURE_DIR / "sample.pdf"
 
 
-@pytest.fixture(autouse=True)
-def _require_fixture_pdf() -> None:
-    if not FIXTURE_PDF.exists():
-        pytest.skip("fixture PDF not found; generate with tests/fixtures/make_sample_pdf.py")
-
-
 def test_pymupdf_parser_satisfies_protocol() -> None:
     parser = PyMuPDFParser()
     assert isinstance(parser, DocumentParser)
@@ -74,8 +68,5 @@ def test_fixture_pdf_content() -> None:
     """Verify the fixture PDF has extractable text."""
     parser = PyMuPDFParser()
     result = parser.parse(FIXTURE_PDF)
-    assert (
-        "sovereign" in result.text.lower()
-        or "bond" in result.text.lower()
-        or len(result.text) > 10
-    )
+    assert "republic of testland" in result.text.lower()
+    assert "collective action clauses" in result.text.lower()

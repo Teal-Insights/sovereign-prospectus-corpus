@@ -78,7 +78,7 @@ def test_documents_unique_storage_key(db: duckdb.DuckDBPyConnection) -> None:
         )
 
 
-def test_document_countries_references_documents(db: duckdb.DuckDBPyConnection) -> None:
+def test_document_countries_has_required_columns(db: duckdb.DuckDBPyConnection) -> None:
     rows = db.execute(
         "SELECT column_name FROM information_schema.columns WHERE table_name = 'document_countries'"
     ).fetchall()

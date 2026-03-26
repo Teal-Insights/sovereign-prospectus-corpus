@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 
 CREATE TABLE IF NOT EXISTS document_countries (
-    document_id  INTEGER NOT NULL,
+    document_id  INTEGER NOT NULL REFERENCES documents(document_id),
     country_code VARCHAR NOT NULL,  -- ISO 3166-1 alpha-3
     country_name VARCHAR,
     role         VARCHAR DEFAULT 'issuer',  -- issuer | guarantor | related
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS document_countries (
 
 CREATE TABLE IF NOT EXISTS grep_matches (
     match_id        INTEGER PRIMARY KEY DEFAULT nextval('grep_matches_seq'),
-    document_id     INTEGER NOT NULL,
+    document_id     INTEGER NOT NULL REFERENCES documents(document_id),
     pattern_name    VARCHAR NOT NULL,    -- e.g. cac_single_limb, pari_passu
     pattern_version VARCHAR NOT NULL,    -- versioned pattern from config
     page_number     INTEGER,
