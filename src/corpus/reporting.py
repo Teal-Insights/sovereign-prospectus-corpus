@@ -76,7 +76,7 @@ def write_run_report(
     return report_path
 
 
-_NON_FAILURE_STATUSES = frozenset({"success", "success_after_429", "rate_limited"})
+_NON_FAILURE_STATUSES = frozenset({"success", "success_after_429", "rate_limited", "not_found"})
 
 
 def _extract_failures(
