@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -177,4 +178,94 @@ class TestResolvePdfUrl:
         url = "https://data.fca.org.uk/artefacts/NSM/RNS/no-pdf.html"
         result = resolve_pdf_url(url, client=mock_client)
 
+        assert result is None
+
+
+class TestDownloadNsmDocument:
+    """Tests for single-document download + manifest record creation."""
+
+    def test_downloads_pdf_and_returns_record(self, tmp_path: Path) -> None:
+        """Successful PDF download returns manifest record with file_path and file_hash."""
+        from corpus.sources.nsm import download_nsm_document
+
+        pdf_bytes = b"%PDF-1.4 fake pdf content here"
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = pdf_bytes
+        mock_client.get.return_value = mock_response
+
+        record = {
+            "source": "nsm",
+            "native_id": "abc-123-pdf",
+            "storage_key": "nsm__abc-123-pdf",
+            "download_url": "https://data.fca.org.uk/artefacts/NSM/Portal/doc.pdf",
+        }
+
+        result = download_nsm_document(record, client=mock_client, output_dir=tmp_path)
+
+        assert result is not None
+        assert result["file_path"] == str(tmp_path / "nsm__abc-123-pdf.pdf")
+        assert result["file_hash"] == hashlib.sha256(pdf_bytes).hexdigest()
+        assert (tmp_path / "nsm__abc-123-pdf.pdf").exists()
+
+    def test_skips_already_downloaded(self, tmp_path: Path) -> None:
+        """If the PDF already exists on disk, returns None (skip)."""
+        from corpus.sources.nsm import download_nsm_document
+
+        target = tmp_path / "nsm__abc-123-pdf.pdf"
+        target.write_bytes(b"%PDF-1.4 already here")
+
+        record = {
+            "source": "nsm",
+            "native_id": "abc-123-pdf",
+            "storage_key": "nsm__abc-123-pdf",
+            "download_url": "https://data.fca.org.uk/artefacts/NSM/Portal/doc.pdf",
+        }
+
+        result = download_nsm_document(record, client=MagicMock(), output_dir=tmp_path)
+        assert result is None
+
+    def test_html_link_resolves_then_downloads(self, tmp_path: Path) -> None:
+        """HTML download URL triggers resolution before downloading."""
+        from corpus.sources.nsm import download_nsm_document
+
+        html_content = '<html><a href="/artefacts/NSM/RNS/real.pdf">PDF</a></html>'
+        pdf_bytes = b"%PDF-1.4 real content"
+
+        mock_client = MagicMock()
+        html_resp = MagicMock()
+        html_resp.text = html_content
+        pdf_resp = MagicMock()
+        pdf_resp.content = pdf_bytes
+        mock_client.get.side_effect = [html_resp, pdf_resp]
+
+        record = {
+            "source": "nsm",
+            "native_id": "def-456-html",
+            "storage_key": "nsm__def-456-html",
+            "download_url": "https://data.fca.org.uk/artefacts/NSM/RNS/def-456.html",
+        }
+
+        result = download_nsm_document(record, client=mock_client, output_dir=tmp_path)
+
+        assert result is not None
+        assert (tmp_path / "nsm__def-456-html.pdf").exists()
+
+    def test_invalid_pdf_returns_none(self, tmp_path: Path) -> None:
+        """Non-PDF content (no %PDF header) returns None."""
+        from corpus.sources.nsm import download_nsm_document
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = b"<html>not a pdf</html>"
+        mock_client.get.return_value = mock_response
+
+        record = {
+            "source": "nsm",
+            "native_id": "bad-content",
+            "storage_key": "nsm__bad-content",
+            "download_url": "https://data.fca.org.uk/artefacts/NSM/Portal/doc.pdf",
+        }
+
+        result = download_nsm_document(record, client=mock_client, output_dir=tmp_path)
         assert result is None

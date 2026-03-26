@@ -6,15 +6,21 @@ downloads PDFs, and writes nsm_manifest.jsonl for downstream ingest.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin
 
+from corpus.io.safe_write import safe_write
+
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from corpus.io.http import CorpusHTTPClient
 
 NSM_API_URL = "https://api.data.fca.org.uk/search?index=fca-nsm-searchdata"
 NSM_ARTEFACT_BASE = "https://data.fca.org.uk/artefacts"
+PDF_HEADER = b"%PDF"
 
 
 def query_nsm_api(
@@ -98,3 +104,44 @@ def resolve_pdf_url(url: str, *, client: CorpusHTTPClient) -> str | None:
         return urljoin(url, match.group(1))
 
     return None
+
+
+def download_nsm_document(
+    record: dict[str, Any],
+    *,
+    client: CorpusHTTPClient,
+    output_dir: Path,
+) -> dict[str, Any] | None:
+    """Download a single NSM document. Returns enriched record or None on skip/fail.
+
+    Skips if the file already exists on disk. Resolves HTML->PDF two-hop links.
+    Validates that downloaded content starts with %PDF header.
+    """
+    storage_key = record.get("storage_key", "")
+    target = output_dir / f"{storage_key}.pdf"
+
+    if target.exists():
+        return None
+
+    download_url = record.get("download_url", "")
+    if not download_url:
+        return None
+
+    # Resolve two-hop HTML links
+    pdf_url = resolve_pdf_url(download_url, client=client)
+    if pdf_url is None:
+        return None
+
+    resp = client.get(pdf_url)
+    content = resp.content
+
+    if not content.startswith(PDF_HEADER):
+        return None
+
+    safe_write(target, content)
+    file_hash = hashlib.sha256(content).hexdigest()
+
+    enriched = dict(record)
+    enriched["file_path"] = str(target)
+    enriched["file_hash"] = file_hash
+    return enriched
