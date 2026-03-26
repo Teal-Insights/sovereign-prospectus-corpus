@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import requests
+
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -163,7 +165,7 @@ class TestFetchSubmissions:
         from corpus.sources.edgar import fetch_submissions
 
         mock_client = MagicMock()
-        mock_client.get.side_effect = Exception("network error")
+        mock_client.get.side_effect = requests.ConnectionError("network error")
 
         result = fetch_submissions(mock_client, cik="0000914021")
         assert result is None
@@ -270,7 +272,7 @@ class TestDiscoverEdgar:
         from corpus.sources.edgar import discover_edgar
 
         mock_client = MagicMock()
-        mock_client.get.side_effect = Exception("network error")
+        mock_client.get.side_effect = requests.ConnectionError("network error")
 
         cik_entries = [
             {"cik": "0000914021", "country": "Argentina", "name": "REPUBLIC OF ARGENTINA"},

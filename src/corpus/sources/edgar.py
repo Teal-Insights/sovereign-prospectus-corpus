@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import time
 from typing import TYPE_CHECKING, Any
+
+import requests
 
 from corpus.io.safe_write import safe_write
 
@@ -19,6 +22,8 @@ if TYPE_CHECKING:
 
     from corpus.io.http import CorpusHTTPClient
     from corpus.logging import CorpusLogger
+
+log = logging.getLogger(__name__)
 
 EDGAR_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 EDGAR_ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_nodash}/{filename}"
@@ -144,7 +149,8 @@ def fetch_submissions(
     url = EDGAR_SUBMISSIONS_URL.format(cik=cik)
     try:
         return client.get(url).json()  # type: ignore[no-any-return]
-    except Exception:
+    except (requests.RequestException, json.JSONDecodeError) as exc:
+        log.warning("Failed to fetch submissions for CIK %s: %s", cik, exc)
         return None
 
 
@@ -162,6 +168,7 @@ def discover_edgar(
     seen_ids: set[str] = set()
     all_records: list[dict[str, Any]] = []
     ciks_failed = 0
+    pagination_errors = 0
 
     for entry in cik_entries:
         cik = entry["cik"]
@@ -184,8 +191,10 @@ def discover_edgar(
                     "filings": {"recent": older_data, "files": []},
                 }
                 filings.extend(build_filing_list(older_subs))
-            except Exception:
-                pass
+            except (requests.RequestException, json.JSONDecodeError) as exc:
+                # Older page failures are non-fatal but should be visible
+                pagination_errors += 1
+                log.warning("Failed to fetch older filings from %s: %s", older_url, exc)
 
             if delay > 0:
                 time.sleep(delay)
@@ -206,6 +215,7 @@ def discover_edgar(
     return {
         "ciks_queried": len(cik_entries),
         "ciks_failed": ciks_failed,
+        "pagination_errors": pagination_errors,
         "total_filings": len(all_records),
     }
 
