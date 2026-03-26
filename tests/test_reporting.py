@@ -315,3 +315,71 @@ class TestFormatStatusSummary:
         assert "3301" in output
         assert "PDIP" in output
         assert "not discovered" in output
+
+
+class TestStatusCli:
+    """Tests for corpus status CLI command."""
+
+    def test_status_help(self) -> None:
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["status", "--help"])
+        assert result.exit_code == 0
+        assert "source" in result.output.lower()
+
+    def test_status_no_args_shows_summary(self, tmp_path: Path) -> None:
+        from unittest.mock import patch
+
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        mock_statuses = [
+            {
+                "source": "nsm",
+                "status": "ok",
+                "discovery_count": 10,
+                "manifest_count": 8,
+                "outstanding_count": 2,
+                "outstanding": [],
+            },
+            {"source": "edgar", "status": "not_discovered"},
+            {"source": "pdip", "status": "not_discovered"},
+        ]
+
+        with patch("corpus.reporting.get_source_status", side_effect=mock_statuses):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["status"])
+
+        assert result.exit_code == 0
+        assert "NSM" in result.output
+
+    def test_status_with_source(self, tmp_path: Path) -> None:
+        from unittest.mock import patch
+
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        mock_status = {
+            "source": "edgar",
+            "status": "ok",
+            "discovery_count": 100,
+            "manifest_count": 95,
+            "outstanding_count": 5,
+            "outstanding": [
+                {"native_id": "doc-1", "title": "Test Doc", "last_error": "HTTP 403"},
+            ],
+        }
+
+        with patch("corpus.reporting.get_source_status", return_value=mock_status):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["status", "edgar"])
+
+        assert result.exit_code == 0
+        assert "EDGAR" in result.output
+        assert "doc-1" in result.output
+        assert "HTTP 403" in result.output

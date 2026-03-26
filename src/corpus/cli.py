@@ -393,6 +393,49 @@ def ingest(manifest_dir: Path, db_path: Path, run_id: str | None) -> None:
     )
 
 
+# ── Status command ─────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("source", required=False, default=None)
+def status(source: str | None) -> None:
+    """Show download status. Optionally filter by SOURCE (nsm, edgar, pdip)."""
+    from corpus.reporting import (
+        _DISCOVERY_PATHS,
+        format_status_summary,
+        get_source_status,
+    )
+
+    sources = [source] if source else list(_DISCOVERY_PATHS.keys())
+
+    if source:
+        # Detailed per-source view
+        s = get_source_status(source)
+        if s.get("status") == "not_discovered":
+            click.echo(f"  {source.upper()}: not discovered")
+            return
+
+        click.echo(
+            f"  {s['source'].upper()}: {s['manifest_count']} / {s['discovery_count']} "
+            f"downloaded ({s['outstanding_count']} outstanding)"
+        )
+
+        if s["outstanding"]:
+            click.echo("")
+            click.echo(f"  Outstanding ({s['outstanding_count']}):")
+            for item in s["outstanding"]:
+                error = f"  last error: {item['last_error']}" if item.get("last_error") else ""
+                click.echo(f"    {item['native_id']:40s}  {item['title'][:40]:40s}{error}")
+
+            click.echo("")
+            discovery_path = _DISCOVERY_PATHS.get(source, f"data/{source}_discovery.jsonl")
+            click.echo(f"  To retry: corpus download {source} --discovery-file {discovery_path}")
+    else:
+        # Cross-source summary
+        statuses = [get_source_status(s) for s in sources]
+        click.echo(format_status_summary(statuses))
+
+
 # ── Entry point ─────────────────────────────────────────────────────
 
 
