@@ -1,6 +1,6 @@
 """Click CLI entry point for the sovereign prospectus corpus pipeline.
 
-Groups: download, parse, grep, extract.
+Groups: discover, download, parse, grep, extract.
 Commands: ingest.
 
 Entry point registered in pyproject.toml as ``corpus = "corpus.cli:main"``.
@@ -48,6 +48,12 @@ def download() -> None:
 @download.command()
 @click.option("--run-id", default=None, help="Pipeline run identifier.")
 @click.option(
+    "--discovery-file",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/nsm_discovery.jsonl",
+    help="Path to discovery JSONL from 'corpus discover nsm'.",
+)
+@click.option(
     "--output-dir",
     type=click.Path(path_type=Path),
     default="data/original",
@@ -65,27 +71,19 @@ def download() -> None:
     default="data/telemetry",
     help="Directory for structured log files.",
 )
-@click.option("--dry-run", is_flag=True, help="Query API and report count without downloading.")
-@click.option(
-    "--api-responses-dir",
-    type=click.Path(path_type=Path),
-    default="data/api_responses",
-    help="Directory for raw API response JSON files.",
-)
 def nsm(
     run_id: str | None,
+    discovery_file: Path,
     output_dir: Path,
     manifest_dir: Path,
     log_dir: Path,
-    dry_run: bool,
-    api_responses_dir: Path,
 ) -> None:
-    """Download documents from FCA National Storage Mechanism."""
+    """Download documents from FCA NSM (reads discovery file)."""
     import uuid
 
     from corpus.io.http import CorpusHTTPClient
     from corpus.logging import CorpusLogger
-    from corpus.sources.nsm import query_nsm_api, run_nsm_download
+    from corpus.sources.nsm import run_nsm_download
 
     cfg = _load_config().get("nsm", {})
     cb_cfg = cfg.get("circuit_breaker", {})
@@ -99,30 +97,25 @@ def nsm(
         timeout=int(cfg.get("timeout", 60)),
     )
 
-    if dry_run:
-        _, total = query_nsm_api(client, from_offset=0, size=1)
-        click.echo(f"NSM dry run: {total} total documents available.")
-        return
-
     log_file = log_dir / f"nsm_{run_id}.jsonl"
     logger = CorpusLogger(log_file, run_id=run_id)
 
-    click.echo(f"Starting NSM download (run_id={run_id})...")
+    click.echo(f"Starting NSM download from {discovery_file} (run_id={run_id})...")
     stats = run_nsm_download(
         client=client,
+        discovery_file=discovery_file,
         output_dir=output_dir,
         manifest_dir=manifest_dir,
         logger=logger,
         run_id=run_id,
-        api_responses_dir=api_responses_dir,
-        delay_api=float(cfg.get("delay_api", 1.0)),
         delay_download=float(cfg.get("delay_download", 1.0)),
         total_failures_abort=int(cb_cfg.get("total_failures_abort", 10)),
     )
 
     click.echo(
         f"NSM download complete: {stats['downloaded']} downloaded, "
-        f"{stats['skipped']} skipped, {stats['failed']} failed."
+        f"{stats['skipped']} skipped, {stats['failed']} failed "
+        f"(of {stats['total_in_discovery']} in discovery)."
     )
     if stats["aborted"]:
         click.echo("WARNING: Download aborted due to too many failures.")
@@ -140,6 +133,65 @@ def edgar(run_id: str | None) -> None:
 def pdip(run_id: str | None) -> None:
     """Download documents from World Bank PDIP."""
     click.echo("PDIP download not yet implemented (see Task 6).")
+
+
+# ── Discover group ─────────────────────────────────────────────────
+
+
+@cli.group()
+def discover() -> None:
+    """Discover sovereign filings from sources (metadata only, no downloads)."""
+
+
+@discover.command("nsm")
+@click.option("--run-id", default=None, help="Pipeline run identifier.")
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default="data/nsm_discovery.jsonl",
+    help="Output path for discovery JSONL.",
+)
+@click.option(
+    "--reference-csv",
+    type=click.Path(path_type=Path),
+    default="data/raw/sovereign_issuer_reference.csv",
+    help="Path to sovereign issuer reference CSV.",
+)
+def discover_nsm_cmd(run_id: str | None, output: Path, reference_csv: Path) -> None:
+    """Discover sovereign filings from FCA NSM (metadata only)."""
+    import uuid
+
+    from corpus.io.http import CorpusHTTPClient
+    from corpus.sources.nsm import build_sovereign_queries, discover_nsm
+
+    cfg = _load_config().get("nsm", {})
+
+    if run_id is None:
+        run_id = f"discover-nsm-{uuid.uuid4().hex[:8]}"
+
+    client = CorpusHTTPClient(
+        max_retries=int(cfg.get("max_retries", 5)),
+        backoff_factor=float(cfg.get("backoff_factor", 0.5)),
+        timeout=int(cfg.get("timeout", 60)),
+    )
+
+    ref_path = reference_csv if reference_csv.exists() else None
+    queries = build_sovereign_queries(reference_csv=ref_path)
+    click.echo(f"Running {len(queries)} sovereign discovery queries (run_id={run_id})...")
+
+    stats = discover_nsm(
+        client=client,
+        queries=queries,
+        output_path=output,
+        delay=float(cfg.get("delay_api", 1.0)),
+    )
+
+    click.echo(
+        f"Discovery complete: {stats['unique_filings']} unique filings from {stats['total_hits_raw']} raw hits."
+    )
+    click.echo(f"Output: {output}")
+    for pq in stats["per_query"]:
+        click.echo(f"  {pq['label']}: {pq['hits']} hits, {pq['new']} new")
 
 
 # ── Parse group ─────────────────────────────────────────────────────

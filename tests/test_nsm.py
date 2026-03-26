@@ -413,22 +413,19 @@ class TestRelatedOrgParsing:
         assert meta["related_org"] == [{"lei": "ABC123", "company": "Some Bank Ltd"}]
 
 
-class TestNsmCli:
-    """Tests for the CLI download nsm command."""
-
-    def test_download_nsm_help(self) -> None:
-        """corpus download nsm --help shows options."""
+class TestDiscoverNsmCli:
+    def test_discover_nsm_help(self) -> None:
         from click.testing import CliRunner
 
         from corpus.cli import cli
 
         runner = CliRunner()
-        result = runner.invoke(cli, ["download", "nsm", "--help"])
+        result = runner.invoke(cli, ["discover", "nsm", "--help"])
         assert result.exit_code == 0
         assert "--run-id" in result.output
+        assert "--output" in result.output
 
-    def test_download_nsm_dry_run(self, tmp_path: Path) -> None:
-        """corpus download nsm --dry-run reports total count without downloading."""
+    def test_discover_nsm_runs(self, tmp_path: Path) -> None:
         from unittest.mock import patch
 
         from click.testing import CliRunner
@@ -436,25 +433,60 @@ class TestNsmCli:
         from corpus.cli import cli
 
         runner = CliRunner()
+        fixture = _load_fixture("nsm_api_response.json")
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = fixture
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
 
-        with patch("corpus.sources.nsm.query_nsm_api") as mock_query:
-            mock_query.return_value = ([], 42)
+        output = tmp_path / "discovery.jsonl"
+
+        with patch("corpus.io.http.CorpusHTTPClient") as mock_cls:
+            mock_client = MagicMock()
+            mock_client.post.return_value = mock_resp
+            mock_cls.return_value = mock_client
 
             result = runner.invoke(
                 cli,
                 [
-                    "download",
+                    "discover",
                     "nsm",
-                    "--dry-run",
-                    "--output-dir",
-                    str(tmp_path / "original"),
-                    "--manifest-dir",
-                    str(tmp_path / "manifests"),
+                    "--output",
+                    str(output),
                 ],
             )
 
         assert result.exit_code == 0
-        assert "42" in result.output
+        assert "unique" in result.output.lower()
+
+
+class TestDownloadNsmCliUpdated:
+    def test_download_nsm_help(self) -> None:
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["download", "nsm", "--help"])
+        assert result.exit_code == 0
+        assert "--discovery-file" in result.output
+
+    def test_download_nsm_requires_discovery_file(self, tmp_path: Path) -> None:
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "download",
+                "nsm",
+                "--discovery-file",
+                str(tmp_path / "nonexistent.jsonl"),
+            ],
+        )
+        assert result.exit_code != 0
 
 
 class TestBuildSovereignQueries:
