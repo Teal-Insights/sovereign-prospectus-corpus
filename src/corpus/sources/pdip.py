@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from corpus.logging import CorpusLogger
+
 import requests
 
 from corpus.io.safe_write import safe_write
@@ -198,3 +200,106 @@ def download_pdip_document(
     }
 
     return enriched, "success"
+
+
+def run_pdip_download(
+    *,
+    discovery_file: Path,
+    output_dir: Path,
+    manifest_dir: Path,
+    logger: CorpusLogger,
+    run_id: str,
+    delay: float = 1.0,
+    total_failures_abort: int = 10,
+) -> dict[str, Any]:
+    """Download PDIP documents from a discovery JSONL file.
+
+    Reads discovery results, downloads each PDF, writes pdip_manifest.jsonl.
+    """
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = manifest_dir / "pdip_manifest.jsonl"
+
+    session = requests.Session()
+    session.headers.update(PDIP_HEADERS)
+
+    stats: dict[str, Any] = {
+        "downloaded": 0,
+        "skipped": 0,
+        "not_found": 0,
+        "failed": 0,
+        "total_in_discovery": 0,
+        "aborted": False,
+    }
+
+    with discovery_file.open() as f:
+        records = [json.loads(line) for line in f if line.strip()]
+
+    stats["total_in_discovery"] = len(records)
+
+    for record in records:
+        if stats["aborted"]:
+            break
+
+        doc_id = record.get("native_id", "unknown")
+        _start = time.monotonic()
+
+        try:
+            result, dl_status = download_pdip_document(
+                record, session=session, output_dir=output_dir
+            )
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - _start) * 1000)
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status="error",
+                error_message=str(exc),
+            )
+            stats["failed"] += 1
+            if stats["failed"] >= total_failures_abort:
+                stats["aborted"] = True
+                break
+            if delay > 0:
+                time.sleep(delay)
+            continue
+
+        elapsed_ms = int((time.monotonic() - _start) * 1000)
+
+        if dl_status == "success" and result is not None:
+            with manifest_path.open("a") as mf:
+                mf.write(json.dumps(result) + "\n")
+            stats["downloaded"] += 1
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status="success",
+            )
+        elif dl_status == "skipped_exists":
+            stats["skipped"] += 1
+        elif dl_status == "not_found":
+            stats["not_found"] += 1
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status="not_found",
+            )
+        elif dl_status == "invalid_pdf":
+            stats["failed"] += 1
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status="invalid_pdf",
+            )
+            if stats["failed"] >= total_failures_abort:
+                stats["aborted"] = True
+                break
+
+        if delay > 0:
+            time.sleep(delay)
+
+    return stats

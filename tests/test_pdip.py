@@ -268,3 +268,195 @@ class TestDownloadPdipDocument:
         assert status == "invalid_pdf"
 
 
+class TestRunPdipDownload:
+    """Tests for the full download pipeline."""
+
+    def test_reads_discovery_and_downloads(self, tmp_path: Path) -> None:
+        from corpus.logging import CorpusLogger
+        from corpus.sources.pdip import run_pdip_download
+
+        discovery = tmp_path / "pdip_discovery.jsonl"
+        record = {
+            "native_id": "VEN85",
+            "source": "pdip",
+            "title": "Test Loan",
+            "tag_status": "Annotated",
+            "country": "Venezuela",
+            "instrument_type": "Loan",
+            "creditor_country": None,
+            "creditor_type": None,
+            "maturity_date": None,
+            "maturity_year": None,
+            "metadata": {},
+        }
+        discovery.write_text(json.dumps(record) + "\n")
+
+        pdf_bytes = b"%PDF-1.6\ntest content"
+
+        with patch("corpus.sources.pdip.requests") as mock_requests:
+            mock_resp = MagicMock()
+            mock_resp.content = pdf_bytes
+            mock_resp.status_code = 200
+            mock_resp.raise_for_status = MagicMock()
+            mock_session = MagicMock()
+            mock_session.get.return_value = mock_resp
+            mock_requests.Session.return_value = mock_session
+
+            log_file = tmp_path / "test.jsonl"
+            logger = CorpusLogger(log_file, run_id="test-run")
+
+            stats = run_pdip_download(
+                discovery_file=discovery,
+                output_dir=tmp_path / "original",
+                manifest_dir=tmp_path / "manifests",
+                logger=logger,
+                run_id="test-run",
+                delay=0.0,
+            )
+
+        assert stats["downloaded"] == 1
+        assert stats["failed"] == 0
+        manifest = tmp_path / "manifests" / "pdip_manifest.jsonl"
+        assert manifest.exists()
+        lines = [json.loads(line) for line in manifest.read_text().strip().split("\n")]
+        assert len(lines) == 1
+        assert lines[0]["native_id"] == "VEN85"
+
+    def test_circuit_breaker_aborts(self, tmp_path: Path) -> None:
+        from corpus.logging import CorpusLogger
+        from corpus.sources.pdip import run_pdip_download
+
+        discovery = tmp_path / "pdip_discovery.jsonl"
+        lines = []
+        for i in range(15):
+            lines.append(
+                json.dumps(
+                    {
+                        "native_id": f"FAIL{i}",
+                        "source": "pdip",
+                        "title": f"Fail {i}",
+                        "tag_status": "",
+                        "country": "Test",
+                        "instrument_type": "",
+                        "creditor_country": None,
+                        "creditor_type": None,
+                        "maturity_date": None,
+                        "maturity_year": None,
+                        "metadata": {},
+                    }
+                )
+            )
+        discovery.write_text("\n".join(lines) + "\n")
+
+        with patch("corpus.sources.pdip.requests") as mock_requests:
+            mock_session = MagicMock()
+            mock_session.get.side_effect = Exception("connection refused")
+            mock_requests.Session.return_value = mock_session
+
+            log_file = tmp_path / "test.jsonl"
+            logger = CorpusLogger(log_file, run_id="test-run")
+
+            stats = run_pdip_download(
+                discovery_file=discovery,
+                output_dir=tmp_path / "original",
+                manifest_dir=tmp_path / "manifests",
+                logger=logger,
+                run_id="test-run",
+                delay=0.0,
+                total_failures_abort=5,
+            )
+
+        assert stats["aborted"]
+        assert stats["failed"] <= 6
+
+    def test_not_found_does_not_count_as_failure(self, tmp_path: Path) -> None:
+        from corpus.logging import CorpusLogger
+        from corpus.sources.pdip import run_pdip_download
+
+        discovery = tmp_path / "pdip_discovery.jsonl"
+        record = {
+            "native_id": "MISSING1",
+            "source": "pdip",
+            "title": "Missing Doc",
+            "tag_status": "",
+            "country": "Test",
+            "instrument_type": "",
+            "creditor_country": None,
+            "creditor_type": None,
+            "maturity_date": None,
+            "maturity_year": None,
+            "metadata": {},
+        }
+        discovery.write_text(json.dumps(record) + "\n")
+
+        with patch("corpus.sources.pdip.requests") as mock_requests:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 404
+            mock_session = MagicMock()
+            mock_session.get.return_value = mock_resp
+            mock_requests.Session.return_value = mock_session
+
+            log_file = tmp_path / "test.jsonl"
+            logger = CorpusLogger(log_file, run_id="test-run")
+
+            stats = run_pdip_download(
+                discovery_file=discovery,
+                output_dir=tmp_path / "original",
+                manifest_dir=tmp_path / "manifests",
+                logger=logger,
+                run_id="test-run",
+                delay=0.0,
+            )
+
+        assert stats["failed"] == 0
+        assert stats["not_found"] == 1
+        assert not stats["aborted"]
+
+    def test_telemetry_logs_download(self, tmp_path: Path) -> None:
+        from corpus.logging import CorpusLogger
+        from corpus.sources.pdip import run_pdip_download
+
+        discovery = tmp_path / "pdip_discovery.jsonl"
+        record = {
+            "native_id": "VEN85",
+            "source": "pdip",
+            "title": "Test",
+            "tag_status": "",
+            "country": "Venezuela",
+            "instrument_type": "Loan",
+            "creditor_country": None,
+            "creditor_type": None,
+            "maturity_date": None,
+            "maturity_year": None,
+            "metadata": {},
+        }
+        discovery.write_text(json.dumps(record) + "\n")
+
+        pdf_bytes = b"%PDF-1.6\ntest"
+
+        with patch("corpus.sources.pdip.requests") as mock_requests:
+            mock_resp = MagicMock()
+            mock_resp.content = pdf_bytes
+            mock_resp.status_code = 200
+            mock_resp.raise_for_status = MagicMock()
+            mock_session = MagicMock()
+            mock_session.get.return_value = mock_resp
+            mock_requests.Session.return_value = mock_session
+
+            log_file = tmp_path / "test.jsonl"
+            logger = CorpusLogger(log_file, run_id="test-run")
+
+            run_pdip_download(
+                discovery_file=discovery,
+                output_dir=tmp_path / "original",
+                manifest_dir=tmp_path / "manifests",
+                logger=logger,
+                run_id="test-run",
+                delay=0.0,
+            )
+
+        log_entries = [json.loads(line) for line in log_file.read_text().strip().split("\n")]
+        assert len(log_entries) == 1
+        assert log_entries[0]["status"] == "success"
+        assert log_entries[0]["document_id"] == "VEN85"
+        assert log_entries[0]["step"] == "download"
