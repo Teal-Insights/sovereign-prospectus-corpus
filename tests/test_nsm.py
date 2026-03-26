@@ -380,3 +380,47 @@ class TestRunNsmDownload:
 
         assert stats["aborted"]
         assert stats["failed"] <= 6  # abort triggers at threshold, may overshoot by 1
+
+
+class TestNsmCli:
+    """Tests for the CLI download nsm command."""
+
+    def test_download_nsm_help(self) -> None:
+        """corpus download nsm --help shows options."""
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["download", "nsm", "--help"])
+        assert result.exit_code == 0
+        assert "--run-id" in result.output
+
+    def test_download_nsm_dry_run(self, tmp_path: Path) -> None:
+        """corpus download nsm --dry-run reports total count without downloading."""
+        from unittest.mock import patch
+
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        runner = CliRunner()
+
+        with patch("corpus.sources.nsm.query_nsm_api") as mock_query:
+            mock_query.return_value = ([], 42)
+
+            result = runner.invoke(
+                cli,
+                [
+                    "download",
+                    "nsm",
+                    "--dry-run",
+                    "--output-dir",
+                    str(tmp_path / "original"),
+                    "--manifest-dir",
+                    str(tmp_path / "manifests"),
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert "42" in result.output

@@ -32,9 +32,67 @@ def download() -> None:
 
 @download.command()
 @click.option("--run-id", default=None, help="Pipeline run identifier.")
-def nsm(run_id: str | None) -> None:
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default="data/original",
+    help="Directory for downloaded PDFs.",
+)
+@click.option(
+    "--manifest-dir",
+    type=click.Path(path_type=Path),
+    default="data/manifests",
+    help="Directory for manifest JSONL files.",
+)
+@click.option(
+    "--log-dir",
+    type=click.Path(path_type=Path),
+    default="data/telemetry",
+    help="Directory for structured log files.",
+)
+@click.option("--dry-run", is_flag=True, help="Query API and report count without downloading.")
+def nsm(
+    run_id: str | None,
+    output_dir: Path,
+    manifest_dir: Path,
+    log_dir: Path,
+    dry_run: bool,
+) -> None:
     """Download documents from FCA National Storage Mechanism."""
-    click.echo("NSM download not yet implemented (see Task 4).")
+    import uuid
+
+    from corpus.io.http import CorpusHTTPClient
+    from corpus.logging import CorpusLogger
+    from corpus.sources.nsm import query_nsm_api, run_nsm_download
+
+    if run_id is None:
+        run_id = f"nsm-{uuid.uuid4().hex[:12]}"
+
+    client = CorpusHTTPClient()
+
+    if dry_run:
+        _, total = query_nsm_api(client, from_offset=0, size=1)
+        click.echo(f"NSM dry run: {total} total documents available.")
+        return
+
+    log_file = log_dir / f"nsm_{run_id}.jsonl"
+    logger = CorpusLogger(log_file, run_id=run_id)
+
+    click.echo(f"Starting NSM download (run_id={run_id})...")
+    stats = run_nsm_download(
+        client=client,
+        output_dir=output_dir,
+        manifest_dir=manifest_dir,
+        logger=logger,
+        run_id=run_id,
+    )
+
+    click.echo(
+        f"NSM download complete: {stats['downloaded']} downloaded, "
+        f"{stats['skipped']} skipped, {stats['failed']} failed."
+    )
+    if stats["aborted"]:
+        click.echo("WARNING: Download aborted due to too many failures.")
 
 
 @download.command()
