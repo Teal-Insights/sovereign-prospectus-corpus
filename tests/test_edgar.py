@@ -491,3 +491,51 @@ class TestRunEdgarDownload:
         assert len(log_entries) == 1
         assert log_entries[0]["status"] == "error"
         assert log_entries[0]["duration_ms"] >= 0
+
+
+class TestEdgarCli:
+    """Tests for EDGAR CLI commands."""
+
+    def test_discover_edgar_help(self) -> None:
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["discover", "edgar", "--help"])
+        assert result.exit_code == 0
+        assert "--run-id" in result.output
+        assert "--output" in result.output
+        assert "--tiers" in result.output
+
+    def test_download_edgar_help(self) -> None:
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["download", "edgar", "--help"])
+        assert result.exit_code == 0
+        assert "--run-id" in result.output
+        assert "--discovery-file" in result.output
+
+    def test_discover_edgar_runs(self, tmp_path: Path) -> None:
+        from unittest.mock import patch
+
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        fixture = _load_fixture("edgar_submissions_response.json")
+        output = tmp_path / "discovery.jsonl"
+
+        with patch("corpus.sources.edgar.fetch_submissions") as mock_fetch:
+            mock_fetch.return_value = fixture
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                ["discover", "edgar", "--output", str(output), "--tiers", "1"],
+            )
+
+        assert result.exit_code == 0
+        assert "filings" in result.output.lower()

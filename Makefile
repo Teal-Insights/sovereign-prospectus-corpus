@@ -10,12 +10,15 @@ export RUN_ID
 
 # ── Pipeline steps ──────────────────────────────────────────────────
 
-.PHONY: discover-nsm download-nsm download-edgar download-pdip download-all
+.PHONY: discover-nsm discover-edgar download-nsm download-edgar download-pdip download-all
 .PHONY: parse grep extract ingest
 .PHONY: pipeline lint test check help
 
 discover-nsm: ## Discover sovereign filings from FCA NSM (metadata only)
 	uv run corpus discover nsm --run-id $(RUN_ID)
+
+discover-edgar: ## Discover sovereign filings from SEC EDGAR (metadata only)
+	uv run corpus discover edgar --run-id $(RUN_ID)
 
 download-nsm: ## Download NSM documents (requires discover-nsm first)
 	uv run corpus download nsm --run-id $(RUN_ID)
