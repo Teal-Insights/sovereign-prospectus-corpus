@@ -93,6 +93,7 @@ def discover_pdip(
     """
     session = requests.Session()
     session.headers.update(PDIP_HEADERS)
+    session.verify = False  # Georgetown cert chain incomplete on some systems
 
     seen_ids: set[str] = set()
     all_records: list[dict[str, Any]] = []
@@ -222,6 +223,7 @@ def run_pdip_download(
 
     session = requests.Session()
     session.headers.update(PDIP_HEADERS)
+    session.verify = False  # Georgetown cert chain incomplete on some systems
 
     stats: dict[str, Any] = {
         "downloaded": 0,
