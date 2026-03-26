@@ -307,7 +307,8 @@ def run_edgar_download(
             elapsed_ms = int((time.monotonic() - _start) * 1000)
 
             # SEC 429 rate-limit: sleep and retry once before counting as failure
-            is_429 = hasattr(exc, "response") and getattr(exc.response, "status_code", 0) == 429
+            resp = getattr(exc, "response", None)
+            is_429 = resp is not None and getattr(resp, "status_code", 0) == 429
             if is_429:
                 logger.log(
                     document_id=doc_id,
