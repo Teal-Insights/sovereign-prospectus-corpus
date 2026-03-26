@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from corpus.io.http import CorpusHTTPClient
 
@@ -15,13 +16,12 @@ class TestCorpusHTTPClient:
     def test_default_user_agent(self) -> None:
         """Client has a User-Agent identifying the project."""
         client = CorpusHTTPClient()
-        assert "sovereign-prospectus-corpus" in client.session.headers["User-Agent"]
+        assert "sovereign-prospectus-corpus" in client.user_agent
 
     def test_custom_user_agent_from_contact(self) -> None:
         """User-Agent includes contact info when provided."""
         client = CorpusHTTPClient(contact_email="test@example.com")
-        ua = client.session.headers["User-Agent"]
-        assert "test@example.com" in ua
+        assert "test@example.com" in client.user_agent
 
     def test_get_returns_response(self) -> None:
         """Successful GET returns the response object."""
@@ -111,6 +111,37 @@ class TestCorpusHTTPClient:
 
         # Should only be called once — no retries for 404
         assert mock_req.call_count == 1
+
+    def test_retries_on_connection_error(self) -> None:
+        """Retries on transport-level ConnectionError."""
+        client = CorpusHTTPClient(max_retries=2, backoff_factor=0.0)
+
+        ok_resp = MagicMock()
+        ok_resp.status_code = 200
+        ok_resp.raise_for_status = MagicMock()
+
+        with patch.object(
+            client.session,
+            "request",
+            side_effect=[requests.ConnectionError("reset"), ok_resp],
+        ):
+            resp = client.get("https://example.com/doc.pdf")
+
+        assert resp.status_code == 200
+
+    def test_raises_connection_error_after_retries_exhausted(self) -> None:
+        """ConnectionError raised after all retries fail."""
+        client = CorpusHTTPClient(max_retries=1, backoff_factor=0.0)
+
+        with (
+            patch.object(
+                client.session,
+                "request",
+                side_effect=requests.ConnectionError("reset"),
+            ),
+            pytest.raises(requests.ConnectionError),
+        ):
+            client.get("https://example.com/doc.pdf")
 
     def test_timeout_passed_to_request(self) -> None:
         """Timeout is forwarded to the underlying request."""

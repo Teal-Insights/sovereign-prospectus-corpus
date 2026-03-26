@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+import pytest
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -102,17 +104,27 @@ class TestCorpusLogger:
         assert isinstance(entry["duration_ms"], int)
         assert entry["duration_ms"] >= 0
 
-    def test_timer_logs_error_on_exception(self, tmp_path: Path) -> None:
-        """Timer context manager logs error status if body raises."""
+    def test_timer_logs_error_and_reraises(self, tmp_path: Path) -> None:
+        """Timer context manager logs error status and re-raises the exception."""
         log_file = tmp_path / "pipeline.jsonl"
         logger = CorpusLogger(log_file, run_id="run-007")
 
-        try:
-            with logger.timed("doc1", "parse"):
-                raise RuntimeError("parse failed")
-        except RuntimeError:
-            pass
+        with pytest.raises(RuntimeError, match="parse failed"), logger.timed("doc1", "parse"):
+            raise RuntimeError("parse failed")
 
         entry = json.loads(log_file.read_text().strip())
         assert entry["status"] == "error"
         assert "parse failed" in entry["error_message"]
+
+    def test_timed_ignores_reserved_extra_keys(self, tmp_path: Path) -> None:
+        """Reserved keys passed as extras to timed() are silently dropped."""
+        log_file = tmp_path / "pipeline.jsonl"
+        logger = CorpusLogger(log_file, run_id="run-008")
+
+        # Passing 'status' as extra should not override the auto-set status
+        with logger.timed("doc1", "download", status="custom", source="nsm"):
+            pass
+
+        entry = json.loads(log_file.read_text().strip())
+        assert entry["status"] == "success"  # not "custom"
+        assert entry["source"] == "nsm"  # non-reserved extra preserved

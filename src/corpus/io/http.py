@@ -33,6 +33,11 @@ class CorpusHTTPClient:
             ua += f" ({contact_email})"
         self.session.headers["User-Agent"] = ua
 
+    @property
+    def user_agent(self) -> str:
+        """Return the User-Agent header as a string."""
+        return str(self.session.headers["User-Agent"])
+
     def get(self, url: str, **kwargs: Any) -> requests.Response:
         return self._request("GET", url, **kwargs)
 
@@ -41,10 +46,16 @@ class CorpusHTTPClient:
 
     def _request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
         kwargs.setdefault("timeout", self.timeout)
-        last_exc: Exception | None = None
 
         for attempt in range(self.max_retries + 1):
-            resp = self.session.request(method, url, **kwargs)
+            try:
+                resp = self.session.request(method, url, **kwargs)
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                if attempt < self.max_retries:
+                    delay = self.backoff_factor * (2**attempt)
+                    time.sleep(delay)
+                    continue
+                raise exc
 
             if resp.status_code < 400:
                 return resp
@@ -58,5 +69,4 @@ class CorpusHTTPClient:
             else:
                 resp.raise_for_status()
 
-        # Unreachable, but satisfies type checker
-        raise last_exc or RuntimeError("request failed")  # pragma: no cover
+        raise RuntimeError("request failed")  # pragma: no cover
