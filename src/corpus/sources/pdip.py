@@ -127,7 +127,10 @@ def discover_pdip(
                 seen_ids.add(record["native_id"])
                 all_records.append(record)
 
-        if len(results) < page_size:
+        # Stop if we got fewer results than requested, or if we've seen
+        # all documents (API may ignore pageSize and return everything)
+        total = data.get("total", 0)
+        if len(results) < page_size or len(all_records) >= total:
             break
 
         page += 1
