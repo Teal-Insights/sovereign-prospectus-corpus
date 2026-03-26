@@ -52,6 +52,9 @@ reportMissingTypeStubs = false
 [tool.pytest.ini_options]
 markers = ["network: tests requiring network access"]
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/corpus"]
+
 [build-system]
 requires = ["hatchling"]
-build-backend = "hatchling.backends"
+build-backend = "hatchling.build"
