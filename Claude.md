@@ -1,18 +1,63 @@
 # CLAUDE.md — Sovereign Bond Prospectus Corpus
 
-## Quick Start
+## Task Execution Workflow (MANDATORY)
 
-1. Read `SESSION-HANDOFF.md` for the current task
-2. Read the task spec linked from SESSION-HANDOFF.md
-3. Check open GitHub issues (`gh issue list`) — incorporate any that overlap with the current task
-4. Confirm understanding before writing code
-5. If stuck after 5 attempts: document the blocker, move on
+This is the end-to-end checklist for every task. Do not skip steps. Do not ask
+the user which steps to use — just follow them. The user runs with
+`--dangerously-skip-permissions` and expects autonomous execution.
 
-## Code Review Process
+### Phase 1: Understand (before writing any code)
 
-- Fix all reasonable issues from code review immediately — it usually doesn't take much time
-- Any issue not fixed immediately gets filed as a GitHub issue (don't let feedback disappear)
-- Use `gh issue create` with context about where the feedback came from
+- [ ] Read `SESSION-HANDOFF.md` for the current task
+- [ ] Read the task spec and completion criteria
+- [ ] Run `gh issue list` — incorporate any open issues that overlap with this task
+- [ ] Read "Lessons Learned" section below if building a source adapter
+- [ ] **Assess completeness of spec.** Do the completion criteria cover everything
+  the task title implies? (e.g., "NSM downloader" must include actually running
+  the download, not just building the code.) If anything is underspecified or
+  ambiguous, **ask the user NOW** before proceeding.
+
+### Phase 2: Plan (use superpowers)
+
+- [ ] Use `superpowers:brainstorming` if this is creative/design work
+- [ ] Use `superpowers:writing-plans` to create an implementation plan
+- [ ] Verify the plan covers ALL completion criteria from the spec, including
+  running the actual pipeline (not just building it)
+- [ ] Save plan to `docs/superpowers/plans/`
+
+### Phase 3: Execute (use superpowers)
+
+- [ ] Use `superpowers:subagent-driven-development` to execute the plan
+  (always use subagents — do not ask)
+- [ ] Follow `superpowers:test-driven-development` within each task
+- [ ] After each subagent task: spec review then code quality review
+- [ ] Fix all issues before moving to next task
+
+### Phase 4: Verify (before claiming done)
+
+- [ ] `uv run ruff check src/ tests/` — no lint errors
+- [ ] `uv run ruff format --check src/ tests/` — formatting OK
+- [ ] `uv run pyright src/corpus/` — no type errors
+- [ ] `uv run pytest -v` — all tests pass
+- [ ] Actually run the pipeline/command end-to-end (not just tests)
+- [ ] Use `superpowers:verification-before-completion`
+- [ ] Use `superpowers:requesting-code-review` for final review
+- [ ] Use `superpowers:receiving-code-review` to evaluate and fix feedback
+- [ ] Fix all reasonable issues immediately. File GitHub issues for anything
+  deferred (`gh issue create` with context about the feedback source)
+
+### Phase 5: Ship
+
+- [ ] Use `superpowers:finishing-a-development-branch`
+- [ ] Push branch, create PR with `gh pr create`
+- [ ] Request external reviews: comment `@codex review` and `@claude review` on the PR
+- [ ] Wait ~3 minutes for external review comments to arrive
+- [ ] Read PR comments with `gh api repos/{owner}/{repo}/pulls/{number}/comments`
+- [ ] Use `superpowers:receiving-code-review` to evaluate external feedback
+- [ ] Fix reasonable issues, push, reply to comments
+- [ ] File GitHub issues for any deferred feedback
+- [ ] Update `SESSION-HANDOFF.md` with what was completed
+- [ ] Update `TASKS.md` completion status
 
 ## Project
 
