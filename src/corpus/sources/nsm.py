@@ -7,7 +7,9 @@ downloads PDFs, and writes nsm_manifest.jsonl for downstream ingest.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin
 
@@ -17,6 +19,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from corpus.io.http import CorpusHTTPClient
+    from corpus.logging import CorpusLogger
 
 NSM_API_URL = "https://api.data.fca.org.uk/search?index=fca-nsm-searchdata"
 NSM_ARTEFACT_BASE = "https://data.fca.org.uk/artefacts"
@@ -145,3 +148,108 @@ def download_nsm_document(
     enriched["file_path"] = str(target)
     enriched["file_hash"] = file_hash
     return enriched
+
+
+def run_nsm_download(
+    *,
+    client: CorpusHTTPClient,
+    output_dir: Path,
+    manifest_dir: Path,
+    logger: CorpusLogger,
+    run_id: str,
+    delay_api: float = 1.0,
+    delay_download: float = 1.0,
+    page_size: int = 10000,
+    consecutive_failures_skip: int = 5,
+    total_failures_abort: int = 10,
+) -> dict[str, Any]:
+    """Run the full NSM download pipeline.
+
+    Paginates through all NSM results, downloads PDFs, writes manifest JSONL.
+    Circuit breaker aborts after total_failures_abort failures.
+    """
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = manifest_dir / "nsm_manifest.jsonl"
+
+    stats: dict[str, Any] = {
+        "downloaded": 0,
+        "skipped": 0,
+        "failed": 0,
+        "api_pages_fetched": 0,
+        "total_hits": 0,
+        "aborted": False,
+    }
+
+    from_offset = 0
+    consecutive_failures = 0
+
+    while True:
+        if stats["aborted"]:
+            break
+
+        with logger.timed("nsm-api", "query", page=from_offset):
+            hits, total = query_nsm_api(client, from_offset=from_offset, size=page_size)
+
+        stats["api_pages_fetched"] += 1
+        if stats["total_hits"] == 0:
+            stats["total_hits"] = total
+
+        if not hits:
+            break
+
+        records = parse_hits(hits)
+
+        for record in records:
+            if stats["aborted"]:
+                break
+
+            doc_id = record.get("native_id", "unknown")
+
+            try:
+                with logger.timed(doc_id, "download"):
+                    result = download_nsm_document(record, client=client, output_dir=output_dir)
+            except Exception as exc:
+                logger.log(
+                    document_id=doc_id,
+                    step="download",
+                    duration_ms=0,
+                    status="error",
+                    error_message=str(exc),
+                )
+                result = None
+
+            if result is not None:
+                with manifest_path.open("a") as f:
+                    f.write(json.dumps(result) + "\n")
+                stats["downloaded"] += 1
+                consecutive_failures = 0
+            elif record.get("download_url"):
+                # Only count as failure if we actually tried (not a skip)
+                target = output_dir / f"{record.get('storage_key', '')}.pdf"
+                if not target.exists():
+                    stats["failed"] += 1
+                    consecutive_failures += 1
+                else:
+                    stats["skipped"] += 1
+            else:
+                stats["skipped"] += 1
+
+            if stats["failed"] >= total_failures_abort:
+                stats["aborted"] = True
+                break
+
+            if consecutive_failures >= consecutive_failures_skip:
+                consecutive_failures = 0  # Reset after skip window
+
+            if delay_download > 0:
+                time.sleep(delay_download)
+
+        from_offset += page_size
+        if from_offset >= total:
+            break
+
+        if delay_api > 0:
+            time.sleep(delay_api)
+
+    return stats

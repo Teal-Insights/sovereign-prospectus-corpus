@@ -269,3 +269,114 @@ class TestDownloadNsmDocument:
 
         result = download_nsm_document(record, client=mock_client, output_dir=tmp_path)
         assert result is None
+
+
+class TestRunNsmDownload:
+    """Tests for the full NSM download pipeline orchestrator."""
+
+    def test_writes_manifest_jsonl(self, tmp_path: Path) -> None:
+        """run_nsm_download writes one JSONL line per downloaded document."""
+        from corpus.logging import CorpusLogger
+        from corpus.sources.nsm import run_nsm_download
+
+        fixture = _load_fixture("nsm_api_response.json")
+        pdf_bytes = b"%PDF-1.4 fake pdf content"
+
+        mock_client = MagicMock()
+        # First call: API query returns fixture; Second+ calls: PDF downloads
+        api_resp = MagicMock()
+        api_resp.json.return_value = fixture
+        pdf_resp = MagicMock()
+        pdf_resp.content = pdf_bytes
+        pdf_resp.text = pdf_bytes.decode("utf-8", errors="replace")
+        mock_client.post.return_value = api_resp
+        mock_client.get.return_value = pdf_resp
+
+        output_dir = tmp_path / "original"
+        manifest_dir = tmp_path / "manifests"
+        log_file = tmp_path / "test.jsonl"
+        logger = CorpusLogger(log_file, run_id="test-run")
+
+        stats = run_nsm_download(
+            client=mock_client,
+            output_dir=output_dir,
+            manifest_dir=manifest_dir,
+            logger=logger,
+            run_id="test-run",
+            delay_api=0.0,
+            delay_download=0.0,
+            page_size=100,
+        )
+
+        manifest_file = manifest_dir / "nsm_manifest.jsonl"
+        assert manifest_file.exists()
+        manifest_lines = [
+            json.loads(line)
+            for line in manifest_file.read_text().strip().split("\n")
+            if line.strip()
+        ]
+        # Both hits have download URLs, at least the PDF one should succeed
+        assert len(manifest_lines) >= 1
+        assert stats["downloaded"] >= 1
+        assert stats["api_pages_fetched"] == 1
+
+    def test_circuit_breaker_aborts(self, tmp_path: Path) -> None:
+        """Pipeline aborts after total_failures_abort threshold."""
+        from corpus.logging import CorpusLogger
+        from corpus.sources.nsm import run_nsm_download
+
+        # Create many hits that will all fail (non-PDF content)
+        bad_hits = []
+        for i in range(15):
+            bad_hits.append(
+                {
+                    "_id": f"fail-{i}",
+                    "_source": {
+                        "disclosure_id": f"fail-{i}",
+                        "download_link": f"NSM/Portal/fail-{i}.pdf",
+                        "company": "BADCORP",
+                        "lei": "",
+                        "type_code": "PDI",
+                        "type": "Test",
+                        "headline": f"Fail doc {i}",
+                        "submitted_date": "2024-01-01T00:00:00Z",
+                        "publication_date": "2024-01-01T00:00:00Z",
+                        "source": "FCA",
+                        "seq_id": f"fail-{i}",
+                        "hist_seq": "1",
+                        "classifications": "",
+                        "classifications_code": "",
+                        "tag_esef": "",
+                        "lei_remediation_flag": "N",
+                        "last_updated_date": "2024-01-01T00:00:00Z",
+                    },
+                }
+            )
+
+        mock_client = MagicMock()
+        api_resp = MagicMock()
+        api_resp.json.return_value = {"hits": {"total": {"value": 15}, "hits": bad_hits}}
+        mock_client.post.return_value = api_resp
+        # All downloads return non-PDF content
+        bad_resp = MagicMock()
+        bad_resp.content = b"not a pdf"
+        mock_client.get.return_value = bad_resp
+
+        output_dir = tmp_path / "original"
+        manifest_dir = tmp_path / "manifests"
+        log_file = tmp_path / "test.jsonl"
+        logger = CorpusLogger(log_file, run_id="test-run")
+
+        stats = run_nsm_download(
+            client=mock_client,
+            output_dir=output_dir,
+            manifest_dir=manifest_dir,
+            logger=logger,
+            run_id="test-run",
+            delay_api=0.0,
+            delay_download=0.0,
+            total_failures_abort=5,
+        )
+
+        assert stats["aborted"]
+        assert stats["failed"] <= 6  # abort triggers at threshold, may overshoot by 1
