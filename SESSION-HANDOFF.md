@@ -1,7 +1,7 @@
 # SESSION-HANDOFF.md — Current Task
 
 **Last updated:** 2026-03-26
-**Status:** Phase 1 tasks 1-5 complete + shared reporting infra. NSM + EDGAR downloading done. Ready for Task 6 (PDIP).
+**Status:** PDIP annotations harvester complete (#19). Full 162-doc run finished. Ready for Phase 2 (Task 7: CAC extraction).
 
 ## Completed
 
@@ -20,13 +20,26 @@
   - `corpus status <source>` shows outstanding items with last errors
   - Automatic run reports after every download
   - PR #15
+- **Task 6:** PDIP source adapter — discovery + download ✅
+  - 823 documents discovered, 823 PDFs downloaded (5 GB, zero failures)
+  - Two-phase: `corpus discover pdip` → `corpus download pdip`
+  - PDIP API requires browser-like headers (Origin, Referer, User-Agent)
+  - SSL verification disabled for Georgetown cert chain issue
+  - PR #17
+- **Issue #19:** PDIP annotations harvester ✅
+  - `corpus scrape pdip-annotations` — inventory-driven, resumable
+  - HTTP-based: uses `/api/details/{doc_id}`, no Playwright needed
+  - Full run: 162/162 processed (122 success, 40 zero-clause)
+  - 37 CAC candidates identified across 58 annotated bonds
+  - 106 distinct raw labels observed (Label Studio rectanglelabels format)
+  - TLS: secure CA-bundle mode worked (InCommon intermediate)
+  - Resume verified: correctly skips completed docs on rerun
+  - Output: `/var/tmp/pdip_annotations/2026-03-26-full/`
+  - Branch: `feature/19-pdip-annotations-harvester`
 
 ## Next Tasks
 
 See `planning/specs/2026-03-25_clean-architecture/TASKS.md` for full task list.
-
-**Phase 1 remaining:**
-- **Task 6:** PDIP source adapter + migration
 
 **Phase 2:**
 - **Task 7:** Grep-first CAC extraction

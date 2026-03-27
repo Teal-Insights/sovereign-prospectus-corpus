@@ -457,6 +457,110 @@ def discover_pdip_cmd(run_id: str | None, output: Path) -> None:
     click.echo(f"Output: {output}")
 
 
+# ── Scrape group ───────────────────────────────────────────────────
+
+
+@cli.group()
+def scrape() -> None:
+    """Scrape structured data from source APIs (pdip-annotations)."""
+
+
+@scrape.command("pdip-annotations")
+@click.option("--run-id", required=True, help="Pipeline run identifier.")
+@click.option(
+    "--inventory-file",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/pdip/pdip_document_inventory.csv",
+    help="Path to PDIP document inventory CSV.",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default="/var/tmp/pdip_annotations",
+    help="Output directory for run artifacts.",
+)
+@click.option("--limit", type=int, default=None, help="Max documents to process.")
+@click.option(
+    "--doc-id",
+    "doc_ids",
+    multiple=True,
+    help="Specific doc IDs to process (repeatable).",
+)
+@click.option("--annotated-only/--all", default=True, help="Filter to annotated docs.")
+@click.option(
+    "--insecure",
+    is_flag=True,
+    default=False,
+    help="Skip TLS verification (emergency override).",
+)
+def scrape_pdip_annotations(
+    run_id: str,
+    inventory_file: Path,
+    output_dir: Path,
+    limit: int | None,
+    doc_ids: tuple[str, ...],
+    annotated_only: bool,
+    insecure: bool,
+) -> None:
+    """Harvest PDIP clause annotations from /api/details."""
+    from corpus.sources.pdip_annotations import run_annotations_harvest
+
+    cfg = _load_config().get("pdip_annotations", {})
+    cb_cfg = cfg.get("circuit_breaker", {})
+    zc_cfg = cfg.get("zero_clause_gate", {})
+
+    # Resolve output dir with run_id
+    run_output = output_dir / run_id
+
+    click.echo(f"PDIP annotations harvest (run_id={run_id})")
+    click.echo(f"  inventory: {inventory_file}")
+    click.echo(f"  output:    {run_output}")
+    if insecure:
+        click.echo("  WARNING: TLS verification disabled (--insecure)")
+    if doc_ids:
+        click.echo(f"  doc_ids:   {', '.join(doc_ids)}")
+    if limit:
+        click.echo(f"  limit:     {limit}")
+
+    try:
+        summary = run_annotations_harvest(
+            inventory_path=inventory_file,
+            output_dir=run_output,
+            run_id=run_id,
+            annotated_only=annotated_only,
+            doc_ids=list(doc_ids) if doc_ids else None,
+            limit=limit,
+            insecure=insecure,
+            timeout=int(cfg.get("timeout", 60)),
+            max_retries=int(cfg.get("max_retries", 3)),
+            delay=float(cfg.get("delay", 1.0)),
+            consecutive_failures_pause=int(cb_cfg.get("consecutive_failures_pause", 3)),
+            consecutive_failures_abort=int(cb_cfg.get("consecutive_failures_abort", 8)),
+            zero_clause_early_abort_count=int(zc_cfg.get("early_abort_count", 10)),
+            zero_clause_early_abort_window=int(zc_cfg.get("early_abort_window", 20)),
+            zero_clause_rate_threshold=float(zc_cfg.get("rate_threshold", 0.40)),
+            zero_clause_rate_min_docs=int(zc_cfg.get("rate_min_docs", 50)),
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        click.echo(f"ERROR: {exc}", err=True)
+        raise SystemExit(1) from exc
+
+    click.echo("")
+    click.echo("── Results ──")
+    click.echo(f"  selected:   {summary['selected_total']}")
+    click.echo(f"  attempted:  {summary['new_attempted']}")
+    click.echo(f"  resumed:    {summary['skipped_via_resume']}")
+    click.echo(f"  terminal:   {summary['terminal_total']}")
+    click.echo(f"  statuses:   {summary['status_counts']}")
+    click.echo(f"  CAC candidates: {summary['cac_candidate_count']}")
+    click.echo(f"  zero-clause:    {summary['zero_clause_on_annotated_count']}")
+    click.echo(f"  summary:    {run_output / 'summary.json'}")
+
+    if summary.get("aborted"):
+        click.echo(f"\nABORTED: {summary.get('abort_reason', 'unknown')}", err=True)
+        raise SystemExit(1)
+
+
 # ── Parse group ─────────────────────────────────────────────────────
 
 

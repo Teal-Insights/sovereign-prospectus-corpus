@@ -20,7 +20,7 @@ worktrees after foundations merge.
 **Cut order if behind:** 9 (viz) → 7 (PDIP migration) → 6 (EDGAR) → keep 5 (NSM) as minimum.
 **Tonight's target:** Tasks 1 → 2 → 3 → 4 (NSM downloading overnight).
 
-**Status (2026-03-26):** Tasks 1-5 COMPLETE. NSM: 899 filings discovered, 642 PDFs downloaded. EDGAR: 3,306 filings discovered, 3,301 downloaded (587 MB). See CLAUDE.md "Lessons Learned from NSM Adapter" before starting Task 6.
+**Status (2026-03-26):** Tasks 1-6 COMPLETE (Phase 1 done). NSM: 899 filings discovered, 642 PDFs downloaded. EDGAR: 3,306 filings discovered, 3,301 downloaded (587 MB). PDIP: 823 documents discovered, 823 PDFs downloaded (5 GB). Ready for Phase 2.
 
 **Key architectural change (council consensus):** Adapters do NOT write directly
 to DuckDB. They download files and produce `{source}_manifest.jsonl`. A serial

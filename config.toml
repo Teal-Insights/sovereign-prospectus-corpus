@@ -31,6 +31,25 @@ timeout = 60
 [pdip.circuit_breaker]
 total_failures_abort = 10
 
+[pdip_annotations]
+delay = 1.0
+max_retries = 3
+timeout = 60
+
+[pdip_annotations.circuit_breaker]
+consecutive_failures_pause = 3
+consecutive_failures_abort = 8
+
+[pdip_annotations.zero_clause_gate]
+# Early abort: if > early_abort_count of first early_abort_window docs are zero-clause
+# Set high because inventory CSV clusters Venezuela zero-clause docs at the start
+early_abort_count = 15
+early_abort_window = 20
+# Rate abort: after rate_min_docs, abort if rate > rate_threshold
+# Baseline: 40/162 = 24.7%. Set to 50% to allow for ordering effects.
+rate_threshold = 0.50
+rate_min_docs = 50
+
 [paths]
 manifests_dir = "data/manifests"
 original_dir = "data/original"
