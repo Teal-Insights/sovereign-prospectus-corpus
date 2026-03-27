@@ -12,7 +12,7 @@ from corpus.parsers.base import ParseResult
 if TYPE_CHECKING:
     from pathlib import Path
 
-_ENCODINGS = ("utf-8", "cp1252", "latin-1")
+_ENCODINGS = ("utf-8", "cp1252")
 _PAGE_MARKER = "<PAGE>"
 
 
@@ -47,5 +47,7 @@ class PlainTextParser:
                 return raw.decode(enc)
             except (UnicodeDecodeError, ValueError):
                 continue
-        # Last resort: replace errors
-        return raw.decode("utf-8", errors="replace")
+        # CP1252 covers all single-byte values 0x00-0xFF except 5 holes,
+        # so this fallback is rarely reached.  Use latin-1 (maps all 256
+        # byte values) as a safe last resort.
+        return raw.decode("latin-1")

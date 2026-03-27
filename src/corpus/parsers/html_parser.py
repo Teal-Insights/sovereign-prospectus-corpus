@@ -14,7 +14,7 @@ from corpus.parsers.base import ParseResult
 if TYPE_CHECKING:
     from pathlib import Path
 
-_ENCODINGS = ("utf-8", "cp1252", "latin-1")
+_ENCODINGS = ("utf-8", "cp1252")
 
 
 class HTMLParser:
@@ -51,4 +51,4 @@ class HTMLParser:
                 return raw.decode(enc)
             except (UnicodeDecodeError, ValueError):
                 continue
-        return raw.decode("utf-8", errors="replace")
+        return raw.decode("latin-1")

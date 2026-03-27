@@ -24,23 +24,30 @@ def load_pdip_presence(
     with clause_annotations_path.open() as f:
         for line in f:
             record = json.loads(line)
-            family = record.get("label_family")
-            if family:
+            family: str | None = record.get("label_family")
+            if family is not None:
                 doc_families[record["doc_id"]].add(family)
     return dict(doc_families)
 
 
 def load_grep_presence(
     parsed_dir: Path,
-    grep_matches_path: Path | None = None,
     *,
     db_path: Path | None = None,
 ) -> dict[str, set[str]]:
-    """Load grep results as {storage_key: set of pattern_names}.
+    """Load grep results as {storage_key: set of clause families}.
 
-    Reads from DuckDB if db_path is provided, otherwise from a JSONL file.
+    Maps pattern_name → family using the pattern registry.
+    Reads from DuckDB if db_path is provided.
     """
-    doc_patterns: dict[str, set[str]] = defaultdict(set)
+    from corpus.extraction.clause_patterns import CLAUSE_PATTERNS, FEATURE_PATTERNS
+
+    # Build pattern_name → family mapping
+    pattern_to_family: dict[str, str] = {}
+    for p in list(CLAUSE_PATTERNS.values()) + list(FEATURE_PATTERNS.values()):
+        pattern_to_family[p.name] = p.family
+
+    doc_families: dict[str, set[str]] = defaultdict(set)
 
     if db_path:
         import duckdb
@@ -53,8 +60,9 @@ def load_grep_presence(
         ).fetchall()
         con.close()
         for storage_key, pattern_name in rows:
-            doc_patterns[storage_key].add(pattern_name)
-    return dict(doc_patterns)
+            family: str = pattern_to_family.get(str(pattern_name), str(pattern_name))
+            doc_families[str(storage_key)].add(family)
+    return dict(doc_families)
 
 
 def compute_validation_report(

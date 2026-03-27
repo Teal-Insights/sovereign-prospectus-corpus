@@ -52,8 +52,9 @@ CREATE TABLE IF NOT EXISTS grep_matches (
     created_at      TIMESTAMP DEFAULT current_timestamp
 );
 
--- Page convention: all page_index columns are 0-indexed internally.
--- Display layers (CLI, views, reports) translate to 1-indexed page_number.
+-- Page convention: page_index columns are 0-indexed (pdip_clauses.page_index).
+-- page_number columns are 1-indexed (grep_matches.page_number).
+-- Display layers (CLI, views, reports) always show 1-indexed page numbers.
 
 ALTER TABLE grep_matches ADD COLUMN IF NOT EXISTS run_id VARCHAR;
 
@@ -69,8 +70,8 @@ CREATE TABLE IF NOT EXISTS pdip_clauses (
     page_index      INTEGER,               -- 0-indexed page number
     text            VARCHAR,               -- clause text (nullable if empty/missing)
     text_status     VARCHAR NOT NULL,       -- present | empty | missing
-    bbox            VARCHAR,               -- JSON: {x, y, width, height}
-    original_dims   VARCHAR,               -- JSON: {width, height}
+    bbox            JSON,                  -- {x, y, width, height}
+    original_dims   JSON,                  -- {width, height}
     country         VARCHAR,
     instrument_type VARCHAR,
     governing_law   VARCHAR,

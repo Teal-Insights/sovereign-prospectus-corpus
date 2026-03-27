@@ -54,7 +54,7 @@ CLAUSE_PATTERNS: dict[str, ClausePattern] = {
         finder=re.compile(
             r"(?:"
             r"pari\s+passu"
-            r"|rank(?:s|ing)?\s+(?:at\s+least\s+)?equal(?:ly)?\s+(?:in\s+right\s+of\s+payment|and\s+ratab)"
+            r"|rank(?:s|ing)?\s+(?:at\s+least\s+)?equal(?:ly)?\s+(?:in\s+right\s+of\s+payment|and\s+ratably)"
             r"|equal\s+ranking\s+(?:with|to)"
             r")",
             re.IGNORECASE,

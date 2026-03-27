@@ -626,10 +626,12 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
     if source in ("pdip", "all"):
         pdip_pdf_dir = Path("data/pdfs/pdip")
         if pdip_pdf_dir.exists():
+            seen_keys = {sk for sk, _ in files_to_parse}
             for pdf_path in pdip_pdf_dir.rglob("*.pdf"):
                 storage_key = f"pdip__{pdf_path.stem}"
-                if not any(sk == storage_key for sk, _ in files_to_parse):
+                if storage_key not in seen_keys:
                     files_to_parse.append((storage_key, pdf_path))
+                    seen_keys.add(storage_key)
 
     if limit:
         files_to_parse = files_to_parse[:limit]
@@ -677,7 +679,8 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
             elapsed_ms = int((time.monotonic() - start) * 1000)
 
             # Determine quality status
-            if result.page_count == 0:
+            total_chars = sum(len(p.strip()) for p in result.pages)
+            if result.page_count == 0 or total_chars == 0:
                 parse_status = "parse_empty"
             else:
                 empty_pages = sum(1 for p in result.pages if len(p.strip()) < 50)
@@ -688,9 +691,10 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
                 else:
                     parse_status = "parse_ok"
 
-            # Write output JSONL
+            # Write output JSONL (atomic: .part → rename)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            with output_path.open("w") as out:
+            part_path = output_path.with_suffix(".jsonl.part")
+            with part_path.open("w") as out:
                 header = {
                     "storage_key": storage_key,
                     "page_count": result.page_count,
@@ -707,6 +711,7 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
                         "char_count": len(page_text),
                     }
                     out.write(_json.dumps(page_record) + "\n")
+            part_path.rename(output_path)
 
             logger.log(
                 document_id=storage_key,
@@ -766,7 +771,10 @@ def grep_doc(pattern_name: str, doc_id: str, verbose: bool) -> None:
     # Find parsed text file
     config = _load_config()
     text_dir = Path(config.get("paths", {}).get("parsed_dir", "data/parsed"))
-    text_path = text_dir / f"{doc_id}.jsonl"
+    text_path = (text_dir / f"{doc_id}.jsonl").resolve()
+    if not text_path.is_relative_to(text_dir.resolve()):
+        click.echo(f"Invalid document ID: {doc_id}", err=True)
+        raise SystemExit(1)
     if not text_path.exists():
         click.echo(f"Parsed text not found: {text_path}", err=True)
         raise SystemExit(1)
@@ -856,12 +864,27 @@ def grep_run(run_id: str, pattern_names: tuple[str, ...], source: str, limit: in
     with open("sql/001_corpus.sql") as _f:
         con.execute(_f.read())
 
-    # Delete old results for these patterns
+    # Delete old results for these patterns (scoped to source if filtered)
     for p in patterns:
-        con.execute(
-            "DELETE FROM grep_matches WHERE pattern_name = ?",
-            [p.name],
-        )
+        if source == "all":
+            con.execute(
+                "DELETE FROM grep_matches WHERE pattern_name = ?",
+                [p.name],
+            )
+        else:
+            con.execute(
+                """DELETE FROM grep_matches
+                   WHERE pattern_name = ?
+                     AND document_id IN (
+                         SELECT document_id FROM documents WHERE source = ?
+                     )""",
+                [p.name, source],
+            )
+
+    # Prefetch storage_key -> document_id mapping
+    doc_id_map: dict[str, int] = {}
+    for row in con.execute("SELECT storage_key, document_id FROM documents").fetchall():
+        doc_id_map[row[0]] = row[1]
 
     total_matches = 0
     docs_with_matches = 0
@@ -890,12 +913,8 @@ def grep_run(run_id: str, pattern_names: tuple[str, ...], source: str, limit: in
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
         if matches:
-            # Look up document_id (may be NULL if not ingested)
-            row = con.execute(
-                "SELECT document_id FROM documents WHERE storage_key = ?",
-                [doc_id],
-            ).fetchone()
-            if row is None:
+            document_id = doc_id_map.get(doc_id)
+            if document_id is None:
                 logger.log(
                     document_id=doc_id,
                     step="grep",
@@ -904,7 +923,6 @@ def grep_run(run_id: str, pattern_names: tuple[str, ...], source: str, limit: in
                     match_count=len(matches),
                 )
                 continue
-            document_id = row[0]
 
             docs_with_matches += 1
             for m in matches:
