@@ -34,6 +34,54 @@ def test_strips_script_and_style_tags(tmp_path: Path) -> None:
     assert "Content" in result.text
 
 
+def test_splits_on_page_break_before(tmp_path: Path) -> None:
+    """CSS page-break-before:always should create page boundaries."""
+    f = tmp_path / "edgar.htm"
+    f.write_text(
+        "<html><body>"
+        "<div>Page 1 content</div>"
+        '<div style="page-break-before:always">Page 2 content</div>'
+        '<div style="page-break-before: always">Page 3 content</div>'
+        "</body></html>",
+        encoding="utf-8",
+    )
+    parser = HTMLParser()
+    result = parser.parse(f)
+    assert result.page_count == 3
+    assert "Page 1 content" in result.pages[0]
+    assert "Page 2 content" in result.pages[1]
+    assert "Page 3 content" in result.pages[2]
+
+
+def test_splits_on_page_break_after(tmp_path: Path) -> None:
+    """CSS page-break-after:always should also create page boundaries."""
+    f = tmp_path / "edgar.htm"
+    f.write_text(
+        "<html><body>"
+        '<div style="page-break-after:always">Page 1 content</div>'
+        "<div>Page 2 content</div>"
+        "</body></html>",
+        encoding="utf-8",
+    )
+    parser = HTMLParser()
+    result = parser.parse(f)
+    assert result.page_count == 2
+    assert "Page 1 content" in result.pages[0]
+    assert "Page 2 content" in result.pages[1]
+
+
+def test_no_page_breaks_single_page(tmp_path: Path) -> None:
+    """HTML without page breaks should remain single page."""
+    f = tmp_path / "simple.htm"
+    f.write_text(
+        "<html><body><div>Just one page</div></body></html>",
+        encoding="utf-8",
+    )
+    parser = HTMLParser()
+    result = parser.parse(f)
+    assert result.page_count == 1
+
+
 def test_parse_latin1_html(tmp_path: Path) -> None:
     f = tmp_path / "test.htm"
     f.write_bytes("<html><body>Côte d'Ivoire</body></html>".encode("latin-1"))

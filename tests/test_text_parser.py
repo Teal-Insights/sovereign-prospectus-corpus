@@ -31,6 +31,24 @@ def test_parse_sec_page_markers(tmp_path: Path) -> None:
     assert "Page 3" in result.pages[2]
 
 
+def test_parse_sgml_preamble_stripped(tmp_path: Path) -> None:
+    """SGML wrapper before first <PAGE> should not become a page."""
+    f = tmp_path / "edgar.txt"
+    f.write_text(
+        "<DOCUMENT>\n<TYPE>424B3\n<TEXT>\n<PAGE>\n"
+        "Real page 1 content\n<PAGE>\nReal page 2 content",
+        encoding="utf-8",
+    )
+    parser = PlainTextParser()
+    result = parser.parse(f)
+    assert result.page_count == 2
+    assert "Real page 1 content" in result.pages[0]
+    assert "Real page 2 content" in result.pages[1]
+    # SGML metadata should not appear in any page
+    assert all("<DOCUMENT>" not in p for p in result.pages)
+    assert all("<TYPE>" not in p for p in result.pages)
+
+
 def test_parse_latin1_encoding(tmp_path: Path) -> None:
     f = tmp_path / "latin1.txt"
     f.write_bytes("Côte d'Ivoire prospectus".encode("latin-1"))

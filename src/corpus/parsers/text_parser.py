@@ -1,10 +1,11 @@
 """Plain text parser for .txt files.
 
-Handles SEC EDGAR <PAGE> markers and encoding fallback.
+Handles SEC EDGAR <PAGE> markers, SGML wrappers, and encoding fallback.
 """
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from corpus.parsers.base import ParseResult
@@ -14,6 +15,9 @@ if TYPE_CHECKING:
 
 _ENCODINGS = ("utf-8", "cp1252")
 _PAGE_MARKER = "<PAGE>"
+# SEC EDGAR SGML wrapper: everything before the first <PAGE> in a
+# <DOCUMENT>...<TEXT> block is metadata, not content.
+_SGML_PREAMBLE = re.compile(r"\A\s*<DOCUMENT>.*?<TEXT>\s*", re.DOTALL | re.IGNORECASE)
 
 
 class PlainTextParser:
@@ -25,8 +29,12 @@ class PlainTextParser:
         text = self._decode(raw_bytes)
 
         if _PAGE_MARKER in text:
+            # Strip SGML preamble so the first <PAGE> starts page 0
+            text = _SGML_PREAMBLE.sub("", text)
             pages = [p.strip() for p in text.split(_PAGE_MARKER)]
-            # Remove empty trailing page from final marker
+            # Remove empty leading/trailing pages from markers
+            if pages and not pages[0]:
+                pages.pop(0)
             if pages and not pages[-1]:
                 pages.pop()
         else:

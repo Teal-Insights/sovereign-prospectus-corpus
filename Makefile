@@ -37,8 +37,8 @@ parse: ## Parse downloaded PDFs into text
 grep: ## Run grep-first pattern matching
 	uv run corpus grep run --run-id $(RUN_ID)
 
-extract: ## Extract structured clause data
-	uv run corpus extract
+extract: ## Extract structured clause data (not yet implemented)
+	@echo "ERROR: extract step not yet implemented. See issue #22." && exit 1
 
 ingest: ## Load JSONL manifests into DuckDB (serial)
 	uv run corpus ingest --run-id $(RUN_ID)
