@@ -572,6 +572,167 @@ def parse(ctx: click.Context) -> None:
         click.echo("Parse not yet implemented. Use --help for subcommands.")
 
 
+@parse.command("run")
+@click.option("--run-id", required=True, help="Unique run identifier.")
+@click.option(
+    "--source",
+    type=click.Choice(["nsm", "edgar", "pdip", "all"]),
+    default="all",
+    help="Which source to parse.",
+)
+@click.option("--limit", type=int, default=None, help="Max documents to parse.")
+def parse_run(run_id: str, source: str, limit: int | None) -> None:
+    """Parse downloaded documents into per-page text JSONL."""
+    import json as _json
+    import time
+    from datetime import UTC, datetime
+
+    from corpus.logging import CorpusLogger
+    from corpus.parsers.html_parser import HTMLParser
+    from corpus.parsers.pymupdf_parser import PyMuPDFParser
+    from corpus.parsers.text_parser import PlainTextParser
+
+    config = _load_config()
+    text_dir = Path(config.get("paths", {}).get("parsed_dir", "data/parsed"))
+    text_dir.mkdir(parents=True, exist_ok=True)
+
+    log_path = Path(config.get("paths", {}).get("telemetry_dir", "data/telemetry")) / "parse.jsonl"
+    logger = CorpusLogger(log_path, run_id=run_id)
+
+    parsers = {
+        ".pdf": PyMuPDFParser(),
+        ".txt": PlainTextParser(),
+        ".htm": HTMLParser(),
+        ".html": HTMLParser(),
+    }
+
+    # Collect files to parse from manifests
+    manifest_dir = Path(config.get("paths", {}).get("manifests_dir", "data/manifests"))
+    files_to_parse: list[tuple[str, Path]] = []
+
+    for manifest_path in sorted(manifest_dir.glob("*_manifest.jsonl")):
+        source_name = manifest_path.stem.replace("_manifest", "")
+        if source != "all" and source_name != source:
+            continue
+        with manifest_path.open() as f:
+            for line in f:
+                record = _json.loads(line)
+                storage_key = record.get("storage_key", "")
+                file_path = record.get("file_path")
+                if file_path:
+                    files_to_parse.append((storage_key, Path(file_path)))
+
+    # Also check legacy PDIP path
+    if source in ("pdip", "all"):
+        pdip_pdf_dir = Path("data/pdfs/pdip")
+        if pdip_pdf_dir.exists():
+            for pdf_path in pdip_pdf_dir.rglob("*.pdf"):
+                storage_key = f"pdip__{pdf_path.stem}"
+                if not any(sk == storage_key for sk, _ in files_to_parse):
+                    files_to_parse.append((storage_key, pdf_path))
+
+    if limit:
+        files_to_parse = files_to_parse[:limit]
+
+    click.echo(f"Parsing {len(files_to_parse)} documents...")
+
+    parsed = 0
+    skipped = 0
+    failed = 0
+
+    for storage_key, file_path in files_to_parse:
+        output_path = text_dir / f"{storage_key}.jsonl"
+
+        # Idempotent: skip if already parsed
+        if output_path.exists():
+            skipped += 1
+            continue
+
+        if not file_path.exists():
+            logger.log(
+                document_id=storage_key,
+                step="parse",
+                duration_ms=0,
+                status="file_not_found",
+            )
+            failed += 1
+            continue
+
+        suffix = file_path.suffix.lower()
+        parser = parsers.get(suffix)
+        if parser is None:
+            logger.log(
+                document_id=storage_key,
+                step="parse",
+                duration_ms=0,
+                status="unsupported_format",
+                file_ext=suffix,
+            )
+            failed += 1
+            continue
+
+        start = time.monotonic()
+        try:
+            result = parser.parse(file_path)
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+
+            # Determine quality status
+            if result.page_count == 0:
+                parse_status = "parse_empty"
+            else:
+                empty_pages = sum(1 for p in result.pages if len(p.strip()) < 50)
+                if empty_pages == result.page_count:
+                    parse_status = "parse_empty"
+                elif empty_pages > result.page_count / 2:
+                    parse_status = "parse_partial"
+                else:
+                    parse_status = "parse_ok"
+
+            # Write output JSONL
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with output_path.open("w") as out:
+                header = {
+                    "storage_key": storage_key,
+                    "page_count": result.page_count,
+                    "parse_tool": result.parse_tool,
+                    "parse_version": result.parse_version,
+                    "parse_status": parse_status,
+                    "parsed_at": datetime.now(UTC).isoformat(),
+                }
+                out.write(_json.dumps(header) + "\n")
+                for i, page_text in enumerate(result.pages):
+                    page_record = {
+                        "page": i,
+                        "text": page_text,
+                        "char_count": len(page_text),
+                    }
+                    out.write(_json.dumps(page_record) + "\n")
+
+            logger.log(
+                document_id=storage_key,
+                step="parse",
+                duration_ms=elapsed_ms,
+                status=parse_status,
+                page_count=result.page_count,
+                file_ext=suffix,
+            )
+            parsed += 1
+
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            logger.log(
+                document_id=storage_key,
+                step="parse",
+                duration_ms=elapsed_ms,
+                status="parse_failed",
+                error_message=str(exc),
+                file_ext=suffix,
+            )
+            failed += 1
+
+    click.echo(f"Done. Parsed: {parsed}, Skipped: {skipped}, Failed: {failed}")
+
+
 # ── Grep group ──────────────────────────────────────────────────────
 
 

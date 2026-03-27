@@ -32,7 +32,7 @@ download-pdip: ## Download documents from World Bank PDIP
 download-all: download-nsm download-edgar download-pdip ## Download from all sources
 
 parse: ## Parse downloaded PDFs into text
-	uv run corpus parse
+	uv run corpus parse run --run-id $(RUN_ID) --source all
 
 grep: ## Run grep-first pattern matching
 	uv run corpus grep
