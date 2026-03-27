@@ -52,6 +52,33 @@ CREATE TABLE IF NOT EXISTS grep_matches (
     created_at      TIMESTAMP DEFAULT current_timestamp
 );
 
+-- Page convention: all page_index columns are 0-indexed internally.
+-- Display layers (CLI, views, reports) translate to 1-indexed page_number.
+
+ALTER TABLE grep_matches ADD COLUMN IF NOT EXISTS run_id VARCHAR;
+
+CREATE SEQUENCE IF NOT EXISTS pdip_clauses_seq START 1;
+
+CREATE TABLE IF NOT EXISTS pdip_clauses (
+    pdip_clause_id  INTEGER PRIMARY KEY DEFAULT nextval('pdip_clauses_seq'),
+    doc_id          VARCHAR NOT NULL,
+    storage_key     VARCHAR,               -- e.g. pdip__VEN85 (joins to documents)
+    clause_id       VARCHAR NOT NULL,      -- Label Studio annotation ID
+    label           VARCHAR NOT NULL,
+    label_family    VARCHAR,               -- mapped clause family (nullable)
+    page_index      INTEGER,               -- 0-indexed page number
+    text            VARCHAR,               -- clause text (nullable if empty/missing)
+    text_status     VARCHAR NOT NULL,       -- present | empty | missing
+    bbox            VARCHAR,               -- JSON: {x, y, width, height}
+    original_dims   VARCHAR,               -- JSON: {width, height}
+    country         VARCHAR,
+    instrument_type VARCHAR,
+    governing_law   VARCHAR,
+    currency        VARCHAR,
+    document_title  VARCHAR,
+    created_at      TIMESTAMP DEFAULT current_timestamp
+);
+
 CREATE TABLE IF NOT EXISTS source_events (
     event_id    INTEGER PRIMARY KEY DEFAULT nextval('source_events_seq'),
     source      VARCHAR NOT NULL,
