@@ -31,15 +31,20 @@ def load_pdip_presence(
 
 
 def load_grep_presence(
-    parsed_dir: Path,
     *,
-    db_path: Path | None = None,
+    db_path: Path,
+    run_id: str | None = None,
 ) -> dict[str, set[str]]:
     """Load grep results as {storage_key: set of clause families}.
 
     Maps pattern_name → family using the pattern registry.
-    Reads from DuckDB if db_path is provided.
+
+    Args:
+        db_path: Path to the DuckDB database.
+        run_id: If provided, filter to matches from this run only.
     """
+    import duckdb
+
     from corpus.extraction.clause_patterns import CLAUSE_PATTERNS, FEATURE_PATTERNS
 
     # Build pattern_name → family mapping
@@ -49,19 +54,25 @@ def load_grep_presence(
 
     doc_families: dict[str, set[str]] = defaultdict(set)
 
-    if db_path:
-        import duckdb
-
-        con = duckdb.connect(str(db_path), read_only=True)
+    con = duckdb.connect(str(db_path), read_only=True)
+    if run_id:
+        rows = con.execute(
+            """SELECT d.storage_key, gm.pattern_name
+               FROM grep_matches gm
+               JOIN documents d ON gm.document_id = d.document_id
+               WHERE gm.run_id = ?""",
+            [run_id],
+        ).fetchall()
+    else:
         rows = con.execute(
             """SELECT d.storage_key, gm.pattern_name
                FROM grep_matches gm
                JOIN documents d ON gm.document_id = d.document_id"""
         ).fetchall()
-        con.close()
-        for storage_key, pattern_name in rows:
-            family: str = pattern_to_family.get(str(pattern_name), str(pattern_name))
-            doc_families[str(storage_key)].add(family)
+    con.close()
+    for storage_key, pattern_name in rows:
+        family: str = pattern_to_family.get(str(pattern_name), str(pattern_name))
+        doc_families[str(storage_key)].add(family)
     return dict(doc_families)
 
 

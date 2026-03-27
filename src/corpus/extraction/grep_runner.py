@@ -72,6 +72,12 @@ def grep_document(
         for m in pattern.finder.finditer(full_text):
             start, end = m.start(), m.end()
             page_idx = offset_to_page_index(start, page_offsets)
+            matched_text = m.group()
+
+            # Verbatim invariant: matched text must be present in source
+            assert matched_text == full_text[start:end], (
+                f"Verbatim violation: {pattern.name} in {document_id}"
+            )
 
             context_before = full_text[max(0, start - CONTEXT_CHARS) : start]
             context_after = full_text[end : end + CONTEXT_CHARS]
@@ -82,7 +88,7 @@ def grep_document(
                     pattern_name=pattern.name,
                     pattern_version=pattern.version,
                     page_index=page_idx,
-                    matched_text=m.group(),
+                    matched_text=matched_text,
                     context_before=context_before,
                     context_after=context_after,
                     run_id=run_id,

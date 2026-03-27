@@ -15,6 +15,8 @@ import click
 import corpus
 from corpus.db.ingest import ingest_manifests
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
 
 def _load_config() -> dict:
     """Load config.toml from the project root. Returns empty dict if missing."""
@@ -23,12 +25,21 @@ def _load_config() -> dict:
     # Try CWD first, then resolve relative to the package location
     for candidate in [
         Path("config.toml"),
-        Path(__file__).resolve().parent.parent.parent / "config.toml",
+        _PROJECT_ROOT / "config.toml",
     ]:
         if candidate.exists():
             with candidate.open("rb") as f:
                 return tomllib.load(f)
     return {}
+
+
+def _resolve_path(config: dict, section: str, key: str, default: str) -> Path:
+    """Resolve a config path relative to the project root."""
+    raw = config.get(section, {}).get(key, default)
+    p = Path(raw)
+    if not p.is_absolute():
+        p = _PROJECT_ROOT / p
+    return p
 
 
 @click.group()
@@ -593,10 +604,10 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
     from corpus.parsers.text_parser import PlainTextParser
 
     config = _load_config()
-    text_dir = Path(config.get("paths", {}).get("parsed_dir", "data/parsed"))
+    text_dir = _resolve_path(config, "paths", "parsed_dir", "data/parsed")
     text_dir.mkdir(parents=True, exist_ok=True)
 
-    log_path = Path(config.get("paths", {}).get("telemetry_dir", "data/telemetry")) / "parse.jsonl"
+    log_path = _resolve_path(config, "paths", "telemetry_dir", "data/telemetry") / "parse.jsonl"
     logger = CorpusLogger(log_path, run_id=run_id)
 
     parsers = {
@@ -607,7 +618,7 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
     }
 
     # Collect files to parse from manifests
-    manifest_dir = Path(config.get("paths", {}).get("manifests_dir", "data/manifests"))
+    manifest_dir = _resolve_path(config, "paths", "manifests_dir", "data/manifests")
     files_to_parse: list[tuple[str, Path]] = []
 
     for manifest_path in sorted(manifest_dir.glob("*_manifest.jsonl")):
@@ -770,7 +781,7 @@ def grep_doc(pattern_name: str, doc_id: str, verbose: bool) -> None:
 
     # Find parsed text file
     config = _load_config()
-    text_dir = Path(config.get("paths", {}).get("parsed_dir", "data/parsed"))
+    text_dir = _resolve_path(config, "paths", "parsed_dir", "data/parsed")
     text_path = (text_dir / f"{doc_id}.jsonl").resolve()
     if not text_path.is_relative_to(text_dir.resolve()):
         click.echo(f"Invalid document ID: {doc_id}", err=True)
@@ -833,9 +844,9 @@ def grep_run(run_id: str, pattern_names: tuple[str, ...], source: str, limit: in
     from corpus.logging import CorpusLogger
 
     config = _load_config()
-    text_dir = Path(config.get("paths", {}).get("parsed_dir", "data/parsed"))
-    db_path = Path(config.get("paths", {}).get("db_path", "data/db/corpus.duckdb"))
-    log_path = Path(config.get("paths", {}).get("telemetry_dir", "data/telemetry")) / "grep.jsonl"
+    text_dir = _resolve_path(config, "paths", "parsed_dir", "data/parsed")
+    db_path = _resolve_path(config, "paths", "db_path", "data/db/corpus.duckdb")
+    log_path = _resolve_path(config, "paths", "telemetry_dir", "data/telemetry") / "grep.jsonl"
     logger = CorpusLogger(log_path, run_id=run_id)
 
     # Select patterns
@@ -861,25 +872,12 @@ def grep_run(run_id: str, pattern_names: tuple[str, ...], source: str, limit: in
     con = duckdb.connect(str(db_path))
 
     # Ensure schema is up to date
-    with open("sql/001_corpus.sql") as _f:
+    with (_PROJECT_ROOT / "sql/001_corpus.sql").open() as _f:
         con.execute(_f.read())
 
-    # Delete old results for these patterns (scoped to source if filtered)
-    for p in patterns:
-        if source == "all":
-            con.execute(
-                "DELETE FROM grep_matches WHERE pattern_name = ?",
-                [p.name],
-            )
-        else:
-            con.execute(
-                """DELETE FROM grep_matches
-                   WHERE pattern_name = ?
-                     AND document_id IN (
-                         SELECT document_id FROM documents WHERE source = ?
-                     )""",
-                [p.name, source],
-            )
+    # Delete only results from THIS run_id (idempotent re-run).
+    # Prior runs are preserved for traceability.
+    con.execute("DELETE FROM grep_matches WHERE run_id = ?", [run_id])
 
     # Prefetch storage_key -> document_id mapping
     doc_id_map: dict[str, int] = {}
