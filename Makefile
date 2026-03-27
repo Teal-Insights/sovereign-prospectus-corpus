@@ -35,7 +35,7 @@ parse: ## Parse downloaded PDFs into text
 	uv run corpus parse run --run-id $(RUN_ID) --source all
 
 grep: ## Run grep-first pattern matching
-	uv run corpus grep
+	uv run corpus grep run --run-id $(RUN_ID)
 
 extract: ## Extract structured clause data
 	uv run corpus extract

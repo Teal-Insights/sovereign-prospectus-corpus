@@ -744,6 +744,206 @@ def grep(ctx: click.Context) -> None:
         click.echo("Grep not yet implemented. Use --help for subcommands.")
 
 
+@grep.command("doc")
+@click.option("--pattern", "pattern_name", required=True, help="Pattern name to search for.")
+@click.option("--doc", "doc_id", required=True, help="Document ID (storage_key).")
+@click.option("--verbose", is_flag=True, help="Show full context around matches.")
+def grep_doc(pattern_name: str, doc_id: str, verbose: bool) -> None:
+    """Search a single document with a pattern (dev mode)."""
+    import json as _json
+
+    from corpus.extraction.clause_patterns import CLAUSE_PATTERNS, FEATURE_PATTERNS
+    from corpus.extraction.grep_runner import grep_document
+
+    all_patterns = {**CLAUSE_PATTERNS, **FEATURE_PATTERNS}
+    if pattern_name not in all_patterns:
+        click.echo(f"Unknown pattern: {pattern_name}", err=True)
+        click.echo(f"Available: {', '.join(sorted(all_patterns.keys()))}", err=True)
+        raise SystemExit(1)
+
+    pattern = all_patterns[pattern_name]
+
+    # Find parsed text file
+    config = _load_config()
+    text_dir = Path(config.get("paths", {}).get("parsed_dir", "data/parsed"))
+    text_path = text_dir / f"{doc_id}.jsonl"
+    if not text_path.exists():
+        click.echo(f"Parsed text not found: {text_path}", err=True)
+        raise SystemExit(1)
+
+    # Load pages from JSONL
+    pages: list[str] = []
+    with text_path.open() as f:
+        for line in f:
+            record = _json.loads(line)
+            if "page" in record:  # skip header line
+                pages.append(record["text"])
+
+    matches = grep_document(
+        pages=pages,
+        patterns=[pattern],
+        document_id=doc_id,
+        run_id="dev",
+    )
+
+    if not matches:
+        click.echo(f"No matches for '{pattern_name}' in {doc_id}")
+        return
+
+    click.echo(f"Found {len(matches)} match(es) for '{pattern_name}' in {doc_id}:\n")
+    for i, m in enumerate(matches, 1):
+        page_display = m.page_index + 1  # 1-indexed for display
+        click.echo(f"--- Match {i} (page {page_display}) ---")
+        if verbose:
+            click.secho(f"  ...{m.context_before[-200:]}", dim=True)
+        click.secho(f"  >>> {m.matched_text}", fg="green", bold=True)
+        if verbose:
+            click.secho(f"  {m.context_after[:200]}...", dim=True)
+        click.echo()
+
+
+@grep.command("run")
+@click.option("--run-id", required=True, help="Unique run identifier.")
+@click.option(
+    "--pattern", "pattern_names", multiple=True, help="Specific pattern(s) to run. Omit for all."
+)
+@click.option("--source", type=click.Choice(["nsm", "edgar", "pdip", "all"]), default="all")
+@click.option("--limit", type=int, default=None, help="Max documents to process.")
+def grep_run(run_id: str, pattern_names: tuple[str, ...], source: str, limit: int | None) -> None:
+    """Run patterns across all parsed documents, write to DuckDB."""
+    import json as _json
+    import time
+
+    import duckdb
+
+    from corpus.extraction.clause_patterns import (
+        CLAUSE_PATTERNS,
+        FEATURE_PATTERNS,
+        get_all_patterns,
+    )
+    from corpus.extraction.grep_runner import grep_document
+    from corpus.logging import CorpusLogger
+
+    config = _load_config()
+    text_dir = Path(config.get("paths", {}).get("parsed_dir", "data/parsed"))
+    db_path = Path(config.get("paths", {}).get("db_path", "data/db/corpus.duckdb"))
+    log_path = Path(config.get("paths", {}).get("telemetry_dir", "data/telemetry")) / "grep.jsonl"
+    logger = CorpusLogger(log_path, run_id=run_id)
+
+    # Select patterns
+    all_registered = {**CLAUSE_PATTERNS, **FEATURE_PATTERNS}
+    if pattern_names:
+        patterns = [all_registered[n] for n in pattern_names if n in all_registered]
+    else:
+        patterns = get_all_patterns()
+
+    if not patterns:
+        click.echo("No patterns selected.", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"Running {len(patterns)} pattern(s) across parsed documents...")
+
+    # Collect parsed text files
+    text_files = sorted(text_dir.glob("*.jsonl"))
+    if source != "all":
+        text_files = [f for f in text_files if f.stem.startswith(f"{source}__")]
+    if limit:
+        text_files = text_files[:limit]
+
+    con = duckdb.connect(str(db_path))
+
+    # Ensure schema is up to date
+    with open("sql/001_corpus.sql") as _f:
+        con.execute(_f.read())
+
+    # Delete old results for these patterns
+    for p in patterns:
+        con.execute(
+            "DELETE FROM grep_matches WHERE pattern_name = ?",
+            [p.name],
+        )
+
+    total_matches = 0
+    docs_with_matches = 0
+
+    for text_path in text_files:
+        doc_id = text_path.stem
+
+        # Load pages
+        pages: list[str] = []
+        with text_path.open() as f:
+            for line in f:
+                record = _json.loads(line)
+                if "page" in record:
+                    pages.append(record["text"])
+
+        if not pages:
+            continue
+
+        start = time.monotonic()
+        matches = grep_document(
+            pages=pages,
+            patterns=patterns,
+            document_id=doc_id,
+            run_id=run_id,
+        )
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+
+        if matches:
+            # Look up document_id (may be NULL if not ingested)
+            row = con.execute(
+                "SELECT document_id FROM documents WHERE storage_key = ?",
+                [doc_id],
+            ).fetchone()
+            if row is None:
+                logger.log(
+                    document_id=doc_id,
+                    step="grep",
+                    duration_ms=elapsed_ms,
+                    status="skipped_no_document",
+                    match_count=len(matches),
+                )
+                continue
+            document_id = row[0]
+
+            docs_with_matches += 1
+            for m in matches:
+                con.execute(
+                    """INSERT INTO grep_matches
+                       (document_id, pattern_name, pattern_version,
+                        page_number, matched_text, context_before,
+                        context_after, run_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    [
+                        document_id,
+                        m.pattern_name,
+                        m.pattern_version,
+                        m.page_index + 1,  # Store 1-indexed in DB
+                        m.matched_text,
+                        m.context_before,
+                        m.context_after,
+                        m.run_id,
+                    ],
+                )
+            total_matches += len(matches)
+
+        logger.log(
+            document_id=doc_id,
+            step="grep",
+            duration_ms=elapsed_ms,
+            status="success",
+            match_count=len(matches),
+        )
+
+    con.commit()
+    con.close()
+
+    click.echo(
+        f"Done. {total_matches} matches across {docs_with_matches} documents "
+        f"(of {len(text_files)} scanned)."
+    )
+
+
 # ── Extract group ───────────────────────────────────────────────────
 
 
