@@ -1,7 +1,7 @@
 # SESSION-HANDOFF.md — Current Task
 
 **Last updated:** 2026-03-26
-**Status:** Phase 1 complete (Tasks 1-6). All three sources downloading. Ready for Phase 2 (Task 7: CAC extraction).
+**Status:** PDIP annotations harvester complete (#19). Full 162-doc run finished. Ready for Phase 2 (Task 7: CAC extraction).
 
 ## Completed
 
@@ -26,6 +26,16 @@
   - PDIP API requires browser-like headers (Origin, Referer, User-Agent)
   - SSL verification disabled for Georgetown cert chain issue
   - PR #17
+- **Issue #19:** PDIP annotations harvester ✅
+  - `corpus scrape pdip-annotations` — inventory-driven, resumable
+  - HTTP-based: uses `/api/details/{doc_id}`, no Playwright needed
+  - Full run: 162/162 processed (122 success, 40 zero-clause)
+  - 37 CAC candidates identified across 58 annotated bonds
+  - 106 distinct raw labels observed (Label Studio rectanglelabels format)
+  - TLS: secure CA-bundle mode worked (InCommon intermediate)
+  - Resume verified: correctly skips completed docs on rerun
+  - Output: `/var/tmp/pdip_annotations/2026-03-26-full/`
+  - Branch: `feature/19-pdip-annotations-harvester`
 
 ## Next Tasks
 
