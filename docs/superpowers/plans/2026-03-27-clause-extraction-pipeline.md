@@ -8,6 +8,10 @@
 
 **Tech Stack:** Python 3.12+, uv, DuckDB, Polars, Click, PyMuPDF, BeautifulSoup4, ruff, pyright, pytest
 
+**Pre-flight:** Run `uv add beautifulsoup4` before starting. Back up DuckDB before schema changes: `cp data/db/corpus.duckdb data/db/corpus.duckdb.bak`
+
+**Review fixes applied:** Critical bugs found by 3-model review — see `planning/council-of-experts/round-6/2026-03-27_plan-review-synthesis.md`
+
 **Spec:** `docs/superpowers/specs/2026-03-27-clause-extraction-pipeline-design.md`
 
 ---
@@ -809,7 +813,13 @@ for itype, cnt in Counter(t for _, _, t in zeros).most_common():
 
 Document the findings in a brief note. Expected: mostly Venezuelan loans.
 
-- [ ] **Step 2: Add `pdip_clauses` table and `run_id` to `grep_matches` schema**
+- [ ] **Step 2: Back up DuckDB before schema changes**
+
+```bash
+cp data/db/corpus.duckdb data/db/corpus.duckdb.bak
+```
+
+- [ ] **Step 3: Add `pdip_clauses` table and `run_id` to `grep_matches` schema**
 
 Add to `sql/001_corpus.sql` after the `grep_matches` table definition:
 
@@ -824,6 +834,7 @@ CREATE SEQUENCE IF NOT EXISTS pdip_clauses_seq START 1;
 CREATE TABLE IF NOT EXISTS pdip_clauses (
     pdip_clause_id  INTEGER PRIMARY KEY DEFAULT nextval('pdip_clauses_seq'),
     doc_id          VARCHAR NOT NULL,
+    storage_key     VARCHAR,               -- e.g. pdip__VEN85 (joins to documents)
     clause_id       VARCHAR NOT NULL,      -- Label Studio annotation ID
     label           VARCHAR NOT NULL,
     label_family    VARCHAR,               -- mapped clause family (nullable)
@@ -841,7 +852,7 @@ CREATE TABLE IF NOT EXISTS pdip_clauses (
 );
 ```
 
-- [ ] **Step 3: Write DuckDB ingest script**
+- [ ] **Step 4: Write DuckDB ingest script**
 
 ```bash
 uv run python3 -c "
@@ -869,15 +880,17 @@ with jsonl_path.open() as f:
 print(f'Loading {len(records)} clause records...')
 
 for r in records:
+    storage_key = f'pdip__{r[\"doc_id\"]}'
     con.execute('''
-        INSERT INTO pdip_clauses (doc_id, clause_id, label, label_family,
-            page_index, text, text_status, bbox, original_dims,
+        INSERT INTO pdip_clauses (doc_id, storage_key, clause_id, label,
+            label_family, page_index, text, text_status, bbox, original_dims,
             country, instrument_type, governing_law, currency, document_title)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', [
-        r['doc_id'], r['clause_id'], r['label'], r.get('label_family'),
-        r.get('page_index'), r.get('text'), r['text_status'],
-        json.dumps(r.get('bbox')), json.dumps(r.get('original_dimensions')),
+        r['doc_id'], storage_key, r['clause_id'], r['label'],
+        r.get('label_family'), r.get('page_index'), r.get('text'),
+        r['text_status'], json.dumps(r.get('bbox')),
+        json.dumps(r.get('original_dimensions')),
         r.get('country'), r.get('instrument_type'),
         r.get('governing_law'), r.get('currency'), r.get('document_title'),
     ])
@@ -892,7 +905,7 @@ con.close()
 "
 ```
 
-- [ ] **Step 4: Run demo insurance queries**
+- [ ] **Step 5: Run demo insurance queries**
 
 ```bash
 uv run python3 -c "
@@ -906,7 +919,7 @@ print(con.execute('''
     FROM pdip_clauses
     WHERE label_family = 'collective_action'
     GROUP BY country ORDER BY docs DESC
-''').fetchdf().to_string())
+''').fetchall())
 
 print()
 print('=== Governing law distribution ===')
@@ -915,7 +928,7 @@ print(con.execute('''
     FROM pdip_clauses
     WHERE text_status = 'present'
     GROUP BY governing_law, instrument_type ORDER BY docs DESC
-''').fetchdf().to_string())
+''').fetchall())
 
 print()
 print('=== Top 15 clause families ===')
@@ -925,7 +938,7 @@ print(con.execute('''
     WHERE label_family IS NOT NULL
     GROUP BY label_family ORDER BY count DESC
     LIMIT 15
-''').fetchdf().to_string())
+''').fetchall())
 
 print()
 print('=== Clause density by country ===')
@@ -935,7 +948,7 @@ print(con.execute('''
            ROUND(COUNT(*) * 1.0 / COUNT(DISTINCT doc_id), 1) as clauses_per_doc
     FROM pdip_clauses
     GROUP BY country ORDER BY docs DESC
-''').fetchdf().to_string())
+''').fetchall())
 
 print()
 print('=== Label frequency (top 20) ===')
@@ -943,7 +956,7 @@ print(con.execute('''
     SELECT label, COUNT(*) as count
     FROM pdip_clauses
     ORDER BY count DESC LIMIT 20
-''').fetchdf().to_string())
+''').fetchall())
 
 con.close()
 "
@@ -952,7 +965,7 @@ con.close()
 Review these results. If they're interesting, you have a demo regardless
 of Sessions 2-4.
 
-- [ ] **Step 5: Verify label mapping with sample texts**
+- [ ] **Step 6: Verify label mapping with sample texts**
 
 ```bash
 uv run python3 -c "
@@ -980,7 +993,7 @@ con.close()
 
 Manually review: do the sample texts match the family definition?
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add sql/001_corpus.sql
@@ -989,7 +1002,90 @@ git commit -m "feat: pdip_clauses table + run_id on grep_matches + demo queries"
 
 ---
 
+### Task 5.5: Bootstrap PDIP Documents into `documents` Table
+
+**CRITICAL:** Without this, `grep run` will crash on NOT NULL constraint
+when inserting into `grep_matches`. PDIP docs must exist in `documents`.
+
+**Files:**
+- No new files — operational script
+
+- [ ] **Step 1: Bootstrap PDIP documents into the documents table**
+
+```bash
+uv run python3 -c "
+import duckdb
+from pathlib import Path
+
+con = duckdb.connect('data/db/corpus.duckdb')
+
+# Scan legacy PDIP PDFs
+pdip_dir = Path('data/pdfs/pdip')
+pdf_files = sorted(pdip_dir.rglob('*.pdf'))
+print(f'Found {len(pdf_files)} PDIP PDFs')
+
+inserted = 0
+skipped = 0
+for pdf_path in pdf_files:
+    doc_id = pdf_path.stem
+    storage_key = f'pdip__{doc_id}'
+
+    # Skip if already exists
+    existing = con.execute(
+        'SELECT 1 FROM documents WHERE storage_key = ?', [storage_key]
+    ).fetchone()
+    if existing:
+        skipped += 1
+        continue
+
+    con.execute('''
+        INSERT INTO documents (source, native_id, storage_key, file_path,
+                              is_sovereign, issuer_type, scope_status)
+        VALUES ('pdip', ?, ?, ?, true, 'sovereign', 'in_scope')
+    ''', [doc_id, storage_key, str(pdf_path)])
+    inserted += 1
+
+con.commit()
+total = con.execute('SELECT COUNT(*) FROM documents WHERE source = ?', ['pdip']).fetchone()[0]
+print(f'Inserted {inserted}, skipped {skipped} (already existed)')
+print(f'Total PDIP documents in table: {total}')
+con.close()
+"
+```
+
+Expected: ~823 PDIP documents inserted.
+
+- [ ] **Step 2: Verify**
+
+```bash
+uv run python3 -c "
+import duckdb
+con = duckdb.connect('data/db/corpus.duckdb')
+for source, cnt in con.execute('SELECT source, COUNT(*) FROM documents GROUP BY source ORDER BY source').fetchall():
+    print(f'  {source}: {cnt}')
+con.close()
+"
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git commit --allow-empty -m 'ops: bootstrap 823 PDIP documents into documents table'
+```
+
+---
+
 ## Session 2: Parse Infrastructure (Scaling Path)
+
+### Pre-flight: Install BeautifulSoup4
+
+- [ ] **Step 0: Add beautifulsoup4 dependency**
+
+```bash
+uv add beautifulsoup4
+```
+
+---
 
 ### Task 6: Plain Text + HTML Parsers
 
@@ -1071,7 +1167,7 @@ from pathlib import Path
 
 from corpus.parsers.base import ParseResult
 
-_ENCODINGS = ("utf-8", "latin-1", "cp1252")
+_ENCODINGS = ("utf-8", "cp1252", "latin-1")
 _PAGE_MARKER = "<PAGE>"
 
 
@@ -1177,7 +1273,7 @@ from bs4 import BeautifulSoup
 
 from corpus.parsers.base import ParseResult
 
-_ENCODINGS = ("utf-8", "latin-1", "cp1252")
+_ENCODINGS = ("utf-8", "cp1252", "latin-1")
 
 
 class HTMLParser:
@@ -1477,6 +1573,12 @@ def test_clause_pattern_dataclass() -> None:
     assert p.family == "test_family"
 
 
+def test_cac_pattern_family_matches_label_mapping() -> None:
+    """Pattern family must match PDIP label mapping family name."""
+    p = CLAUSE_PATTERNS["collective_action"]
+    assert p.family == "collective_action"  # Must match label_mapping.py
+
+
 def test_all_patterns_compile() -> None:
     for name, pattern in {**CLAUSE_PATTERNS, **FEATURE_PATTERNS}.items():
         assert isinstance(pattern.finder, re.Pattern), f"{name} finder is not compiled"
@@ -1564,7 +1666,7 @@ class ClausePattern:
 CLAUSE_PATTERNS: dict[str, ClausePattern] = {
     "collective_action": ClausePattern(
         name="collective_action",
-        family="cac",
+        family="collective_action",
         version="1.0.0",
         finder=re.compile(
             r"(?:"
@@ -2053,6 +2155,20 @@ def grep_run(run_id: str, pattern_names: tuple[str, ...], source: str, limit: in
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
         if matches:
+            # Look up document_id (may be NULL if not ingested)
+            row = con.execute(
+                "SELECT document_id FROM documents WHERE storage_key = ?",
+                [doc_id],
+            ).fetchone()
+            if row is None:
+                logger.log(
+                    document_id=doc_id, step="grep",
+                    duration_ms=elapsed_ms, status="skipped_no_document",
+                    match_count=len(matches),
+                )
+                continue
+            document_id = row[0]
+
             docs_with_matches += 1
             for m in matches:
                 con.execute(
@@ -2060,11 +2176,11 @@ def grep_run(run_id: str, pattern_names: tuple[str, ...], source: str, limit: in
                        (document_id, pattern_name, pattern_version,
                         page_number, matched_text, context_before,
                         context_after, run_id)
-                       VALUES ((SELECT document_id FROM documents WHERE storage_key = ?),
-                               ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                     [
-                        doc_id, m.pattern_name, m.pattern_version,
-                        m.page_index, m.matched_text,
+                        document_id, m.pattern_name, m.pattern_version,
+                        m.page_index + 1,  # Store 1-indexed in DB
+                        m.matched_text,
                         m.context_before, m.context_after, m.run_id,
                     ],
                 )
