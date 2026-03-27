@@ -282,6 +282,66 @@ class TestExtractLabels:
         result = extract_labels(clauses)
         assert len(result["raw_clause_labels"]) == 1
 
+    def test_handles_null_value(self) -> None:
+        from corpus.sources.pdip_annotations import extract_labels
+
+        clauses = [{"value": None}, _clause("GoverningLaw_English")]
+        result = extract_labels(clauses)
+        assert result["clause_count"] == 2
+        assert len(result["raw_clause_labels"]) == 1
+
+    def test_handles_missing_value(self) -> None:
+        from corpus.sources.pdip_annotations import extract_labels
+
+        clauses = [{}, _clause("GoverningLaw_English")]
+        result = extract_labels(clauses)
+        assert len(result["raw_clause_labels"]) == 1
+
+    def test_handles_non_list_rectanglelabels(self) -> None:
+        from corpus.sources.pdip_annotations import extract_labels
+
+        clauses = [{"value": {"rectanglelabels": "not_a_list"}}]
+        result = extract_labels(clauses)
+        assert len(result["raw_clause_labels"]) == 0
+
+
+class TestClassifyStatus:
+    def test_api_error_before_zero_clause(self) -> None:
+        from corpus.sources.pdip_annotations import _classify_status
+
+        status = _classify_status(
+            {"error": "boom", "clauses": []},
+            200,
+            None,
+            inventory_tag_status="Annotated",
+            attempt=1,
+        )
+        assert status == "api_error"
+
+    def test_zero_clause_on_annotated(self) -> None:
+        from corpus.sources.pdip_annotations import _classify_status
+
+        status = _classify_status(
+            {"clauses": []},
+            200,
+            None,
+            inventory_tag_status="Annotated",
+            attempt=1,
+        )
+        assert status == "annotated_zero_clauses"
+
+    def test_success_with_clauses(self) -> None:
+        from corpus.sources.pdip_annotations import _classify_status
+
+        status = _classify_status(
+            {"clauses": [{"value": {}}]},
+            200,
+            None,
+            inventory_tag_status="Annotated",
+            attempt=1,
+        )
+        assert status == "success"
+
 
 class TestGenerateSummary:
     def test_summary_fields(self) -> None:
@@ -351,12 +411,19 @@ class TestWriteCacCandidatesCsv:
         assert len(rows) == 1
         assert rows[0]["doc_id"] == "VEN85"
 
-    def test_returns_zero_when_no_candidates(self, tmp_path: Path) -> None:
+    def test_writes_header_only_when_no_candidates(self, tmp_path: Path) -> None:
         from corpus.sources.pdip_annotations import write_cac_candidates_csv
 
         records = [{"doc_id": "X", "cac_candidate": False}]
-        count = write_cac_candidates_csv(records, tmp_path / "cac.csv")
+        path = tmp_path / "cac.csv"
+        count = write_cac_candidates_csv(records, path)
         assert count == 0
+        assert path.exists()
+        with path.open() as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+        assert len(rows) == 0
+        assert "doc_id" in path.read_text()  # header present
 
 
 class TestCircuitBreaker:
@@ -508,6 +575,53 @@ class TestAnnotatedZeroClauses:
         # Should complete without abort since zero-clause isn't a transport failure
         assert summary["aborted"] is False
         assert summary["status_counts"].get("annotated_zero_clauses", 0) == 3
+
+    def test_zero_clause_gate_includes_resumed_records(self, tmp_path: Path) -> None:
+        from corpus.sources.pdip_annotations import run_annotations_harvest
+
+        rows = _make_annotated_rows()
+        csv_path = _make_inventory_csv(tmp_path / "inv.csv", rows)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir(parents=True)
+
+        # Pre-populate 11 zero-clause records (exceeds >10 of first 20 gate)
+        annotations = output_dir / "annotations.jsonl"
+        pre_records = []
+        smoke_ids = ["VEN85", "NLD21", "KEN68", "JAM22", "VEN59"]
+        bond_ids = [f"BOND{i:03d}" for i in range(6)]
+        for doc_id in smoke_ids + bond_ids:
+            rec = {"doc_id": doc_id, "status": "annotated_zero_clauses", "run_id": "old"}
+            pre_records.append(json.dumps(rec))
+        annotations.write_text("\n".join(pre_records) + "\n")
+
+        # New doc also returns zero clauses
+        mock_session = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"clauses": [], "source_url": ""}
+        mock_session.get.return_value = mock_resp
+
+        with patch("corpus.sources.pdip_annotations._make_session") as mock_make:
+            mock_make.return_value = (
+                mock_session,
+                {"tls_mode": "test", "tls_verify": False, "tls_reason": "test"},
+            )
+
+            # Use 12 specific IDs: 11 already done + 1 new
+            target_ids = smoke_ids + bond_ids + ["BOND006"]
+            summary = run_annotations_harvest(
+                inventory_path=csv_path,
+                output_dir=output_dir,
+                run_id="test-gate-resume",
+                doc_ids=target_ids,
+                delay=0.0,
+                zero_clause_early_abort_count=10,
+                zero_clause_early_abort_window=20,
+            )
+
+        # Gate should fire: 12 zero-clause out of 12 processed (11 resumed + 1 new)
+        assert summary["aborted"] is True
+        assert "zero-clause" in summary["abort_reason"].lower()
 
 
 class TestCli:

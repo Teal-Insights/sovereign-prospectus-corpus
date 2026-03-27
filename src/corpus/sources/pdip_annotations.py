@@ -140,10 +140,14 @@ def extract_labels(clauses: list[dict[str, Any]]) -> dict[str, Any]:
     raw_labels: list[str] = []
     for clause in clauses:
         # Label Studio format: labels in value.rectanglelabels
-        value = clause.get("value", {})
-        rect_labels = value.get("rectanglelabels", [])
+        value = clause.get("value")
+        if not isinstance(value, dict):
+            continue
+        rect_labels = value.get("rectanglelabels")
+        if not isinstance(rect_labels, list):
+            continue
         for label in rect_labels:
-            if label:
+            if isinstance(label, str) and label:
                 raw_labels.append(label)
 
     modification_labels = [lbl for lbl in raw_labels if lbl.startswith(_CAC_MODIFICATION_PREFIX)]
@@ -172,6 +176,9 @@ def _make_session(
     session.headers.update(PDIP_HEADERS)
 
     if insecure:
+        import urllib3
+
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         session.verify = False
         tls_info = {
             "tls_mode": "insecure",
@@ -238,12 +245,12 @@ def _classify_status(
     if payload is None:
         return "failed_request"
 
+    if "error" in payload:
+        return "api_error"
+
     clauses = payload.get("clauses", [])
     if len(clauses) == 0 and inventory_tag_status == "Annotated":
         return "annotated_zero_clauses"
-
-    if "error" in payload:
-        return "api_error"
 
     return "success"
 
@@ -386,8 +393,6 @@ def write_cac_candidates_csv(
 ) -> int:
     """Write CAC candidate records to CSV. Returns count written."""
     candidates = [r for r in records if r.get("cac_candidate")]
-    if not candidates:
-        return 0
 
     fieldnames = [
         "doc_id",
@@ -436,8 +441,6 @@ def run_annotations_harvest(
     delay: float = 1.0,
     consecutive_failures_pause: int = 3,
     consecutive_failures_abort: int = 8,
-    zero_clause_pilot_threshold: int = 6,
-    zero_clause_pilot_window: int = 20,
     zero_clause_early_abort_count: int = 10,
     zero_clause_early_abort_window: int = 20,
     zero_clause_rate_threshold: float = 0.40,
@@ -486,7 +489,8 @@ def run_annotations_harvest(
     # Track all terminal records (including resumed ones)
     all_records: list[dict[str, Any]] = []
 
-    # Re-read existing records for summary generation
+    # Re-read existing records for summary generation, filtered to current target set
+    target_ids = {r["id"] for r in target_rows}
     if annotations_path.exists():
         with annotations_path.open() as f:
             for line in f:
@@ -494,16 +498,18 @@ def run_annotations_harvest(
                 if not line:
                     continue
                 with contextlib.suppress(json.JSONDecodeError):
-                    all_records.append(json.loads(line))
+                    record = json.loads(line)
+                    if record.get("doc_id") in target_ids:
+                        all_records.append(record)
 
     # Circuit breaker state
     consecutive_transport_failures = 0
     aborted = False
     abort_reason = ""
 
-    # Zero-clause tracking
-    zero_clause_count = 0
-    docs_processed = 0
+    # Zero-clause tracking — seed from resumed records so gate isn't bypassed
+    zero_clause_count = sum(1 for r in all_records if r.get("status") == "annotated_zero_clauses")
+    docs_processed = len(all_records)
 
     for row in target_rows:
         doc_id = row["id"]
