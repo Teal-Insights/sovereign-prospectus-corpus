@@ -199,6 +199,21 @@ def export_clause_families() -> None:
     print(f"Wrote {len(rows) + (1 if unmapped and unmapped[0] > 0 else 0)} rows to {output_path}")
 
 
+_GREP_COLUMNS = [
+    "storage_key",
+    "pattern_name",
+    "page_number",
+    "matched_text",
+    "context_before",
+    "context_after",
+    "run_id",
+    "country",
+    "document_title",
+    "instrument_type",
+    "page_text",
+]
+
+
 def export_grep_candidates(run_id: str | None = None) -> None:
     """Export grep match candidates with context and full page text."""
     con = duckdb.connect(str(DB_PATH), read_only=True)
@@ -271,40 +286,9 @@ def export_grep_candidates(run_id: str | None = None) -> None:
     output_path = OUTPUT_DIR / "grep_candidates.csv"
     with output_path.open("w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(
-            [
-                "storage_key",
-                "pattern_name",
-                "page_number",
-                "matched_text",
-                "context_before",
-                "context_after",
-                "run_id",
-                "country",
-                "document_title",
-                "instrument_type",
-                "page_text",
-            ]
-        )
+        writer.writerow(_GREP_COLUMNS)
         for record in deduped:
-            writer.writerow(
-                [
-                    record[k]
-                    for k in [
-                        "storage_key",
-                        "pattern_name",
-                        "page_number",
-                        "matched_text",
-                        "context_before",
-                        "context_after",
-                        "run_id",
-                        "country",
-                        "document_title",
-                        "instrument_type",
-                        "page_text",
-                    ]
-                ]
-            )
+            writer.writerow([record[k] for k in _GREP_COLUMNS])
 
     print(f"Wrote {len(deduped)} rows to {output_path} (deduped from {len(rows)})")
 
