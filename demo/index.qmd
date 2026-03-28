@@ -1,0 +1,27 @@
+# Preface {.unnumbered}
+
+This document accompanies a proof of concept presented at the
+[#PublicDebtIsPublic](https://publicdebtispublic.mdi.georgetown.edu/)
+Scoping Roundtable on March 30, 2026 at Georgetown University Law Center.
+
+It demonstrates how expert clause annotations — like those created by
+the #PublicDebtIsPublic initiative — can power a scalable system for
+identifying and monitoring key terms in sovereign bond prospectuses.
+
+**What's here:**
+
+- **Chapter 1** explains what we built in one week and why the
+  #PublicDebtIsPublic annotated corpus is catalytic
+- **Chapter 2** presents preliminary findings with interactive
+  exploration
+- **Chapter 3** proposes a lawyer-in-the-loop flywheel and outlines
+  what collaboration could look like
+
+The code behind this work is open source and available on
+[GitHub](https://github.com/Teal-Insights/sovereign-prospectus-corpus).
+
+::: {.callout-note}
+This is a proof of concept. Findings are preliminary and the methodology
+needs expert review. We present it as evidence that the approach works
+and merits further development — not as finished research.
+:::
