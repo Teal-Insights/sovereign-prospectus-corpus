@@ -154,7 +154,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
         if page_text and matched:
             # Create a pattern that matches the text with flexible whitespace
             escaped = re.escape(matched)
-            flex_pattern = re.sub(r"\\ ", r"\\s+", escaped)
+            flex_pattern = re.sub(r" ", r"\\s+", escaped)
             highlighted = re.sub(
                 f"({flex_pattern})",
                 r'<mark style="background-color: #fff3cd; padding: 2px 4px; font-weight: bold;">\1</mark>',
@@ -169,11 +169,14 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
             display_html = f"<p>{display_html}</p>"
         else:
             # Fallback to old context_before/after display
-            ctx_before = str(row.get("context_before", "") or "")
-            ctx_after = str(row.get("context_after", "") or "")
+            from html import escape as _esc
+
+            ctx_before = _esc(str(row.get("context_before", "") or ""))
+            ctx_after = _esc(str(row.get("context_after", "") or ""))
+            matched_esc = _esc(matched)
             display_html = (
                 f'<p style="color: #666;">{ctx_before}</p>'
-                f'<p><mark style="background-color: #fff3cd; padding: 2px 4px; font-weight: bold;">{matched}</mark></p>'
+                f'<p><mark style="background-color: #fff3cd; padding: 2px 4px; font-weight: bold;">{matched_esc}</mark></p>'
                 f'<p style="color: #666;">{ctx_after}</p>'
             )
 
