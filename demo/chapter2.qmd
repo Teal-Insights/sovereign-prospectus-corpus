@@ -9,29 +9,106 @@ methodology review — not as finished research.
 ## The Corpus
 
 We collected over 4,800 sovereign bond prospectuses from three public
-sources. The map below shows geographic coverage — the number of
-documents per country across all three sources.
+sources. The map below shows geographic coverage based on preliminary
+matching of issuer names to countries.
 
-*Visualization: world map of corpus coverage — coming in next iteration.*
+```{python}
+#| label: fig-map
+#| fig-cap: "Sovereign bond prospectuses collected from SEC EDGAR, FCA NSM, and #PublicDebtIsPublic. Geographic coverage is based on preliminary substring matching of issuer names."
+
+import pandas as pd
+import plotly.express as px
+
+corpus = pd.read_csv("data/corpus_by_country.csv")
+by_country = corpus.groupby(["country_code", "country_name"])["doc_count"].sum().reset_index()
+
+fig = px.choropleth(
+    by_country,
+    locations="country_code",
+    color="doc_count",
+    hover_name="country_name",
+    hover_data={"doc_count": True, "country_code": False},
+    color_continuous_scale="Blues",
+    labels={"doc_count": "Documents"},
+    title="4,800+ Sovereign Bond Prospectuses from 3 Public Sources",
+)
+fig.update_layout(
+    geo=dict(showframe=False, showcoastlines=True, projection_type="natural earth"),
+    margin=dict(l=0, r=0, t=40, b=0),
+    coloraxis_colorbar=dict(title="Documents"),
+    height=450,
+)
+fig.show()
+```
 
 ## What #PublicDebtIsPublic Annotations Reveal
 
 The #PublicDebtIsPublic corpus contains 122 documents with over 6,200
-expert clause annotations across 25 clause families.
+expert clause annotations. The chart below shows how many documents
+contain annotations for each clause family. Some annotation labels
+have not yet been mapped to families and are shown separately.
 
-*Visualization: clause family coverage chart — coming in next iteration.*
+```{python}
+#| label: fig-families
+#| fig-cap: "Clause family coverage in #PublicDebtIsPublic expert-annotated corpus (122 documents)"
+
+families = pd.read_csv("data/clause_families.csv")
+mapped = families[families["label_family"] != "(unmapped)"].head(15).copy()
+mapped["label_clean"] = mapped["label_family"].str.replace("_", " ").str.title()
+
+fig = px.bar(
+    mapped.sort_values("docs"),
+    x="docs",
+    y="label_clean",
+    orientation="h",
+    labels={"docs": "Documents", "label_clean": ""},
+    title="Expert-Annotated Clause Families",
+    text="docs",
+)
+fig.update_layout(
+    height=500,
+    margin=dict(l=0, r=20, t=40, b=0),
+    showlegend=False,
+    yaxis=dict(tickfont=dict(size=12)),
+)
+fig.update_traces(marker_color="#2c7bb6", textposition="outside")
+fig.show()
+```
 
 ## Retrieval Validation
 
 Using patterns derived from #PublicDebtIsPublic annotations, we searched
-the corpus for key clause families. Results will be presented here with
-precision/recall metrics against the expert ground truth.
+the full corpus for three key clause families. The table below shows
+how our automated retrieval compares against the expert annotations.
 
-*Table: precision/recall for key clause families — coming in next iteration.*
+| Clause Family | Expert Docs | Retrieved Docs | Recall | Notes |
+|:---|:---:|:---:|:---:|:---|
+| Collective Action | 37 | 1,537 | 97.3% | Found 36 of 37 annotated documents |
+| Pari Passu | 29 | 1,582 | 69.0% | Pattern expanded to cover "rank without preference" variants |
+| Governing Law | 71 | 2,036 | 69.0% | Now matches all jurisdictions, not just NY/English |
+
+: Retrieval performance against #PublicDebtIsPublic expert annotations (preliminary) {#tbl-validation}
+
+**Reading this table:** "Expert Docs" is the number of documents where
+#PublicDebtIsPublic experts annotated this clause family (out of 122
+annotated documents). "Retrieved Docs" is the number of documents
+across the entire 4,800+ corpus where our automated retrieval found a
+candidate match. The large gap between these columns is the point —
+these are candidates for expert review, and each review makes the
+system more accurate.
 
 ## Try It Yourself: The Eval Explorer
 
-An interactive app where you can browse clause candidates, see context,
-and experience what the review workflow feels like.
+The interactive explorer below lets you browse clause candidates from
+the corpus. Pick a clause family, click through the matches, and see
+what a reviewer's experience would look like.
 
-*Interactive Shiny app — coming in next iteration.*
+<iframe
+  src="https://tealinsights.shinyapps.io/clause-eval-explorer/"
+  width="100%"
+  height="700px"
+  style="border: 1px solid #ddd; border-radius: 4px;"
+></iframe>
+
+*If the interactive explorer doesn't load, visit it directly at
+[tealinsights.shinyapps.io/clause-eval-explorer](https://tealinsights.shinyapps.io/clause-eval-explorer/).*

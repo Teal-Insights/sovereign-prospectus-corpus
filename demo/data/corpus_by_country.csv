@@ -1,20 +1,25 @@
 country_name,country_code,source,doc_count
 Albania,ALB,nsm,3
-Albania,ALB,pdip,1
+Angola,AGO,nsm,16
+Angola,AGO,pdip,12
 Argentina,ARG,edgar,37
+Bahrain,BHR,nsm,6
 Brazil,BRA,edgar,220
 Cameroon,CMR,nsm,2
-Cameroon,CMR,pdip,1
+Cameroon,CMR,pdip,8
 Canada,CAN,edgar,62
 Canada,CAN,nsm,2
 Chile,CHL,edgar,186
+China,CHN,nsm,2
 Colombia,COL,edgar,246
 Cyprus,CYP,nsm,23
-Ecuador,ECU,pdip,5
+Ecuador,ECU,pdip,32
 Egypt,EGY,nsm,36
 Finland,FIN,edgar,3
 Finland,FIN,nsm,28
 Ghana,GHA,nsm,21
+Ghana,GHA,pdip,28
+Hong Kong SAR China,HKG,nsm,3
 Hungary,HUN,edgar,30
 Hungary,HUN,nsm,21
 Iceland,ISL,nsm,28
@@ -23,29 +28,33 @@ Indonesia,IDN,pdip,18
 Israel,ISR,edgar,1155
 Israel,ISR,nsm,144
 Italy,ITA,edgar,43
-Italy,ITA,pdip,1
+Italy,ITA,pdip,2
 Jamaica,JAM,edgar,43
-Jamaica,JAM,pdip,18
+Jamaica,JAM,pdip,20
 Jordan,JOR,nsm,6
 Kazakhstan,KAZ,nsm,24
 Kenya,KEN,nsm,5
-Kenya,KEN,pdip,16
+Kenya,KEN,pdip,26
 Korea Republic of,KOR,edgar,55
-Moldova,MDA,pdip,2
+Mexico,MEX,edgar,266
+Moldova,MDA,pdip,5
+Montenegro,MNE,nsm,7
 Morocco,MAR,nsm,2
-Netherlands,NLD,pdip,13
+Netherlands,NLD,pdip,23
 Nigeria,NGA,nsm,41
+Oman,OMN,nsm,17
 Panama,PAN,edgar,126
 Peru,PER,edgar,85
-Peru,PER,pdip,9
+Peru,PER,pdip,126
 Philippines,PHL,edgar,171
-Philippines,PHL,pdip,15
+Philippines,PHL,pdip,52
+Qatar,QAT,nsm,10
 Rwanda,RWA,nsm,2
-Rwanda,RWA,pdip,1
+Rwanda,RWA,pdip,55
 Saudi Arabia,SAU,nsm,23
-Senegal,SEN,pdip,1
+Senegal,SEN,pdip,7
 Serbia,SRB,nsm,24
-Sierra Leone,SLE,pdip,10
+Sierra Leone,SLE,pdip,15
 South Africa,ZAF,edgar,68
 South Africa,ZAF,nsm,2
 Sri Lanka,LKA,nsm,3
@@ -54,4 +63,5 @@ Turkey,TUR,edgar,261
 United Arab Emirates,ARE,nsm,35
 Uruguay,URY,edgar,150
 Uruguay,URY,nsm,2
-Venezuela,VEN,pdip,1
+Uzbekistan,UZB,nsm,21
+Venezuela,VEN,pdip,39

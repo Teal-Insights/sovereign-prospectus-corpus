@@ -58,15 +58,6 @@ def export_corpus_by_country() -> None:
                 if match:
                     counts[(match[0], match[1], source)] += 1
 
-    con = duckdb.connect(str(DB_PATH), read_only=True)
-    pdip_rows = con.execute(
-        """SELECT country, COUNT(DISTINCT doc_id) as docs
-           FROM pdip_clauses
-           WHERE country IS NOT NULL
-           GROUP BY country"""
-    ).fetchall()
-    con.close()
-
     pdip_country_to_code = {
         "Indonesia": "IDN",
         "Jamaica": "JAM",
@@ -83,11 +74,21 @@ def export_corpus_by_country() -> None:
         "Senegal": "SEN",
         "Rwanda": "RWA",
         "Albania": "ALB",
+        "Ghana": "GHA",
+        "Angola": "AGO",
     }
-    for country_name, doc_count in pdip_rows:
-        code = pdip_country_to_code.get(country_name, "")
-        if code:
-            counts[(country_name, code, "pdip")] += doc_count
+
+    # Count from PDIP inventory (all 823 docs, not just annotated)
+    inventory_path = PROJECT_ROOT / "data/pdip/pdip_document_inventory.csv"
+    if inventory_path.exists():
+        with inventory_path.open() as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                country = row.get("country", "").strip()
+                if country:
+                    code = pdip_country_to_code.get(country, "")
+                    if code:
+                        counts[(country, code, "pdip")] += 1
 
     output_path = OUTPUT_DIR / "corpus_by_country.csv"
     with output_path.open("w", newline="") as f:
@@ -111,6 +112,12 @@ def export_clause_families() -> None:
            GROUP BY label_family
            ORDER BY docs DESC"""
     ).fetchall()
+
+    unmapped = con.execute(
+        """SELECT COUNT(*) as annotations, COUNT(DISTINCT doc_id) as docs
+           FROM pdip_clauses WHERE label_family IS NULL"""
+    ).fetchone()
+
     con.close()
 
     output_path = OUTPUT_DIR / "clause_families.csv"
@@ -119,15 +126,25 @@ def export_clause_families() -> None:
         writer.writerow(["label_family", "annotations", "docs"])
         for row in rows:
             writer.writerow(row)
+        if unmapped and unmapped[0] > 0:
+            writer.writerow(["(unmapped)", unmapped[0], unmapped[1]])
 
-    print(f"Wrote {len(rows)} rows to {output_path}")
+    print(f"Wrote {len(rows) + (1 if unmapped and unmapped[0] > 0 else 0)} rows to {output_path}")
 
 
-def export_grep_candidates() -> None:
+def export_grep_candidates(run_id: str | None = None) -> None:
     """Export grep match candidates with context for the Shiny eval explorer."""
     con = duckdb.connect(str(DB_PATH), read_only=True)
+
+    params: list[str] = []
+    where_clauses = ["d.source = 'pdip'"]
+    if run_id:
+        where_clauses.append("gm.run_id = ?")
+        params.append(run_id)
+    where_str = " AND ".join(where_clauses)
+
     rows = con.execute(
-        """SELECT d.storage_key,
+        f"""SELECT d.storage_key,
                   gm.pattern_name,
                   gm.page_number,
                   gm.matched_text,
@@ -143,8 +160,9 @@ def export_grep_candidates() -> None:
                SELECT DISTINCT doc_id, country, document_title, instrument_type
                FROM pdip_clauses
            ) pc ON d.storage_key = 'pdip__' || pc.doc_id
-           WHERE d.source = 'pdip'
-           ORDER BY gm.pattern_name, pc.country, d.storage_key"""
+           WHERE {where_str}
+           ORDER BY gm.pattern_name, pc.country, d.storage_key""",
+        params,
     ).fetchall()
     con.close()
 
@@ -172,8 +190,11 @@ def export_grep_candidates() -> None:
 
 
 if __name__ == "__main__":
-    print("Exporting data for Quarto book and Shiny app...")
+    import sys
+
+    run_id = sys.argv[1] if len(sys.argv) > 1 else None
+    print(f"Exporting data (run_id={run_id})...")
     export_corpus_by_country()
     export_clause_families()
-    export_grep_candidates()
+    export_grep_candidates(run_id)
     print("Done.")
