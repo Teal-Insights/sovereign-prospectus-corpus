@@ -49,3 +49,13 @@ def test_terminal_punctuation_prevents_joining() -> None:
     result = reflow_text(text)
     lines = [ln for ln in result.split("\n") if ln.strip()]
     assert len(lines) == 2, f"Expected 2 lines, got: {lines}"
+
+
+def test_medium_line_with_uppercase_next_not_joined() -> None:
+    """Lines >15 chars without terminal punctuation followed by uppercase should not join (e.g. section headers)."""
+    text = "This is a medium length header\nFollowing text starts with cap."
+    result = reflow_text(text)
+    assert "\n" in result
+    lines = result.split("\n")
+    assert len(lines) == 2
+    assert lines[0] == "This is a medium length header"
