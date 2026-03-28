@@ -2,16 +2,20 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a 3-chapter Quarto book with static visualizations and an embedded Shiny eval explorer app, deployed to GitHub Pages, for the #PublicDebtIsPublic Scoping Roundtable (March 30, 2026).
+**Goal:** Build a 3-chapter Quarto book with static visualizations and an embedded Shiny for Python eval explorer app, deployed to GitHub Pages, for the #PublicDebtIsPublic Scoping Roundtable (March 30, 2026).
 
-**Architecture:** Quarto book project in a new `demo/` directory within the existing repo. Static visualizations generated via Python scripts that export PNGs/HTML from DuckDB data. Shiny app built in R, deployed to shinyapps.io, embedded in the Quarto book via iframe. Data for the Shiny app pre-exported as CSV from DuckDB (no database at runtime).
+**Architecture:** Quarto book project in a new `demo/` directory within the existing repo. Static visualizations generated via Python (plotly/matplotlib). Shiny app built in Python (shiny for Python), deployed to shinyapps.io or shinylive, embedded in the Quarto book via iframe. Data for the Shiny app pre-exported as CSV from DuckDB (no database at runtime).
 
-**Tech Stack:** Quarto 1.8, R 4.5 + Shiny/bslib/DT/ggplot2, Python 3.12 (for data export), DuckDB, GitHub Pages
+**Tech Stack:** Quarto 1.8, Python 3.12, Shiny for Python, plotly, DuckDB, GitHub Pages
+
+**Two-branch strategy:**
+
+- **Branch 1 (this plan, `feature/26-roundtable-quarto-book`):** Quarto book scaffold, narrative chapters (1 + 3), data export pipeline, placeholder Chapter 2. Gets the text right.
+- **Branch 2 (next session):** Pattern optimization, corpus exploration, improved preliminary results, static visualizations, Shiny eval explorer app, final Chapter 2 with real data. Gets the results right.
 
 **Pre-flight:**
 ```bash
-# Install R packages (one-time)
-Rscript -e 'install.packages(c("shiny", "bslib", "DT", "jsonlite", "ggplot2", "sf", "rnaturalearth", "rnaturalearthdata", "dplyr", "plotly", "countrycode"), repos="https://cloud.r-project.org")'
+uv add shiny plotly
 ```
 
 **Spec:** `docs/superpowers/specs/2026-03-28-roundtable-quarto-book-design.md`
@@ -20,323 +24,46 @@ Rscript -e 'install.packages(c("shiny", "bslib", "DT", "jsonlite", "ggplot2", "s
 
 ## File Structure
 
-### New Files
+### New Files (Branch 1 — this plan)
 
 | File | Responsibility |
 |------|---------------|
 | `demo/_quarto.yml` | Quarto book config (title, chapters, theme, output) |
 | `demo/index.qmd` | Landing page / preface |
 | `demo/chapter1.qmd` | "What We Built and Why" — narrative + flywheel diagram |
-| `demo/chapter2.qmd` | "Preliminary Findings" — visualizations + Shiny embed |
+| `demo/chapter2.qmd` | "Preliminary Findings" — placeholder for Branch 2 visualizations |
 | `demo/chapter3.qmd` | "A Lawyer-in-the-Loop Flywheel" — co-design ask |
 | `demo/references.bib` | Bibliography (Gelpern 2019, Rivetti & Mihalyi 2025) |
-| `demo/data/export_data.py` | Python script to export DuckDB data → CSV for visualizations and Shiny |
+| `demo/data/export_data.py` | Python script to export DuckDB data → CSV |
+| `demo/data/issuer_country_map.csv` | Hand-curated: issuer_name → country_code mapping |
+
+### New Files (Branch 2 — next session)
+
+| File | Responsibility |
+|------|---------------|
 | `demo/data/corpus_by_country.csv` | Exported: country, source, document count |
 | `demo/data/clause_families.csv` | Exported: label_family, annotation count, doc count |
 | `demo/data/grep_candidates.csv` | Exported: grep matches with context for Shiny app |
-| `demo/data/issuer_country_map.csv` | Hand-curated: issuer_name → country_code mapping |
-| `demo/shiny-app/app.R` | Shiny eval explorer (single-file app) |
-| `demo/shiny-app/data/` | Symlink or copy of exported CSVs for Shiny deployment |
-| `demo/images/flywheel.png` | Flywheel diagram (generated or hand-drawn) |
+| `demo/shiny-app/app.py` | Shiny for Python eval explorer |
+| `demo/shiny-app/data/` | Copy of exported CSVs for Shiny deployment |
 | `.github/workflows/publish-demo.yml` | GitHub Actions to render + deploy Quarto to Pages |
 
-### Modified Files
-
-| File | Change |
-|------|--------|
-| `README.md` | Add link to demo site (optional) |
-
 ---
 
-## Session 1: Data Export + Quarto Scaffold
-
-### Task 1: Export Data from DuckDB to CSV
-
-**Files:**
-- Create: `demo/data/export_data.py`
-- Create: `demo/data/issuer_country_map.csv`
-- Output: `demo/data/corpus_by_country.csv`, `demo/data/clause_families.csv`, `demo/data/grep_candidates.csv`
-
-- [ ] **Step 1: Create the demo directory structure**
-
-```bash
-mkdir -p demo/data demo/shiny-app/data demo/images
-```
-
-- [ ] **Step 2: Create the issuer-to-country mapping**
-
-NSM and EDGAR manifests have `issuer_name` but no country code. The PDIP corpus has `country` in `pdip_clauses`. We need a mapping file for NSM/EDGAR issuers.
-
-Create `demo/data/issuer_country_map.csv` with the top issuers from NSM and EDGAR manifests:
-
-```csv
-issuer_pattern,country_name,country_code
-ISRAEL,Israel,ISR
-MEXICO,Mexico,MEX
-TURKEY,Turkey,TUR
-COLOMBIA,Colombia,COL
-BRAZIL,Brazil,BRA
-CHILE,Chile,CHL
-PHILIPPINES,Philippines,PHL
-URUGUAY,Uruguay,URY
-PANAMA,Panama,PAN
-INDONESIA,Indonesia,IDN
-PERU,Peru,PER
-SOUTH AFRICA,South Africa,ZAF
-CANADA,Canada,CAN
-KOREA,Korea Republic of,KOR
-JAMAICA,Jamaica,JAM
-SWEDEN,Sweden,SWE
-NIGERIA,Nigeria,NGA
-ABU DHABI,United Arab Emirates,ARE
-EGYPT,Egypt,EGY
-FINLAND,Finland,FIN
-CYPRUS,Cyprus,CYP
-HUNGARY,Hungary,HUN
-KAZAKHSTAN,Kazakhstan,KAZ
-GHANA,Ghana,GHA
-ICELAND,Iceland,ISL
-SERBIA,Serbia,SRB
-SAUDI ARABIA,Saudi Arabia,SAU
-ARGENTINA,Argentina,ARG
-DOMINICAN REPUBLIC,Dominican Republic,DOM
-ECUADOR,Ecuador,ECU
-KENYA,Kenya,KEN
-ALBANIA,Albania,ALB
-SIERRA LEONE,Sierra Leone,SLE
-MOLDOVA,Moldova,MDA
-CAMEROON,Cameroon,CMR
-RWANDA,Rwanda,RWA
-SENEGAL,Senegal,SEN
-ITALY,Italy,ITA
-NETHERLANDS,Netherlands,NLD
-JAPAN,Japan,JPN
-LEBANON,Lebanon,LBN
-COSTA RICA,Costa Rica,CRI
-BARBADOS,Barbados,BRB
-BAHAMAS,Bahamas,BHS
-BERMUDA,Bermuda,BMU
-TRINIDAD,Trinidad and Tobago,TTO
-SRI LANKA,Sri Lanka,LKA
-PAKISTAN,Pakistan,PAK
-EL SALVADOR,El Salvador,SLV
-VENEZUELA,Venezuela,VEN
-JORDAN,Jordan,JOR
-MOROCCO,Morocco,MAR
-```
-
-- [ ] **Step 3: Create the data export script**
-
-Create `demo/data/export_data.py`:
-
-```python
-"""Export DuckDB data to CSV for Quarto visualizations and Shiny app."""
-
-from __future__ import annotations
-
-import csv
-import json
-from pathlib import Path
-
-import duckdb
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DB_PATH = PROJECT_ROOT / "data/db/corpus.duckdb"
-MANIFEST_DIR = PROJECT_ROOT / "data/manifests"
-OUTPUT_DIR = Path(__file__).resolve().parent
-COUNTRY_MAP_PATH = OUTPUT_DIR / "issuer_country_map.csv"
-
-
-def load_country_map() -> dict[str, tuple[str, str]]:
-    """Load issuer pattern → (country_name, country_code) mapping."""
-    mapping: dict[str, tuple[str, str]] = {}
-    with COUNTRY_MAP_PATH.open() as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            mapping[row["issuer_pattern"].upper()] = (
-                row["country_name"],
-                row["country_code"],
-            )
-    return mapping
-
-
-def match_country(issuer_name: str, country_map: dict[str, tuple[str, str]]) -> tuple[str, str] | None:
-    """Match an issuer name to a country using substring matching."""
-    upper = issuer_name.upper()
-    for pattern, country_info in country_map.items():
-        if pattern in upper:
-            return country_info
-    return None
-
-
-def export_corpus_by_country() -> None:
-    """Export document counts by country and source."""
-    country_map = load_country_map()
-
-    # Count from manifests (NSM + EDGAR)
-    from collections import Counter
-    counts: Counter[tuple[str, str, str]] = Counter()  # (country_name, country_code, source)
-
-    for manifest_name in ["nsm_manifest.jsonl", "edgar_manifest.jsonl"]:
-        manifest_path = MANIFEST_DIR / manifest_name
-        if not manifest_path.exists():
-            continue
-        source = manifest_name.split("_")[0]
-        with manifest_path.open() as f:
-            for line in f:
-                record = json.loads(line)
-                issuer = record.get("issuer_name", "")
-                match = match_country(issuer, country_map)
-                if match:
-                    counts[(match[0], match[1], source)] += 1
-
-    # Count from PDIP (pdip_clauses has country directly)
-    con = duckdb.connect(str(DB_PATH), read_only=True)
-    pdip_rows = con.execute(
-        """SELECT country, COUNT(DISTINCT doc_id) as docs
-           FROM pdip_clauses
-           WHERE country IS NOT NULL
-           GROUP BY country"""
-    ).fetchall()
-    con.close()
-
-    # Map PDIP country names to codes
-    pdip_country_to_code = {
-        "Indonesia": "IDN", "Jamaica": "JAM", "Kenya": "KEN",
-        "Philippines": "PHL", "Netherlands": "NLD", "Sierra Leone": "SLE",
-        "Peru": "PER", "Ecuador": "ECU", "Moldova": "MDA",
-        "Cameroon": "CMR", "Venezuela": "VEN", "Italy": "ITA",
-        "Senegal": "SEN", "Rwanda": "RWA", "Albania": "ALB",
-    }
-    for country_name, doc_count in pdip_rows:
-        code = pdip_country_to_code.get(country_name, "")
-        if code:
-            counts[(country_name, code, "pdip")] += doc_count
-
-    # Write CSV
-    output_path = OUTPUT_DIR / "corpus_by_country.csv"
-    with output_path.open("w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["country_name", "country_code", "source", "doc_count"])
-        for (country_name, country_code, source), count in sorted(counts.items()):
-            writer.writerow([country_name, country_code, source, count])
-
-    print(f"Wrote {len(counts)} rows to {output_path}")
-
-
-def export_clause_families() -> None:
-    """Export clause family annotation counts from PDIP."""
-    con = duckdb.connect(str(DB_PATH), read_only=True)
-    rows = con.execute(
-        """SELECT label_family,
-                  COUNT(*) as annotations,
-                  COUNT(DISTINCT doc_id) as docs
-           FROM pdip_clauses
-           WHERE label_family IS NOT NULL
-           GROUP BY label_family
-           ORDER BY docs DESC"""
-    ).fetchall()
-    con.close()
-
-    output_path = OUTPUT_DIR / "clause_families.csv"
-    with output_path.open("w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["label_family", "annotations", "docs"])
-        for row in rows:
-            writer.writerow(row)
-
-    print(f"Wrote {len(rows)} rows to {output_path}")
-
-
-def export_grep_candidates() -> None:
-    """Export grep match candidates with context for the Shiny eval explorer."""
-    con = duckdb.connect(str(DB_PATH), read_only=True)
-    rows = con.execute(
-        """SELECT d.storage_key,
-                  gm.pattern_name,
-                  gm.page_number,
-                  gm.matched_text,
-                  gm.context_before,
-                  gm.context_after,
-                  gm.run_id,
-                  pc.country,
-                  pc.document_title,
-                  pc.instrument_type
-           FROM grep_matches gm
-           JOIN documents d ON gm.document_id = d.document_id
-           LEFT JOIN (
-               SELECT DISTINCT doc_id, country, document_title, instrument_type
-               FROM pdip_clauses
-           ) pc ON d.storage_key = 'pdip__' || pc.doc_id
-           WHERE d.source = 'pdip'
-           ORDER BY gm.pattern_name, pc.country, d.storage_key"""
-    ).fetchall()
-    con.close()
-
-    output_path = OUTPUT_DIR / "grep_candidates.csv"
-    with output_path.open("w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            "storage_key", "pattern_name", "page_number",
-            "matched_text", "context_before", "context_after",
-            "run_id", "country", "document_title", "instrument_type",
-        ])
-        for row in rows:
-            writer.writerow(row)
-
-    print(f"Wrote {len(rows)} rows to {output_path}")
-
-
-if __name__ == "__main__":
-    print("Exporting data for Quarto book and Shiny app...")
-    export_corpus_by_country()
-    export_clause_families()
-    export_grep_candidates()
-    print("Done.")
-```
-
-- [ ] **Step 4: Run the export**
-
-```bash
-uv run python3 demo/data/export_data.py
-```
-
-Expected: Three CSV files created in `demo/data/`. Verify row counts look reasonable.
-
-- [ ] **Step 5: Spot-check the exports**
-
-```bash
-head -5 demo/data/corpus_by_country.csv
-wc -l demo/data/corpus_by_country.csv
-head -5 demo/data/clause_families.csv
-head -3 demo/data/grep_candidates.csv
-wc -l demo/data/grep_candidates.csv
-```
-
-- [ ] **Step 6: Copy data for Shiny app**
-
-```bash
-cp demo/data/grep_candidates.csv demo/shiny-app/data/
-cp demo/data/clause_families.csv demo/shiny-app/data/
-```
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add demo/data/
-git commit -m "feat: data export pipeline for Quarto book and Shiny app"
-```
-
----
-
-### Task 2: Quarto Book Scaffold
+## Task 1: Quarto Book Scaffold
 
 **Files:**
 - Create: `demo/_quarto.yml`
 - Create: `demo/index.qmd`
 - Create: `demo/references.bib`
 
-- [ ] **Step 1: Create Quarto config**
+- [ ] **Step 1: Create directory structure**
+
+```bash
+mkdir -p demo/data demo/shiny-app/data demo/images
+```
+
+- [ ] **Step 2: Create Quarto config**
 
 Create `demo/_quarto.yml`:
 
@@ -367,7 +94,7 @@ format:
     link-external-newwindow: true
 ```
 
-- [ ] **Step 2: Create landing page**
+- [ ] **Step 3: Create landing page**
 
 Create `demo/index.qmd`:
 
@@ -401,7 +128,7 @@ and merits further development — not as finished research.
 :::
 ```
 
-- [ ] **Step 3: Create bibliography**
+- [ ] **Step 4: Create bibliography**
 
 Create `demo/references.bib`:
 
@@ -425,7 +152,7 @@ Create `demo/references.bib`:
 }
 ```
 
-- [ ] **Step 4: Test Quarto renders**
+- [ ] **Step 5: Test Quarto renders**
 
 ```bash
 cd demo && quarto render index.qmd && cd ..
@@ -434,7 +161,7 @@ ls demo/_book/index.html
 
 Expected: HTML file renders without errors.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add demo/_quarto.yml demo/index.qmd demo/references.bib
@@ -443,17 +170,12 @@ git commit -m "feat: Quarto book scaffold with config and landing page"
 
 ---
 
-## Session 2: Chapters 1 and 3 (Narrative)
-
-### Task 3: Chapter 1 — "What We Built and Why"
+## Task 2: Chapter 1 — "What We Built and Why"
 
 **Files:**
 - Create: `demo/chapter1.qmd`
-- Create: `demo/images/flywheel.png` (or inline Mermaid/dot diagram)
 
-- [ ] **Step 1: Create the flywheel diagram**
-
-Use Quarto's built-in Mermaid support (no external image needed):
+- [ ] **Step 1: Create Chapter 1**
 
 Create `demo/chapter1.qmd`:
 
@@ -536,7 +258,7 @@ git commit -m "feat: Chapter 1 — what we built and why"
 
 ---
 
-### Task 4: Chapter 3 — "A Lawyer-in-the-Loop Flywheel"
+## Task 3: Chapter 3 — "A Lawyer-in-the-Loop Flywheel"
 
 **Files:**
 - Create: `demo/chapter3.qmd`
@@ -696,16 +418,14 @@ git commit -m "feat: Chapter 3 — lawyer-in-the-loop flywheel and co-design ask
 
 ---
 
-## Session 3: Visualizations + Chapter 2
-
-### Task 5: Static Visualizations
+## Task 4: Chapter 2 Placeholder + Data Export Script
 
 **Files:**
-- Create: `demo/chapter2.qmd`
+- Create: `demo/chapter2.qmd` (placeholder)
+- Create: `demo/data/export_data.py`
+- Create: `demo/data/issuer_country_map.csv`
 
-Chapter 2 uses R code chunks in Quarto to generate the map and clause coverage chart inline. This keeps everything in one `.qmd` file — no separate image generation step.
-
-- [ ] **Step 1: Create Chapter 2 with R visualizations**
+- [ ] **Step 1: Create Chapter 2 placeholder**
 
 Create `demo/chapter2.qmd`:
 
@@ -720,452 +440,287 @@ methodology review — not as finished research.
 
 ## The Corpus
 
+*Visualization: world map of corpus coverage — coming soon.*
+
 We collected over 4,800 sovereign bond prospectuses from three public
 sources. The map below shows geographic coverage — the number of
 documents per country across all three sources.
 
-```{r}
-#| label: fig-map
-#| fig-cap: "Sovereign bond prospectuses collected from SEC EDGAR, FCA NSM, and #PublicDebtIsPublic"
-#| fig-height: 5
-#| fig-width: 9
-#| message: false
-#| warning: false
-
-library(dplyr)
-library(ggplot2)
-library(sf)
-library(rnaturalearth)
-library(countrycode)
-
-corpus <- read.csv("data/corpus_by_country.csv")
-
-# Aggregate across sources
-by_country <- corpus |>
-  group_by(country_code, country_name) |>
-  summarise(total_docs = sum(doc_count), .groups = "drop")
-
-# Get world map
-world <- ne_countries(scale = "medium", returnclass = "sf") |>
-  select(iso_a3, name, geometry)
-
-# Join
-map_data <- world |>
-  left_join(by_country, by = c("iso_a3" = "country_code"))
-
-ggplot(map_data) +
-  geom_sf(aes(fill = total_docs), color = "grey80", linewidth = 0.1) +
-  scale_fill_gradient(
-    low = "#e8f4f8", high = "#1a5276",
-    na.value = "#f5f5f5",
-    name = "Documents",
-    breaks = c(1, 50, 200, 500, 1000),
-    trans = "log1p"
-  ) +
-  theme_minimal() +
-  theme(
-    legend.position = "bottom",
-    panel.grid = element_blank(),
-    axis.text = element_blank(),
-    axis.title = element_blank(),
-    plot.title = element_text(size = 14, face = "bold"),
-    plot.subtitle = element_text(size = 11, color = "grey40")
-  ) +
-  labs(
-    title = "4,800+ Sovereign Bond Prospectuses from 3 Public Sources",
-    subtitle = "SEC EDGAR · FCA National Storage Mechanism · #PublicDebtIsPublic"
-  )
-```
-
 ## What #PublicDebtIsPublic Annotations Reveal
 
+*Visualization: clause family coverage chart — coming soon.*
+
 The #PublicDebtIsPublic corpus contains 122 documents with over 6,200
-expert clause annotations across 25 clause families. The chart below
-shows how many documents contain annotations for each family.
-
-```{r}
-#| label: fig-families
-#| fig-cap: "Clause family coverage in #PublicDebtIsPublic expert-annotated corpus (122 documents)"
-#| fig-height: 6
-#| fig-width: 8
-#| message: false
-
-families <- read.csv("data/clause_families.csv")
-
-# Show top 15 families
-top_families <- families |>
-  slice_max(docs, n = 15) |>
-  mutate(
-    label_clean = gsub("_", " ", label_family) |> tools::toTitleCase(),
-    label_clean = factor(label_clean, levels = rev(label_clean))
-  )
-
-ggplot(top_families, aes(x = docs, y = label_clean)) +
-  geom_col(fill = "#2c7bb6", alpha = 0.85) +
-  geom_text(aes(label = docs), hjust = -0.3, size = 3.5) +
-  theme_minimal() +
-  theme(
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor = element_blank(),
-    plot.title = element_text(size = 13, face = "bold")
-  ) +
-  labs(
-    title = "Expert-Annotated Clause Families",
-    subtitle = "Number of documents containing each clause family",
-    x = "Documents",
-    y = NULL
-  ) +
-  xlim(0, max(top_families$docs) * 1.15)
-```
+expert clause annotations across 25 clause families.
 
 ## Retrieval Validation
 
-Using patterns derived from #PublicDebtIsPublic annotations, we searched
-the full PDIP corpus for three key clause families. The table below
-shows how our automated retrieval compares against the expert
-annotations.
-
-| Clause Family | Expert-Annotated Docs | Retrieved Docs | Recall | Notes |
-|:---|:---:|:---:|:---:|:---|
-| Collective Action | 37 | 177 | 92% | High recall; many candidates in unannotated docs need review |
-| Pari Passu | 29 | 162 | 28% | Pattern needs expansion; many phrasing variants |
-| Governing Law | 71 | 130 | 34% | Currently matches NY/English law only |
-
-: Retrieval performance against #PublicDebtIsPublic expert annotations (preliminary) {#tbl-validation}
-
-**Reading this table:** High recall means we're finding most of the
-clauses that experts annotated. The "Retrieved Docs" column is larger
-than "Expert-Annotated Docs" because the retrieval runs across all 823
-#PublicDebtIsPublic documents, while expert annotations cover 122
-documents. Retrieved matches in unannotated documents are candidates
-for expert review — which is exactly the point of the flywheel.
+*Table: precision/recall for key clause families — coming soon.*
 
 ## Try It Yourself: The Eval Explorer
 
-The interactive explorer below lets you browse clause candidates from
-the corpus. Pick a clause family, click through the matches, and see
-what a reviewer's experience would look like.
-
-<iframe
-  src="https://tealinsights.shinyapps.io/clause-eval-explorer/"
-  width="100%"
-  height="700px"
-  style="border: 1px solid #ddd; border-radius: 4px;"
-></iframe>
-
-*If the interactive explorer doesn't load, visit it directly at
-[tealinsights.shinyapps.io/clause-eval-explorer](https://tealinsights.shinyapps.io/clause-eval-explorer/).*
+*Interactive Shiny app — coming soon.*
 ````
 
-Note: The validation table numbers will need to be updated after re-running grep with the latest code. The current numbers are from the most recent validation run.
+- [ ] **Step 2: Create the issuer-to-country mapping**
 
-- [ ] **Step 2: Test render (may fail on Shiny iframe — that's expected)**
+Create `demo/data/issuer_country_map.csv`:
 
-```bash
-cd demo && quarto render chapter2.qmd && cd ..
+```csv
+issuer_pattern,country_name,country_code
+ISRAEL,Israel,ISR
+MEXICO,Mexico,MEX
+TURKEY,Turkey,TUR
+COLOMBIA,Colombia,COL
+BRAZIL,Brazil,BRA
+CHILE,Chile,CHL
+PHILIPPINES,Philippines,PHL
+URUGUAY,Uruguay,URY
+PANAMA,Panama,PAN
+INDONESIA,Indonesia,IDN
+PERU,Peru,PER
+SOUTH AFRICA,South Africa,ZAF
+CANADA,Canada,CAN
+KOREA,Korea Republic of,KOR
+JAMAICA,Jamaica,JAM
+SWEDEN,Sweden,SWE
+NIGERIA,Nigeria,NGA
+ABU DHABI,United Arab Emirates,ARE
+EGYPT,Egypt,EGY
+FINLAND,Finland,FIN
+CYPRUS,Cyprus,CYP
+HUNGARY,Hungary,HUN
+KAZAKHSTAN,Kazakhstan,KAZ
+GHANA,Ghana,GHA
+ICELAND,Iceland,ISL
+SERBIA,Serbia,SRB
+SAUDI ARABIA,Saudi Arabia,SAU
+ARGENTINA,Argentina,ARG
+DOMINICAN REPUBLIC,Dominican Republic,DOM
+ECUADOR,Ecuador,ECU
+KENYA,Kenya,KEN
+ALBANIA,Albania,ALB
+SIERRA LEONE,Sierra Leone,SLE
+MOLDOVA,Moldova,MDA
+CAMEROON,Cameroon,CMR
+RWANDA,Rwanda,RWA
+SENEGAL,Senegal,SEN
+ITALY,Italy,ITA
+NETHERLANDS,Netherlands,NLD
+JAPAN,Japan,JPN
+LEBANON,Lebanon,LBN
+COSTA RICA,Costa Rica,CRI
+BARBADOS,Barbados,BRB
+BAHAMAS,Bahamas,BHS
+BERMUDA,Bermuda,BMU
+TRINIDAD,Trinidad and Tobago,TTO
+SRI LANKA,Sri Lanka,LKA
+PAKISTAN,Pakistan,PAK
+EL SALVADOR,El Salvador,SLV
+VENEZUELA,Venezuela,VEN
+JORDAN,Jordan,JOR
+MOROCCO,Morocco,MAR
 ```
 
-Expected: Renders with map and bar chart. Iframe will show empty box until Shiny app is deployed.
+- [ ] **Step 3: Create the data export script**
 
-- [ ] **Step 3: Commit**
+Create `demo/data/export_data.py`:
 
-```bash
-git add demo/chapter2.qmd
-git commit -m "feat: Chapter 2 — map, clause coverage chart, validation table"
-```
+```python
+"""Export DuckDB data to CSV for Quarto visualizations and Shiny app."""
 
----
+from __future__ import annotations
 
-## Session 4: Shiny Eval Explorer
+import csv
+import json
+from collections import Counter
+from pathlib import Path
 
-### Task 6: Build the Shiny App
+import duckdb
 
-**Files:**
-- Create: `demo/shiny-app/app.R`
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DB_PATH = PROJECT_ROOT / "data/db/corpus.duckdb"
+MANIFEST_DIR = PROJECT_ROOT / "data/manifests"
+OUTPUT_DIR = Path(__file__).resolve().parent
+COUNTRY_MAP_PATH = OUTPUT_DIR / "issuer_country_map.csv"
 
-- [ ] **Step 1: Install R packages (if not already done)**
 
-```bash
-Rscript -e 'install.packages(c("shiny", "bslib", "DT", "dplyr", "jsonlite"), repos="https://cloud.r-project.org")'
-```
+def load_country_map() -> dict[str, tuple[str, str]]:
+    """Load issuer pattern -> (country_name, country_code) mapping."""
+    mapping: dict[str, tuple[str, str]] = {}
+    with COUNTRY_MAP_PATH.open() as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            mapping[row["issuer_pattern"].upper()] = (
+                row["country_name"],
+                row["country_code"],
+            )
+    return mapping
 
-- [ ] **Step 2: Create the Shiny app**
 
-Create `demo/shiny-app/app.R`:
+def match_country(
+    issuer_name: str, country_map: dict[str, tuple[str, str]]
+) -> tuple[str, str] | None:
+    """Match an issuer name to a country using substring matching."""
+    upper = issuer_name.upper()
+    for pattern, country_info in country_map.items():
+        if pattern in upper:
+            return country_info
+    return None
 
-```r
-library(shiny)
-library(bslib)
-library(DT)
-library(dplyr)
 
-# ── Load data ──────────────────────────────────────────────────────
-candidates <- read.csv("data/grep_candidates.csv",
-                        stringsAsFactors = FALSE,
-                        na.strings = c("", "NA"))
+def export_corpus_by_country() -> None:
+    """Export document counts by country and source."""
+    country_map = load_country_map()
+    counts: Counter[tuple[str, str, str]] = Counter()
 
-# Clean up pattern names for display
-candidates <- candidates |>
-  mutate(
-    family = case_when(
-      pattern_name == "collective_action" ~ "Collective Action",
-      pattern_name == "pari_passu" ~ "Pari Passu",
-      pattern_name == "feature__governing_law" ~ "Governing Law",
-      TRUE ~ pattern_name
-    ),
-    country = ifelse(is.na(country), "Unknown", country),
-    document_title = ifelse(is.na(document_title), storage_key, document_title),
-    page_display = paste("p.", page_number)
-  )
+    for manifest_name in ["nsm_manifest.jsonl", "edgar_manifest.jsonl"]:
+        manifest_path = MANIFEST_DIR / manifest_name
+        if not manifest_path.exists():
+            continue
+        source = manifest_name.split("_")[0]
+        with manifest_path.open() as f:
+            for line in f:
+                record = json.loads(line)
+                issuer = record.get("issuer_name", "")
+                match = match_country(issuer, country_map)
+                if match:
+                    counts[(match[0], match[1], source)] += 1
 
-# Feedback log file
-feedback_file <- "feedback_log.csv"
-if (!file.exists(feedback_file)) {
-  write.csv(
-    data.frame(
-      storage_key = character(),
-      family = character(),
-      matched_text = character(),
-      decision = character(),
-      reason = character(),
-      timestamp = character(),
-      stringsAsFactors = FALSE
-    ),
-    feedback_file,
-    row.names = FALSE
-  )
-}
+    con = duckdb.connect(str(DB_PATH), read_only=True)
+    pdip_rows = con.execute(
+        """SELECT country, COUNT(DISTINCT doc_id) as docs
+           FROM pdip_clauses
+           WHERE country IS NOT NULL
+           GROUP BY country"""
+    ).fetchall()
+    con.close()
 
-# ── UI ─────────────────────────────────────────────────────────────
-ui <- page_sidebar(
-  title = "Clause Eval Explorer",
-  theme = bs_theme(bootswatch = "flatly"),
-
-  sidebar = sidebar(
-    width = 300,
-    selectInput("family", "Clause Family",
-                choices = sort(unique(candidates$family)),
-                selected = "Collective Action"),
-    hr(),
-    p("Browse clause candidates identified by automated
-      retrieval. Click a row to see full context."),
-    p(tags$strong("Try it:"), "Would you mark each candidate as a
-      real clause (thumbs up) or not (thumbs down)?"),
-    hr(),
-    p(class = "text-muted small",
-      "Proof of concept for the #PublicDebtIsPublic roundtable.",
-      tags$br(),
-      "Findings are preliminary.")
-  ),
-
-  layout_columns(
-    col_widths = c(12),
-
-    card(
-      card_header("Candidates"),
-      DTOutput("candidates_table")
-    ),
-
-    card(
-      card_header(
-        class = "d-flex justify-content-between align-items-center",
-        span("Context"),
-        span(
-          actionButton("thumbs_up", "", icon = icon("thumbs-up"),
-                       class = "btn-success btn-sm me-1"),
-          actionButton("thumbs_down", "", icon = icon("thumbs-down"),
-                       class = "btn-danger btn-sm me-1"),
-          textInput("reason", NULL, placeholder = "Why not? (optional)",
-                    width = "250px") |>
-            tagAppendAttributes(style = "display:inline-block; margin:0;")
-        )
-      ),
-      uiOutput("context_display")
-    )
-  )
-)
-
-# ── Server ─────────────────────────────────────────────────────────
-server <- function(input, output, session) {
-
-  filtered <- reactive({
-    candidates |>
-      filter(family == input$family) |>
-      select(country, document_title, page_display,
-             matched_text, context_before, context_after,
-             storage_key, pattern_name)
-  })
-
-  output$candidates_table <- renderDT({
-    df <- filtered() |>
-      select(Country = country,
-             Document = document_title,
-             Page = page_display,
-             Match = matched_text)
-
-    datatable(df,
-              selection = "single",
-              options = list(
-                pageLength = 10,
-                scrollX = TRUE,
-                columnDefs = list(
-                  list(targets = 3, width = "300px",
-                       render = JS(
-                         "function(data, type, row) {",
-                         "  if (type === 'display' && data && data.length > 80) {",
-                         "    return data.substr(0, 80) + '...';",
-                         "  }",
-                         "  return data;",
-                         "}"
-                       ))
-                )
-              ),
-              rownames = FALSE)
-  })
-
-  selected_row <- reactive({
-    idx <- input$candidates_table_rows_selected
-    if (is.null(idx)) return(NULL)
-    filtered()[idx, ]
-  })
-
-  output$context_display <- renderUI({
-    row <- selected_row()
-    if (is.null(row)) {
-      return(p(class = "text-muted", "Click a row above to see the full context."))
+    pdip_country_to_code = {
+        "Indonesia": "IDN", "Jamaica": "JAM", "Kenya": "KEN",
+        "Philippines": "PHL", "Netherlands": "NLD", "Sierra Leone": "SLE",
+        "Peru": "PER", "Ecuador": "ECU", "Moldova": "MDA",
+        "Cameroon": "CMR", "Venezuela": "VEN", "Italy": "ITA",
+        "Senegal": "SEN", "Rwanda": "RWA", "Albania": "ALB",
     }
+    for country_name, doc_count in pdip_rows:
+        code = pdip_country_to_code.get(country_name, "")
+        if code:
+            counts[(country_name, code, "pdip")] += doc_count
 
-    ctx_before <- gsub("\n", "<br/>", row$context_before)
-    matched <- gsub("\n", "<br/>", row$matched_text)
-    ctx_after <- gsub("\n", "<br/>", row$context_after)
+    output_path = OUTPUT_DIR / "corpus_by_country.csv"
+    with output_path.open("w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["country_name", "country_code", "source", "doc_count"])
+        for (country_name, country_code, source), count in sorted(counts.items()):
+            writer.writerow([country_name, country_code, source, count])
 
-    tags$div(
-      style = "font-family: 'Georgia', serif; font-size: 14px; line-height: 1.6;",
-      tags$p(
-        style = "color: #666;",
-        HTML(ctx_before)
-      ),
-      tags$p(
-        style = "background-color: #fff3cd; padding: 8px 12px; border-left: 4px solid #ffc107; font-weight: bold;",
-        HTML(matched)
-      ),
-      tags$p(
-        style = "color: #666;",
-        HTML(ctx_after)
-      ),
-      tags$hr(),
-      tags$small(
-        class = "text-muted",
-        paste0(row$storage_key, " · ", row$page_display,
-               " · Pattern: ", row$pattern_name)
-      )
-    )
-  })
+    print(f"Wrote {len(counts)} rows to {output_path}")
 
-  # Feedback handlers
-  log_feedback <- function(decision) {
-    row <- selected_row()
-    if (is.null(row)) return()
 
-    entry <- data.frame(
-      storage_key = row$storage_key,
-      family = input$family,
-      matched_text = substr(row$matched_text, 1, 200),
-      decision = decision,
-      reason = input$reason,
-      timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S"),
-      stringsAsFactors = FALSE
-    )
-    write.table(entry, feedback_file, append = TRUE,
-                sep = ",", row.names = FALSE, col.names = FALSE)
+def export_clause_families() -> None:
+    """Export clause family annotation counts from PDIP."""
+    con = duckdb.connect(str(DB_PATH), read_only=True)
+    rows = con.execute(
+        """SELECT label_family,
+                  COUNT(*) as annotations,
+                  COUNT(DISTINCT doc_id) as docs
+           FROM pdip_clauses
+           WHERE label_family IS NOT NULL
+           GROUP BY label_family
+           ORDER BY docs DESC"""
+    ).fetchall()
+    con.close()
 
-    showNotification(
-      paste0(ifelse(decision == "yes", "\U1F44D", "\U1F44E"),
-             " Recorded for ", row$storage_key),
-      type = ifelse(decision == "yes", "message", "warning"),
-      duration = 2
-    )
-    updateTextInput(session, "reason", value = "")
-  }
+    output_path = OUTPUT_DIR / "clause_families.csv"
+    with output_path.open("w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["label_family", "annotations", "docs"])
+        for row in rows:
+            writer.writerow(row)
 
-  observeEvent(input$thumbs_up, log_feedback("yes"))
-  observeEvent(input$thumbs_down, log_feedback("no"))
-}
+    print(f"Wrote {len(rows)} rows to {output_path}")
 
-shinyApp(ui, server)
+
+def export_grep_candidates() -> None:
+    """Export grep match candidates with context for the Shiny eval explorer."""
+    con = duckdb.connect(str(DB_PATH), read_only=True)
+    rows = con.execute(
+        """SELECT d.storage_key,
+                  gm.pattern_name,
+                  gm.page_number,
+                  gm.matched_text,
+                  gm.context_before,
+                  gm.context_after,
+                  gm.run_id,
+                  pc.country,
+                  pc.document_title,
+                  pc.instrument_type
+           FROM grep_matches gm
+           JOIN documents d ON gm.document_id = d.document_id
+           LEFT JOIN (
+               SELECT DISTINCT doc_id, country, document_title, instrument_type
+               FROM pdip_clauses
+           ) pc ON d.storage_key = 'pdip__' || pc.doc_id
+           WHERE d.source = 'pdip'
+           ORDER BY gm.pattern_name, pc.country, d.storage_key"""
+    ).fetchall()
+    con.close()
+
+    output_path = OUTPUT_DIR / "grep_candidates.csv"
+    with output_path.open("w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "storage_key", "pattern_name", "page_number",
+            "matched_text", "context_before", "context_after",
+            "run_id", "country", "document_title", "instrument_type",
+        ])
+        for row in rows:
+            writer.writerow(row)
+
+    print(f"Wrote {len(rows)} rows to {output_path}")
+
+
+if __name__ == "__main__":
+    print("Exporting data for Quarto book and Shiny app...")
+    export_corpus_by_country()
+    export_clause_families()
+    export_grep_candidates()
+    print("Done.")
 ```
 
-- [ ] **Step 3: Test locally**
+- [ ] **Step 4: Run the export**
 
 ```bash
-cd demo/shiny-app && Rscript -e 'shiny::runApp(".", port=3838, launch.browser=TRUE)' &
-# Open http://localhost:3838 in browser
-# Test: select each family, click rows, try thumbs up/down
-# Kill with: kill %1
-cd ../..
+uv run python3 demo/data/export_data.py
 ```
 
-- [ ] **Step 4: Commit**
+Expected: Three CSV files created in `demo/data/`.
+
+- [ ] **Step 5: Spot-check the exports**
 
 ```bash
-git add demo/shiny-app/
-git commit -m "feat: Shiny eval explorer — clause candidate browser with feedback"
+head -5 demo/data/corpus_by_country.csv
+wc -l demo/data/corpus_by_country.csv
+head -5 demo/data/clause_families.csv
+wc -l demo/data/grep_candidates.csv
+```
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add demo/chapter2.qmd demo/data/
+git commit -m "feat: Chapter 2 placeholder + data export pipeline + country mapping"
 ```
 
 ---
 
-### Task 7: Deploy Shiny App to shinyapps.io
+## Task 5: Full Book Render + Test
 
 **Files:**
-- No new files — deployment step
+- No new files — integration test
 
-- [ ] **Step 1: Install rsconnect**
-
-```bash
-Rscript -e 'install.packages("rsconnect", repos="https://cloud.r-project.org")'
-```
-
-- [ ] **Step 2: Configure shinyapps.io account**
-
-```bash
-# Get token from https://www.shinyapps.io/admin/#/tokens
-Rscript -e 'rsconnect::setAccountInfo(name="tealinsights", token="YOUR_TOKEN", secret="YOUR_SECRET")'
-```
-
-Note: If you don't have a shinyapps.io account, create one at https://www.shinyapps.io/. The free tier allows 5 apps and 25 active hours/month — more than enough for a demo.
-
-- [ ] **Step 3: Deploy**
-
-```bash
-Rscript -e 'rsconnect::deployApp("demo/shiny-app", appName="clause-eval-explorer", account="tealinsights")'
-```
-
-Expected: App deploys to `https://tealinsights.shinyapps.io/clause-eval-explorer/`
-
-- [ ] **Step 4: Verify the deployed app**
-
-Open `https://tealinsights.shinyapps.io/clause-eval-explorer/` in browser. Test all three clause families. Verify context display and feedback buttons work.
-
-- [ ] **Step 5: Update Chapter 2 iframe URL if needed**
-
-If the deployed URL differs from the one in `chapter2.qmd`, update the `src` attribute in the iframe tag.
-
----
-
-## Session 5: Full Render + Deploy
-
-### Task 8: Render Full Book + Deploy to GitHub Pages
-
-**Files:**
-- Create: `.github/workflows/publish-demo.yml` (optional — can also deploy manually)
-
-- [ ] **Step 1: Install remaining R packages for rendering**
-
-```bash
-Rscript -e 'install.packages(c("sf", "rnaturalearth", "rnaturalearthdata", "countrycode"), repos="https://cloud.r-project.org")'
-```
-
-- [ ] **Step 2: Render the full book**
+- [ ] **Step 1: Render the full book**
 
 ```bash
 cd demo && quarto render && cd ..
@@ -1173,76 +728,64 @@ cd demo && quarto render && cd ..
 
 Expected: All 4 chapters render. `demo/_book/` directory contains the full HTML site.
 
-- [ ] **Step 3: Preview locally**
+- [ ] **Step 2: Preview locally**
 
 ```bash
 cd demo && quarto preview &
-# Opens in browser at http://localhost:PORT
-# Review all chapters, check map, chart, iframe
+# Opens in browser — review all chapters
+# Check: Mermaid diagram renders, callout boxes display, navigation works
 # Kill with Ctrl+C
 cd ..
 ```
 
-- [ ] **Step 4: Deploy to GitHub Pages**
-
-Option A — manual (simplest):
+- [ ] **Step 3: Commit any render fixes**
 
 ```bash
-cd demo && quarto publish gh-pages --no-prompt && cd ..
+git add demo/
+git commit -m "fix: Quarto render adjustments"
 ```
 
-Option B — if that doesn't work or you want a separate repo:
+---
 
-```bash
-# Create a new repo for the demo
-gh repo create Teal-Insights/sovereign-clause-corpus-demo --public
-# Push _book contents there
-cd demo/_book
-git init
-git add .
-git commit -m "Deploy Quarto book"
-git remote add origin https://github.com/Teal-Insights/sovereign-clause-corpus-demo.git
-git push -u origin main
-# Enable Pages in repo settings → Source: main branch, / (root)
-cd ../..
-```
+## What Happens in Branch 2 (Next Session)
 
-- [ ] **Step 5: Verify deployed site**
+Branch 2 picks up where this one leaves off. Before building visualizations, spend time exploring the corpus and improving results:
 
-Open the GitHub Pages URL. Test:
-- [ ] All 3 chapters load
-- [ ] Map renders with country shading
-- [ ] Clause family bar chart renders
-- [ ] Shiny iframe loads and is interactive
-- [ ] Works on mobile (test on phone)
-- [ ] Mermaid flywheel diagram renders
+1. **Corpus exploration** — What do we actually have? Look at the NSM and EDGAR documents by country, issuer, date. What's the coverage story? Are there interesting patterns even before clause extraction?
 
-- [ ] **Step 6: Commit any final adjustments**
+2. **Pattern optimization** — The current grep patterns have CAC recall of 92% but pari passu only 28% and governing law 34%. Spend time looking at actual false negatives and false positives. Expand patterns. Test against PDIP ground truth. Aim for results interesting enough to show.
 
-```bash
-git add demo/ .github/
-git commit -m "feat: full Quarto book rendered and deployed to GitHub Pages"
-```
+3. **Static visualizations** — Generate the choropleth map and clause coverage chart from the exported CSVs. Embed in Chapter 2 using plotly or matplotlib.
+
+4. **Shiny eval explorer** — Build the Python Shiny app (dropdown + table + context + thumbs up/down). Deploy to shinyapps.io. Embed in Chapter 2 via iframe.
+
+5. **Update Chapter 2** — Replace placeholder text with real visualizations, updated validation table, and Shiny embed.
+
+6. **Deploy to GitHub Pages** — `quarto publish gh-pages`
 
 ---
 
 ## Self-Review Checklist
 
-**Spec coverage:**
-- [x] Chapter 1: narrative + flywheel diagram → Task 3
-- [x] Chapter 2: choropleth map → Task 5
-- [x] Chapter 2: clause family bar chart → Task 5
-- [x] Chapter 2: validation table → Task 5
-- [x] Chapter 2: Shiny eval explorer embed → Task 5 + 6
-- [x] Chapter 3: flywheel concept, evals, co-design ask → Task 4
-- [x] Shiny app: dropdown + table + context + thumbs up/down + feedback log → Task 6
-- [x] Data export from DuckDB → Task 1
-- [x] Country mapping for NSM/EDGAR → Task 1
-- [x] Deployment to GitHub Pages → Task 8
-- [x] Shiny deployment to shinyapps.io → Task 7
-- [x] Bibliography → Task 2
-- [x] "Proud but humble" tone throughout → Tasks 3, 4, 5
+**Spec coverage (Branch 1):**
+- [x] Quarto scaffold + config → Task 1
+- [x] Landing page / preface → Task 1
+- [x] Bibliography → Task 1
+- [x] Chapter 1: narrative + flywheel diagram → Task 2
+- [x] Chapter 3: flywheel concept, evals, co-design ask → Task 3
+- [x] Chapter 2: placeholder for Branch 2 → Task 4
+- [x] Data export pipeline → Task 4
+- [x] Country mapping for NSM/EDGAR → Task 4
+- [x] Full render test → Task 5
 
-**Placeholder scan:** No TBD, TODO, or "implement later" found. Validation table numbers may need updating after re-running grep — noted in Task 5.
+**Deferred to Branch 2:**
+- [ ] Corpus exploration + pattern optimization
+- [ ] Static visualizations (map, clause chart)
+- [ ] Shiny eval explorer app
+- [ ] Final Chapter 2 with real data
+- [ ] Deployment to GitHub Pages
+- [ ] Shiny deployment to shinyapps.io
 
-**Type consistency:** CSV column names match between export script (Task 1) and R code (Tasks 5, 6). Pattern names (`collective_action`, `pari_passu`, `feature__governing_law`) used consistently.
+**Placeholder scan:** No TBD/TODO in implementation code. Chapter 2 has intentional "coming soon" placeholders that will be filled in Branch 2.
+
+**Type consistency:** CSV column names in export script match what Branch 2 visualization and Shiny code will expect.
