@@ -152,20 +152,30 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
 
         # Highlight matched text within page text
         if page_text and matched:
-            # Create a pattern that matches the text with flexible whitespace
-            escaped = re.escape(matched)
-            flex_pattern = re.sub(r" ", r"\\s+", escaped)
+            from html import escape as _esc
+
+            # HTML-escape first to prevent XSS, then highlight
+            safe_text = _esc(page_text)
+            safe_matched = _esc(matched)
+            # Create a pattern that matches the text with flexible whitespace.
+            # re.escape prefixes spaces with backslash; newlines pass through raw.
+            # \\?\s+ handles both cases so highlights survive reflow.
+            escaped = re.escape(safe_matched)
+            flex_pattern = re.sub(r"\\?\s+", r"\\s+", escaped)
             highlighted = re.sub(
                 f"({flex_pattern})",
                 r'<mark style="background-color: #fff3cd; padding: 2px 4px; font-weight: bold;">\1</mark>',
-                page_text,
+                safe_text,
                 count=0,
                 flags=re.IGNORECASE,
             )
             display_html = highlighted.replace("\n\n", "</p><p>").replace("\n", " ")
             display_html = f"<p>{display_html}</p>"
         elif page_text:
-            display_html = page_text.replace("\n\n", "</p><p>").replace("\n", " ")
+            from html import escape as _esc
+
+            safe_text = _esc(page_text)
+            display_html = safe_text.replace("\n\n", "</p><p>").replace("\n", " ")
             display_html = f"<p>{display_html}</p>"
         else:
             # Fallback to old context_before/after display
