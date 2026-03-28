@@ -70,6 +70,66 @@ def test_governing_law_pattern_matches_english() -> None:
     assert p.finder.search(text) is not None
 
 
+def test_cac_pattern_matches_modification_to_debt_securities() -> None:
+    p = CLAUSE_PATTERNS["collective_action"]
+    text = "Any Modification to the Debt Securities or the Indenture"
+    assert p.finder.search(text) is not None
+
+
+def test_cac_pattern_matches_meetings_of_noteholders() -> None:
+    p = CLAUSE_PATTERNS["collective_action"]
+    text = "meetings of the Noteholders may be convened"
+    assert p.finder.search(text) is not None
+
+
+def test_pari_passu_rank_without_preference() -> None:
+    p = CLAUSE_PATTERNS["pari_passu"]
+    text = "rank without any preference among themselves and equally with all other"
+    assert p.finder.search(text) is not None
+
+
+def test_pari_passu_unsecured_unsubordinated() -> None:
+    p = CLAUSE_PATTERNS["pari_passu"]
+    text = "unsecured and unsubordinated Public External Indebtedness of Jamaica"
+    assert p.finder.search(text) is not None
+
+
+def test_pari_passu_equal_priority_status() -> None:
+    p = CLAUSE_PATTERNS["pari_passu"]
+    text = "at least equal priority status with all other current and future unsecured"
+    assert p.finder.search(text) is not None
+
+
+def test_governing_law_matches_china() -> None:
+    p = FEATURE_PATTERNS["feature__governing_law"]
+    text = "governed by and construed in accordance with the laws of China"
+    assert p.finder.search(text) is not None
+
+
+def test_governing_law_matches_netherlands() -> None:
+    p = FEATURE_PATTERNS["feature__governing_law"]
+    text = "subject to Netherlands law"
+    assert p.finder.search(text) is not None
+
+
+def test_governing_law_matches_section_header() -> None:
+    p = FEATURE_PATTERNS["feature__governing_law"]
+    text = "Governing Law and Jurisdiction"
+    assert p.finder.search(text) is not None
+
+
+def test_governing_law_matches_choice_of_law() -> None:
+    p = FEATURE_PATTERNS["feature__governing_law"]
+    text = "choice of French law as the governing law"
+    assert p.finder.search(text) is not None
+
+
+def test_governing_law_matches_applicable_law() -> None:
+    p = FEATURE_PATTERNS["feature__governing_law"]
+    text = "Applicable law and jurisdiction"
+    assert p.finder.search(text) is not None
+
+
 def test_get_all_patterns() -> None:
     all_patterns = get_all_patterns()
     assert len(all_patterns) >= 3
