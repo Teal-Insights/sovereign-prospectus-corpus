@@ -15,6 +15,8 @@ import click
 import corpus
 from corpus.db.ingest import ingest_manifests
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
 
 def _load_config() -> dict:
     """Load config.toml from the project root. Returns empty dict if missing."""
@@ -23,12 +25,21 @@ def _load_config() -> dict:
     # Try CWD first, then resolve relative to the package location
     for candidate in [
         Path("config.toml"),
-        Path(__file__).resolve().parent.parent.parent / "config.toml",
+        _PROJECT_ROOT / "config.toml",
     ]:
         if candidate.exists():
             with candidate.open("rb") as f:
                 return tomllib.load(f)
     return {}
+
+
+def _resolve_path(config: dict, section: str, key: str, default: str) -> Path:
+    """Resolve a config path relative to the project root."""
+    raw = config.get(section, {}).get(key, default)
+    p = Path(raw)
+    if not p.is_absolute():
+        p = _PROJECT_ROOT / p
+    return p
 
 
 @click.group()
@@ -572,6 +583,175 @@ def parse(ctx: click.Context) -> None:
         click.echo("Parse not yet implemented. Use --help for subcommands.")
 
 
+@parse.command("run")
+@click.option("--run-id", required=True, help="Unique run identifier.")
+@click.option(
+    "--source",
+    type=click.Choice(["nsm", "edgar", "pdip", "all"]),
+    default="all",
+    help="Which source to parse.",
+)
+@click.option("--limit", type=int, default=None, help="Max documents to parse.")
+def parse_run(run_id: str, source: str, limit: int | None) -> None:
+    """Parse downloaded documents into per-page text JSONL."""
+    import json as _json
+    import time
+    from datetime import UTC, datetime
+
+    from corpus.logging import CorpusLogger
+    from corpus.parsers.html_parser import HTMLParser
+    from corpus.parsers.pymupdf_parser import PyMuPDFParser
+    from corpus.parsers.text_parser import PlainTextParser
+
+    config = _load_config()
+    text_dir = _resolve_path(config, "paths", "parsed_dir", "data/parsed")
+    text_dir.mkdir(parents=True, exist_ok=True)
+
+    log_path = _resolve_path(config, "paths", "telemetry_dir", "data/telemetry") / "parse.jsonl"
+    logger = CorpusLogger(log_path, run_id=run_id)
+
+    parsers = {
+        ".pdf": PyMuPDFParser(),
+        ".txt": PlainTextParser(),
+        ".htm": HTMLParser(),
+        ".html": HTMLParser(),
+    }
+
+    # Collect files to parse from manifests
+    manifest_dir = _resolve_path(config, "paths", "manifests_dir", "data/manifests")
+    files_to_parse: list[tuple[str, Path]] = []
+
+    for manifest_path in sorted(manifest_dir.glob("*_manifest.jsonl")):
+        source_name = manifest_path.stem.replace("_manifest", "")
+        if source != "all" and source_name != source:
+            continue
+        with manifest_path.open() as f:
+            for line in f:
+                record = _json.loads(line)
+                storage_key = record.get("storage_key", "")
+                file_path = record.get("file_path")
+                if file_path:
+                    p = Path(file_path)
+                    if not p.is_absolute():
+                        p = _PROJECT_ROOT / p
+                    files_to_parse.append((storage_key, p))
+
+    # Also check legacy PDIP path
+    if source in ("pdip", "all"):
+        pdip_pdf_dir = _PROJECT_ROOT / "data/pdfs/pdip"
+        if pdip_pdf_dir.exists():
+            seen_keys = {sk for sk, _ in files_to_parse}
+            for pdf_path in pdip_pdf_dir.rglob("*.pdf"):
+                storage_key = f"pdip__{pdf_path.stem}"
+                if storage_key not in seen_keys:
+                    files_to_parse.append((storage_key, pdf_path))
+                    seen_keys.add(storage_key)
+
+    if limit:
+        files_to_parse = files_to_parse[:limit]
+
+    click.echo(f"Parsing {len(files_to_parse)} documents...")
+
+    parsed = 0
+    skipped = 0
+    failed = 0
+
+    for storage_key, file_path in files_to_parse:
+        output_path = text_dir / f"{storage_key}.jsonl"
+
+        # Idempotent: skip if already parsed
+        if output_path.exists():
+            skipped += 1
+            continue
+
+        if not file_path.exists():
+            logger.log(
+                document_id=storage_key,
+                step="parse",
+                duration_ms=0,
+                status="file_not_found",
+            )
+            failed += 1
+            continue
+
+        suffix = file_path.suffix.lower()
+        parser = parsers.get(suffix)
+        if parser is None:
+            logger.log(
+                document_id=storage_key,
+                step="parse",
+                duration_ms=0,
+                status="unsupported_format",
+                file_ext=suffix,
+            )
+            failed += 1
+            continue
+
+        start = time.monotonic()
+        try:
+            result = parser.parse(file_path)
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+
+            # Determine quality status
+            total_chars = sum(len(p.strip()) for p in result.pages)
+            if result.page_count == 0 or total_chars == 0:
+                parse_status = "parse_empty"
+            else:
+                empty_pages = sum(1 for p in result.pages if len(p.strip()) < 50)
+                if empty_pages == result.page_count:
+                    parse_status = "parse_empty"
+                elif empty_pages > result.page_count / 2:
+                    parse_status = "parse_partial"
+                else:
+                    parse_status = "parse_ok"
+
+            # Write output JSONL (atomic: .part → rename)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            part_path = output_path.with_suffix(".jsonl.part")
+            with part_path.open("w") as out:
+                header = {
+                    "storage_key": storage_key,
+                    "page_count": result.page_count,
+                    "parse_tool": result.parse_tool,
+                    "parse_version": result.parse_version,
+                    "parse_status": parse_status,
+                    "parsed_at": datetime.now(UTC).isoformat(),
+                }
+                out.write(_json.dumps(header) + "\n")
+                for i, page_text in enumerate(result.pages):
+                    page_record = {
+                        "page": i,
+                        "text": page_text,
+                        "char_count": len(page_text),
+                    }
+                    out.write(_json.dumps(page_record) + "\n")
+            part_path.rename(output_path)
+
+            logger.log(
+                document_id=storage_key,
+                step="parse",
+                duration_ms=elapsed_ms,
+                status=parse_status,
+                page_count=result.page_count,
+                file_ext=suffix,
+            )
+            parsed += 1
+
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            logger.log(
+                document_id=storage_key,
+                step="parse",
+                duration_ms=elapsed_ms,
+                status="parse_failed",
+                error_message=str(exc),
+                file_ext=suffix,
+            )
+            failed += 1
+
+    click.echo(f"Done. Parsed: {parsed}, Skipped: {skipped}, Failed: {failed}")
+
+
 # ── Grep group ──────────────────────────────────────────────────────
 
 
@@ -583,6 +763,222 @@ def grep(ctx: click.Context) -> None:
         click.echo("Grep not yet implemented. Use --help for subcommands.")
 
 
+@grep.command("doc")
+@click.option("--pattern", "pattern_name", required=True, help="Pattern name to search for.")
+@click.option("--doc", "doc_id", required=True, help="Document ID (storage_key).")
+@click.option("--verbose", is_flag=True, help="Show full context around matches.")
+def grep_doc(pattern_name: str, doc_id: str, verbose: bool) -> None:
+    """Search a single document with a pattern (dev mode)."""
+    import json as _json
+
+    from corpus.extraction.clause_patterns import CLAUSE_PATTERNS, FEATURE_PATTERNS
+    from corpus.extraction.grep_runner import grep_document
+
+    all_patterns = {**CLAUSE_PATTERNS, **FEATURE_PATTERNS}
+    if pattern_name not in all_patterns:
+        click.echo(f"Unknown pattern: {pattern_name}", err=True)
+        click.echo(f"Available: {', '.join(sorted(all_patterns.keys()))}", err=True)
+        raise SystemExit(1)
+
+    pattern = all_patterns[pattern_name]
+
+    # Find parsed text file
+    config = _load_config()
+    text_dir = _resolve_path(config, "paths", "parsed_dir", "data/parsed")
+    text_path = (text_dir / f"{doc_id}.jsonl").resolve()
+    if not text_path.is_relative_to(text_dir.resolve()):
+        click.echo(f"Invalid document ID: {doc_id}", err=True)
+        raise SystemExit(1)
+    if not text_path.exists():
+        click.echo(f"Parsed text not found: {text_path}", err=True)
+        raise SystemExit(1)
+
+    # Load pages from JSONL
+    pages: list[str] = []
+    with text_path.open() as f:
+        for line in f:
+            record = _json.loads(line)
+            if "page" in record:  # skip header line
+                pages.append(record["text"])
+
+    matches = grep_document(
+        pages=pages,
+        patterns=[pattern],
+        document_id=doc_id,
+        run_id="dev",
+    )
+
+    if not matches:
+        click.echo(f"No matches for '{pattern_name}' in {doc_id}")
+        return
+
+    click.echo(f"Found {len(matches)} match(es) for '{pattern_name}' in {doc_id}:\n")
+    for i, m in enumerate(matches, 1):
+        page_display = m.page_index + 1  # 1-indexed for display
+        click.echo(f"--- Match {i} (page {page_display}) ---")
+        if verbose:
+            click.secho(f"  ...{m.context_before[-200:]}", dim=True)
+        click.secho(f"  >>> {m.matched_text}", fg="green", bold=True)
+        if verbose:
+            click.secho(f"  {m.context_after[:200]}...", dim=True)
+        click.echo()
+
+
+@grep.command("run")
+@click.option("--run-id", required=True, help="Unique run identifier.")
+@click.option(
+    "--pattern", "pattern_names", multiple=True, help="Specific pattern(s) to run. Omit for all."
+)
+@click.option("--source", type=click.Choice(["nsm", "edgar", "pdip", "all"]), default="all")
+@click.option("--limit", type=int, default=None, help="Max documents to process.")
+def grep_run(run_id: str, pattern_names: tuple[str, ...], source: str, limit: int | None) -> None:
+    """Run patterns across all parsed documents, write to DuckDB."""
+    import json as _json
+    import time
+
+    import duckdb
+
+    from corpus.extraction.clause_patterns import (
+        CLAUSE_PATTERNS,
+        FEATURE_PATTERNS,
+        get_all_patterns,
+    )
+    from corpus.extraction.grep_runner import grep_document
+    from corpus.logging import CorpusLogger
+
+    config = _load_config()
+    text_dir = _resolve_path(config, "paths", "parsed_dir", "data/parsed")
+    db_path = _resolve_path(config, "paths", "db_path", "data/db/corpus.duckdb")
+    log_path = _resolve_path(config, "paths", "telemetry_dir", "data/telemetry") / "grep.jsonl"
+    logger = CorpusLogger(log_path, run_id=run_id)
+
+    # Select patterns
+    all_registered = {**CLAUSE_PATTERNS, **FEATURE_PATTERNS}
+    if pattern_names:
+        patterns = [all_registered[n] for n in pattern_names if n in all_registered]
+    else:
+        patterns = get_all_patterns()
+
+    if not patterns:
+        click.echo("No patterns selected.", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"Running {len(patterns)} pattern(s) across parsed documents...")
+
+    # Collect parsed text files
+    text_files = sorted(text_dir.glob("*.jsonl"))
+    if source != "all":
+        text_files = [f for f in text_files if f.stem.startswith(f"{source}__")]
+    if limit:
+        text_files = text_files[:limit]
+
+    con = duckdb.connect(str(db_path))
+
+    # Ensure schema is up to date
+    with (_PROJECT_ROOT / "sql/001_corpus.sql").open() as _f:
+        con.execute(_f.read())
+
+    # Delete only results from THIS run_id + selected patterns + selected
+    # source (idempotent partial re-run). Prior runs are preserved.
+    pattern_name_list = [p.name for p in patterns]
+    placeholders = ", ".join("?" for _ in pattern_name_list)
+    if source == "all":
+        con.execute(
+            f"DELETE FROM grep_matches WHERE run_id = ? AND pattern_name IN ({placeholders})",
+            [run_id, *pattern_name_list],
+        )
+    else:
+        con.execute(
+            f"""DELETE FROM grep_matches
+                WHERE run_id = ?
+                  AND pattern_name IN ({placeholders})
+                  AND document_id IN (
+                      SELECT document_id FROM documents WHERE source = ?
+                  )""",
+            [run_id, *pattern_name_list, source],
+        )
+
+    # Prefetch storage_key -> document_id mapping
+    doc_id_map: dict[str, int] = {}
+    for row in con.execute("SELECT storage_key, document_id FROM documents").fetchall():
+        doc_id_map[row[0]] = row[1]
+
+    total_matches = 0
+    docs_with_matches = 0
+
+    for text_path in text_files:
+        doc_id = text_path.stem
+
+        # Load pages
+        pages: list[str] = []
+        with text_path.open() as f:
+            for line in f:
+                record = _json.loads(line)
+                if "page" in record:
+                    pages.append(record["text"])
+
+        if not pages:
+            continue
+
+        start = time.monotonic()
+        matches = grep_document(
+            pages=pages,
+            patterns=patterns,
+            document_id=doc_id,
+            run_id=run_id,
+        )
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+
+        if matches:
+            document_id = doc_id_map.get(doc_id)
+            if document_id is None:
+                logger.log(
+                    document_id=doc_id,
+                    step="grep",
+                    duration_ms=elapsed_ms,
+                    status="skipped_no_document",
+                    match_count=len(matches),
+                )
+                continue
+
+            docs_with_matches += 1
+            for m in matches:
+                con.execute(
+                    """INSERT INTO grep_matches
+                       (document_id, pattern_name, pattern_version,
+                        page_number, matched_text, context_before,
+                        context_after, run_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    [
+                        document_id,
+                        m.pattern_name,
+                        m.pattern_version,
+                        m.page_index + 1,  # Store 1-indexed in DB
+                        m.matched_text,
+                        m.context_before,
+                        m.context_after,
+                        m.run_id,
+                    ],
+                )
+            total_matches += len(matches)
+
+        logger.log(
+            document_id=doc_id,
+            step="grep",
+            duration_ms=elapsed_ms,
+            status="success",
+            match_count=len(matches),
+        )
+
+    con.commit()
+    con.close()
+
+    click.echo(
+        f"Done. {total_matches} matches across {docs_with_matches} documents "
+        f"(of {len(text_files)} scanned)."
+    )
+
+
 # ── Extract group ───────────────────────────────────────────────────
 
 
@@ -591,7 +987,84 @@ def grep(ctx: click.Context) -> None:
 def extract(ctx: click.Context) -> None:
     """Extract structured clause data from grep matches."""
     if ctx.invoked_subcommand is None:
-        click.echo("Extract not yet implemented. Use --help for subcommands.")
+        click.echo("Use --help for subcommands.")
+
+
+@extract.command("pdip")
+@click.option("--run-id", required=True, help="Unique run identifier.")
+def extract_pdip(run_id: str) -> None:
+    """Extract PDIP clause annotations → JSONL + DuckDB."""
+    import json as _json
+
+    import duckdb
+
+    from corpus.extraction.pdip_clause_extractor import process_raw_files
+
+    config = _load_config()
+    raw_dir = _resolve_path(config, "paths", "pdip_raw_dir", "data/pdip/annotations/raw")
+    output_path = _resolve_path(
+        config, "paths", "pdip_clauses_jsonl", "data/pdip/clause_annotations.jsonl"
+    )
+    db_path = _resolve_path(config, "paths", "db_path", "data/db/corpus.duckdb")
+
+    if not raw_dir.exists():
+        click.echo(f"Raw PDIP annotations not found: {raw_dir}", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"Extracting clauses from {raw_dir}...")
+    summary = process_raw_files(raw_dir=raw_dir, output_path=output_path)
+
+    click.echo(
+        f"Extracted {summary['total_clauses']} clauses from "
+        f"{summary['documents_processed']} documents "
+        f"({summary['clauses_with_text']} with text, "
+        f"{summary['zero_clause_documents']} zero-clause docs)"
+    )
+
+    if summary["unmapped_labels"]:
+        click.echo(f"Unmapped labels: {len(summary['unmapped_labels'])}")
+
+    # Ingest into DuckDB
+    click.echo("Loading into DuckDB...")
+    con = duckdb.connect(str(db_path))
+    with (_PROJECT_ROOT / "sql/001_corpus.sql").open() as _f:
+        con.execute(_f.read())
+
+    con.execute("DELETE FROM pdip_clauses")
+
+    with output_path.open() as f:
+        for line in f:
+            r = _json.loads(line)
+            storage_key = f"pdip__{r['doc_id']}"
+            con.execute(
+                """INSERT INTO pdip_clauses (doc_id, storage_key, clause_id,
+                    label, label_family, page_index, text, text_status,
+                    bbox, original_dims, country, instrument_type,
+                    governing_law, currency, document_title)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                [
+                    r["doc_id"],
+                    storage_key,
+                    r["clause_id"],
+                    r["label"],
+                    r.get("label_family"),
+                    r.get("page_index"),
+                    r.get("text"),
+                    r["text_status"],
+                    _json.dumps(r.get("bbox")),
+                    _json.dumps(r.get("original_dims")),
+                    r.get("country"),
+                    r.get("instrument_type"),
+                    r.get("governing_law"),
+                    r.get("currency"),
+                    r.get("document_title"),
+                ],
+            )
+
+    con.commit()
+    count = con.execute("SELECT COUNT(*) FROM pdip_clauses").fetchone()
+    con.close()
+    click.echo(f"Loaded {count[0] if count else 0} records into pdip_clauses")
 
 
 # ── Ingest command ──────────────────────────────────────────────────
