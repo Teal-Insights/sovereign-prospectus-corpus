@@ -2,6 +2,8 @@
 
 **Two parallel workstreams to improve clause candidate quality for the Monday roundtable.**
 
+**Review feedback applied:** Incorporates feedback from 3 external reviews on robustness, reflow heuristics, page display strategy, markdown vs plain text, and process supervision.
+
 ---
 
 ## Problem
@@ -18,49 +20,54 @@ EDGAR HTML extraction is clean (flowing paragraphs). The problem is specifically
 
 ## Workstream A: Quick-Fix Shiny Display
 
-**Issue:** Quick-fix Shiny app display — reflow text, deduplicate matches, expand context
-**Branch:** `feature/XX-shiny-display-fixes` (runs on MacBook Air)
+**Issue:** #29 — Quick-fix Shiny app display — reflow text, deduplicate matches, expand context
+**Branch:** `feature/29-shiny-display-fixes` (runs on MacBook Air)
 **Goal:** Make the current data presentable for Monday without re-parsing anything.
 
 ### Fix 1: Reflow broken text
 
-Post-process context strings in `demo/data/export_data.py` (during export, not at Shiny runtime). Detect single-word lines and join them:
+Post-process context strings in `demo/data/export_data.py` (during export, not at Shiny runtime). Heuristic to join broken lines:
 
-- If a line is shorter than ~60 characters and the next line starts with a lowercase letter or is also short, join with a space instead of a newline.
-- Preserve intentional line breaks: lines ending with a period/colon followed by a blank line stay as paragraph breaks.
-- This is a heuristic, not perfect. But it turns `"The\nBonds\ncontain"` into `"The Bonds contain"` which is dramatically better.
+- If a line is short AND doesn't end with sentence-terminal punctuation (`.`, `:`, `;`), join it with the next line using a space.
+- Very short lines (< 15 chars) are joined regardless of next-line case (catches single-word fragments like `"The"`).
+- Preserve intentional paragraph breaks: blank lines stay as paragraph separators.
+- Pre-process: `text.replace('-\n', '')` to handle hyphenation across lines.
+- **Only apply to PyMuPDF-parsed documents** (check `storage_key` prefix — `pdip__` and `nsm__` are PDFs, `edgar__` is HTML). Do not reflow EDGAR HTML text.
 
-Apply to both `context_before` and `context_after` fields, and to `matched_text`.
+**Important:** Do NOT reflow `matched_text` — keep the raw match for provenance. Apply reflow only to the display context. Store both raw and reflowed versions if needed.
 
 ### Fix 2: Deduplicate matches
 
-In `demo/data/export_data.py`, after loading grep candidates from DuckDB, deduplicate:
+In `demo/data/export_data.py`, after loading grep candidates from DuckDB:
 
 - Group by `(storage_key, page_number, pattern_name)`
-- Keep only the first match per group (longest matched_text, or first encountered)
+- Keep only the first match per group (longest `matched_text`)
 - This eliminates the 6 near-identical "Indonesia / page 7 / collective action" rows
 
 ### Fix 3: Show full page text
 
-Change the Shiny app to load and display full page text instead of the 500-char context window:
+Replace the 500-char context window with full page text from the parsed JSONL files:
 
-- Add a new export: for each grep match, include the full page text from the parsed JSONL file
-- In the Shiny app, display the full page text with the matched phrase highlighted (search for the matched_text substring within the page text and wrap it in a highlight span)
-- This gives the reviewer natural context — the whole page — instead of an arbitrary character window
+- At export time, for each grep match, read the corresponding page from `data/parsed/{storage_key}.jsonl`
+- Apply the reflow heuristic (Fix 1) to the full page text for PDF sources
+- In the Shiny app, display the full page text with a scrollable container and the match region highlighted
+- **For PDF sources (PDIP, NSM):** show full page text — these are real pages, bounded by physical page breaks, typically 3,000-5,000 chars
+- **For EDGAR HTML:** not applicable for Monday (current export is PDIP-only), but if added later, expand to paragraph boundaries (`\n\n` before/after match) capped at 5,000 chars, since HTML "pages" can be the entire filing
 
-Alternatively, if full page text makes the CSV too large: increase context to 2000 chars and expand to paragraph boundaries (find the nearest `\n\n` before the match start and after the match end).
+**Highlighting:** Normalize whitespace in the match text before searching for it in the page text, and highlight all occurrences (not just the first).
 
 ### Shiny app improvements
 
 - Add a callout note: "In a production version, each candidate would link to the original source document."
-- Fix the display to use proportional font (Georgia/serif) with proper paragraph spacing instead of monospace with broken lines
+- Use proportional font (Georgia/serif) with proper paragraph spacing
+- Scrollable context panel for long pages
 
 ---
 
 ## Workstream B: Docling PDF Re-parse
 
-**Issue:** Docling PDF re-parse — parallel extraction to data/parsed_docling/
-**Branch:** `feature/YY-docling-reparse` (runs on Mac Mini)
+**Issue:** #30 — Docling PDF re-parse — parallel extraction to data/parsed_docling/
+**Branch:** `feature/30-docling-reparse` (runs on Mac Mini)
 **Goal:** Replace PyMuPDF extraction with Docling for all PDFs, producing clean flowing text with document structure.
 
 ### Architecture
@@ -68,14 +75,85 @@ Alternatively, if full page text makes the CSV too large: increase context to 20
 A standalone script `scripts/docling_reparse.py` that:
 
 1. Reads all PDFs from `data/pdfs/pdip/` (823 files) and `data/original/nsm__*.pdf` (645 files)
-2. Runs 4 worker processes via `concurrent.futures.ProcessPoolExecutor`
+2. Uses a supervised process pool that restarts on worker death (see Process Supervision below)
 3. Each worker creates its own `DocumentConverter` instance (models loaded once per worker, ~500MB each)
-4. For each PDF, produces two outputs:
-   - `data/parsed_docling/{storage_key}.md` — Docling markdown (preserves headers, tables, structure)
-   - `data/parsed_docling/{storage_key}.jsonl` — same format as existing parsed output (header line + per-page records) so the grep pipeline can consume it without changes
-5. Checkpoints progress to `data/parsed_docling/_progress.jsonl` after each document
-6. Per-document timeout of 300 seconds — skip and log if exceeded
-7. Produces a summary at the end: successes, failures, skipped, total time
+4. Prewarms on one document before starting the full run (catches bootstrap failures early)
+5. For each PDF, produces two outputs:
+   - `data/parsed_docling/{storage_key}.md` — Docling markdown (preserves headers, tables, structure for human/LLM reading)
+   - `data/parsed_docling/{storage_key}.jsonl` — **plain text** (NOT markdown), same format as existing parsed output (header line + per-page records) so the grep pipeline can consume it without changes
+6. Outputs are written atomically (`.part` → `os.replace()`)
+7. Progress tracked via file-system presence (skip if output `.jsonl` already exists) + advisory `_progress.jsonl` append log
+8. Per-document timeout of 300 seconds with hard process kill
+9. Produces a summary at the end: successes, failures, skipped, total time
+
+### Dual output format
+
+- **`.md` file:** Full Docling markdown via `result.document.export_to_markdown()`. Preserves headers, tables, structure. For human reading and future LLM consumption.
+- **`.jsonl` file:** Plain text via `result.document.export_to_text()` (or markdown with formatting stripped). Split by page. This is what the grep pipeline reads. No `##`, `**`, `|`, or other markdown syntax that would interfere with regex patterns.
+
+### Process supervision (critical for unattended execution)
+
+`ProcessPoolExecutor` does NOT restart dead workers. A single segfault (common with native ML code) puts the pool in `BrokenProcessPool` state and all subsequent work fails.
+
+**Pattern:** Supervised pool with automatic restart:
+
+```python
+def run_with_supervision(pdf_paths, max_workers=4):
+    remaining = list(pdf_paths)
+    while remaining and not shutdown_requested:
+        try:
+            with ProcessPoolExecutor(max_workers=max_workers) as pool:
+                futures = {}
+                for path in remaining[:]:  # copy to allow removal
+                    futures[pool.submit(process_one, path)] = path
+                for future in as_completed(futures):
+                    path = futures[future]
+                    try:
+                        future.result(timeout=300)
+                    except (TimeoutError, Exception) as e:
+                        log_failure(path, e)
+                    remaining.remove(path)
+        except BrokenProcessPool:
+            logger.warning(f"Pool crashed. {len(remaining)} remaining. Restarting...")
+            continue
+```
+
+**Graceful shutdown:** Catch `SIGTERM` and `SIGINT`. Set a `shutdown_requested` flag. Finish current documents, then exit cleanly.
+
+**Timeout enforcement:** `concurrent.futures` timeout doesn't kill the underlying worker process. After timeout, call `process.terminate()` on the worker or accept that zombie workers accumulate (acceptable for a one-off job if total count is small).
+
+### Failure handling
+
+| Failure Mode | What Happens | Mitigation |
+|---|---|---|
+| Docling segfault / crash | Worker dies, BrokenProcessPool | Supervised pool restarts (see above) |
+| OOM kill | macOS kills worker | Same as crash — pool restart |
+| Metal/MPS driver error | Python RuntimeError | Catch per-document. After 3+ MPS errors, set `DOCLING_DEVICE=cpu` for remaining docs |
+| Corrupt PDF / infinite loop | 300s timeout fires | Log failure, skip document, continue |
+| Disk space exhaustion | OSError on write | Check `shutil.disk_usage()` every 50 docs. If < 1GB free, pause and log |
+
+### Checkpoint and resume
+
+- **Primary:** File-system presence. On startup, scan `data/parsed_docling/` for existing `.jsonl` files and skip those documents. This makes the script inherently resumable.
+- **Advisory:** Append to `_progress.jsonl` after each successful document (for observability, not correctness). On resume, tolerate a truncated last line.
+- **Atomic writes:** Write output to `{key}.jsonl.part`, then `os.replace()` to `{key}.jsonl`. A crash mid-write leaves only a `.part` file which is ignored on resume.
+
+### Page splitting
+
+- Use Docling's per-page content tracking (`result.document.pages`) to split plain text by page
+- Each page goes into a JSONL record: `{"page": N, "text": "..."}`
+- If Docling's page count differs significantly from PyMuPDF's (stored in the existing parsed JSONL header), log a warning but use Docling's numbering
+- **Do NOT fall back to "store everything as page 0"** — this breaks page citations. If page detection is unreliable for a document, keep the PyMuPDF output for that document (don't swap it in)
+
+### Logging and observability
+
+For a 4-5 hour unattended run:
+
+- **Per document:** `[347/1468] pdip__BRA42 — 53 pages — 12.3s — OK`
+- **Every 50 documents:** `Progress: 347/1468 (23.6%) — 12 failed — 3 skipped — ETA 3h 12m`
+- **Startup:** Log config (device, threads, workers, Docling version, output path)
+- **Errors:** Full traceback to `data/parsed_docling/_errors.log`
+- **Final:** `_summary.json` with counts, timings, failure list
 
 ### Environment
 
@@ -88,16 +166,7 @@ export DOCLING_NUM_THREADS=3      # PyTorch threads per worker
 
 - 4 workers × ~1.7GB peak = ~7GB RAM (well within 64GB)
 - 4 workers × 3 PyTorch threads = 12 inference threads + ~20 pipeline threads
-- Leaves headroom for other work on the Mac Mini
 - Estimated runtime: 4-5 hours
-
-### Page splitting
-
-Docling outputs a single document, not per-page. For the JSONL output:
-
-- Use Docling's internal page tracking (`result.document.pages`) to split content by page
-- Each page's content goes into a separate JSONL record with `{"page": N, "text": "..."}`
-- If page detection is unreliable for a document, store the entire text as page 0
 
 ### What it doesn't touch
 
@@ -107,25 +176,27 @@ Docling outputs a single document, not per-page. For the JSONL output:
 
 ### Swap-in procedure (after Docling finishes)
 
-1. For each PDF document: if `data/parsed_docling/{key}.jsonl` exists and is non-empty, copy it over `data/parsed/{key}.jsonl`
-2. Re-run `corpus grep run --run-id grep-docling`
-3. Re-run `demo/data/export_data.py grep-docling`
-4. Copy updated CSVs to `demo/shiny-app/data/`
-5. Re-deploy Shiny app and Quarto book
+1. For each PDF document: if `data/parsed_docling/{key}.jsonl` exists, is non-empty, and has reasonable page count (within ±2 of PyMuPDF), copy over `data/parsed/{key}.jsonl`
+2. Spot-check 10 documents: compare a known clause match against the original PDF to verify text and page number
+3. Re-run `corpus grep run --run-id grep-docling`
+4. Re-run validation, compare match counts per pattern — expect matches to go UP (better text extraction = more regex hits)
+5. Re-export: `demo/data/export_data.py grep-docling`
+6. Copy CSVs to `demo/shiny-app/data/`
+7. Re-deploy Shiny app and Quarto book
 
 ### Fallback
 
 If Docling doesn't finish by Sunday evening:
-- Monday demo uses Workstream A's quick-fix display (reflowed text, deduped matches, expanded context)
-- Docling re-parse continues running and is swapped in post-roundtable
+- Monday demo uses Workstream A's quick-fix display (reflowed text, deduped matches, full page context)
+- Docling re-parse continues and is swapped in post-roundtable
 
 ---
 
 ## Execution order
 
-1. **Now (Saturday morning):** Create both issues. Start Workstream B on Mac Mini (kick off the Docling job, let it run). Switch to MacBook Air for Workstream A.
+1. **Now (Saturday morning):** Start Workstream B on Mac Mini (kick off Docling, let it run). Switch to MacBook Air for Workstream A.
 2. **Saturday afternoon:** Workstream A merges — Shiny app display is improved with current data.
-3. **Saturday evening / Sunday morning:** If Docling finishes, do the swap-in: re-grep, re-export, re-deploy.
+3. **Saturday evening / Sunday morning:** If Docling finishes, do the swap-in: spot-check, re-grep, re-export, re-deploy.
 4. **Sunday afternoon:** Final polish, test deployed site, prepare Monday morning checklist.
 
 ---
