@@ -1,0 +1,162 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Sovereign Clause Corpus",
+    "section": "",
+    "text": "Preface\nThis document accompanies a proof of concept presented at the #PublicDebtIsPublic Scoping Roundtable on March 30, 2026 at Georgetown University Law Center.\nIt demonstrates how expert clause annotations — like those created by the #PublicDebtIsPublic initiative — can power a scalable system for identifying and monitoring key terms in sovereign bond prospectuses.\nWhat’s here:\n\nChapter 1 explains what we built in one week and why the #PublicDebtIsPublic annotated corpus is catalytic\nChapter 2 presents preliminary findings with interactive exploration\nChapter 3 proposes a lawyer-in-the-loop flywheel and outlines what collaboration could look like\n\nThe code behind this work is open source and available on GitHub.\n\n\n\n\n\n\nNote\n\n\n\nThis is a proof of concept. Findings are preliminary and the methodology needs expert review. We present it as evidence that the approach works and merits further development — not as finished research.",
+    "crumbs": [
+      "Preface"
+    ]
+  },
+  {
+    "objectID": "chapter1.html",
+    "href": "chapter1.html",
+    "title": "What We Built and Why",
+    "section": "",
+    "text": "One Week, Three Sources, 4,800+ Documents\nSovereign bond prospectuses are public documents — filed with the SEC in New York, the FCA in London. But in practice, doing cross-country, cross-regional research on contract terms is cumbersome and time-consuming. A researcher studying how collective action clauses vary across African, Latin American, and European issuers would need to navigate multiple filing systems, download documents one by one, and read through hundreds of pages of boilerplate to find the 10% that varies.\nIn one week, we built an open-source pipeline that collected over 4,800 sovereign bond prospectuses from three public sources:\nAll documents are parsed into searchable text and stored in a single database. The pipeline handles PDFs, HTML filings, and plain text — with encoding detection for documents filed across different systems and eras.",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>What We Built and Why</span>"
+    ]
+  },
+  {
+    "objectID": "chapter1.html#one-week-three-sources-4800-documents",
+    "href": "chapter1.html#one-week-three-sources-4800-documents",
+    "title": "What We Built and Why",
+    "section": "",
+    "text": "Source\nDocuments\nDescription\n\n\n\n\nSEC EDGAR\n~3,300\nUS securities filings by sovereign issuers\n\n\nFCA National Storage Mechanism\n~900\nUK regulatory filings\n\n\n#PublicDebtIsPublic\n~823\nExpert-annotated sovereign debt corpus\n\n\nTotal\n~4,800+",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>What We Built and Why</span>"
+    ]
+  },
+  {
+    "objectID": "chapter1.html#why-publicdebtispublic-annotations-are-catalytic",
+    "href": "chapter1.html#why-publicdebtispublic-annotations-are-catalytic",
+    "title": "What We Built and Why",
+    "section": "Why #PublicDebtIsPublic Annotations Are Catalytic",
+    "text": "Why #PublicDebtIsPublic Annotations Are Catalytic\nThe #PublicDebtIsPublic corpus is special. It contains 122 documents where legal experts have hand-annotated specific clause types — collective action clauses, pari passu, governing law, events of default, and many more. Across these documents, experts identified over 6,200 individual clause annotations spanning 25 clause families.\nThese expert annotations are the seed that makes everything else possible. We used them to build retrieval patterns that find similar clauses across the much larger SEC and FCA corpora. The more clauses experts review and validate, the more accurate automated identification becomes.",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>What We Built and Why</span>"
+    ]
+  },
+  {
+    "objectID": "chapter1.html#the-flywheel",
+    "href": "chapter1.html#the-flywheel",
+    "title": "What We Built and Why",
+    "section": "The Flywheel",
+    "text": "The Flywheel\n\n\n\n\n\nflowchart LR\n    A[\"Expert&lt;br/&gt;Annotation\"] --&gt; B[\"Pattern&lt;br/&gt;Extraction\"]\n    B --&gt; C[\"Candidate Retrieval&lt;br/&gt;Across Full Corpus\"]\n    C --&gt; D[\"Expert Review&lt;br/&gt;(yes / no + why)\"]\n    D --&gt; E[\"Improved&lt;br/&gt;Patterns\"]\n    E --&gt; B\n\n\n Each expert review improves the next round of automated identification \n\n\n\nThis is a proof of concept built in one week. The findings are preliminary and the methodology needs expert review. But the infrastructure is open source, and it demonstrates how expert legal knowledge can be made catalytic — scaling the impact of every annotation across thousands of documents.",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>What We Built and Why</span>"
+    ]
+  },
+  {
+    "objectID": "chapter2.html",
+    "href": "chapter2.html",
+    "title": "Preliminary Findings",
+    "section": "",
+    "text": "The Corpus\nWe collected over 4,800 sovereign bond prospectuses from three public sources. The map below shows geographic coverage based on preliminary matching of issuer names to countries.\nimport pandas as pd\nimport plotly.express as px\n\ncorpus = pd.read_csv(\"data/corpus_by_country.csv\")\nby_country = corpus.groupby([\"country_code\", \"country_name\"])[\"doc_count\"].sum().reset_index()\n\nfig = px.choropleth(\n    by_country,\n    locations=\"country_code\",\n    color=\"doc_count\",\n    hover_name=\"country_name\",\n    hover_data={\"doc_count\": True, \"country_code\": False},\n    color_continuous_scale=\"Blues\",\n    labels={\"doc_count\": \"Documents\"},\n    title=\"4,800+ Sovereign Bond Prospectuses from 3 Public Sources\",\n)\nfig.update_layout(\n    geo=dict(showframe=False, showcoastlines=True, projection_type=\"natural earth\"),\n    margin=dict(l=0, r=0, t=40, b=0),\n    coloraxis_colorbar=dict(title=\"Documents\"),\n    height=450,\n)\nfig.show()\n\n\n\n                            \n                                            \n\n\nFigure 2.1: Sovereign bond prospectuses collected from SEC EDGAR, FCA NSM, and #PublicDebtIsPublic. Geographic coverage is based on preliminary substring matching of issuer names.",
+    "crumbs": [
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Preliminary Findings</span>"
+    ]
+  },
+  {
+    "objectID": "chapter2.html#what-publicdebtispublic-annotations-reveal",
+    "href": "chapter2.html#what-publicdebtispublic-annotations-reveal",
+    "title": "Preliminary Findings",
+    "section": "What #PublicDebtIsPublic Annotations Reveal",
+    "text": "What #PublicDebtIsPublic Annotations Reveal\nThe #PublicDebtIsPublic corpus contains 122 documents with over 6,200 expert clause annotations. The chart below shows how many documents contain annotations for each clause family. Some annotation labels have not yet been mapped to families and are shown separately.\n\nfamilies = pd.read_csv(\"data/clause_families.csv\")\nmapped = families[families[\"label_family\"] != \"(unmapped)\"].head(15).copy()\nmapped[\"label_clean\"] = mapped[\"label_family\"].str.replace(\"_\", \" \").str.title()\n\nfig = px.bar(\n    mapped.sort_values(\"docs\"),\n    x=\"docs\",\n    y=\"label_clean\",\n    orientation=\"h\",\n    labels={\"docs\": \"Documents\", \"label_clean\": \"\"},\n    title=\"Expert-Annotated Clause Families\",\n    text=\"docs\",\n)\nfig.update_layout(\n    height=500,\n    margin=dict(l=0, r=20, t=40, b=0),\n    showlegend=False,\n    yaxis=dict(tickfont=dict(size=12)),\n)\nfig.update_traces(marker_color=\"#2c7bb6\", textposition=\"outside\")\nfig.show()\n\n\n\n                            \n                                            \n\n\nFigure 2.2: Clause family coverage in #PublicDebtIsPublic expert-annotated corpus (122 documents)",
+    "crumbs": [
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Preliminary Findings</span>"
+    ]
+  },
+  {
+    "objectID": "chapter2.html#retrieval-validation",
+    "href": "chapter2.html#retrieval-validation",
+    "title": "Preliminary Findings",
+    "section": "Retrieval Validation",
+    "text": "Retrieval Validation\nUsing patterns derived from #PublicDebtIsPublic annotations, we searched the full corpus for three key clause families. The table below shows how our automated retrieval compares against the expert annotations.\n\n\n\nTable 2.1: Retrieval performance against #PublicDebtIsPublic expert annotations (preliminary)\n\n\n\n\n\n\n\n\n\n\n\n\nClause Family\nExpert Docs\nRetrieved Docs\nRecall\nNotes\n\n\n\n\nCollective Action\n37\n1,537\n97.3%\nFound 36 of 37 annotated documents\n\n\nPari Passu\n29\n1,582\n69.0%\nPattern expanded to cover “rank without preference” variants\n\n\nGoverning Law\n71\n2,036\n69.0%\nNow matches all jurisdictions, not just NY/English\n\n\n\n\n\n\nReading this table: “Expert Docs” is the number of documents where #PublicDebtIsPublic experts annotated this clause family (out of 122 annotated documents). “Retrieved Docs” is the number of documents across the entire 4,800+ corpus where our automated retrieval found a candidate match. The large gap between these columns is the point — these are candidates for expert review, and each review makes the system more accurate.",
+    "crumbs": [
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Preliminary Findings</span>"
+    ]
+  },
+  {
+    "objectID": "chapter2.html#try-it-yourself-the-eval-explorer",
+    "href": "chapter2.html#try-it-yourself-the-eval-explorer",
+    "title": "Preliminary Findings",
+    "section": "Try It Yourself: The Eval Explorer",
+    "text": "Try It Yourself: The Eval Explorer\nThe interactive explorer below lets you browse clause candidates from the corpus. Pick a clause family, click through the matches, and see what a reviewer’s experience would look like.\n\n\nIf the interactive explorer doesn’t load, visit it directly at tealinsights.shinyapps.io/clause-eval-explorer.",
+    "crumbs": [
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Preliminary Findings</span>"
+    ]
+  },
+  {
+    "objectID": "chapter3.html",
+    "href": "chapter3.html",
+    "title": "A Lawyer-in-the-Loop Flywheel",
+    "section": "",
+    "text": "Inverting the Workflow\n#PublicDebtIsPublic has already built something remarkable — over 900 documents from 45+ countries with expert-annotated contract terms. The initiative’s five-year plan envisions comprehensive global coverage. This proof of concept demonstrates an approach that could help amplify that rare and valuable legal expertise — making every annotation reach further across the corpus.\nToday, a legal expert searching for a collective action clause in a prospectus might Control+F for “collective action” or navigate to the section where it typically appears — then read carefully to confirm. Multiply that across hundreds of documents and dozens of clause types.\nNow imagine: the system surfaces a candidate clause in a browser window. The expert clicks yes or no, and if no, briefly says why. That “why” gets embedded in the system — surfacing better candidates next time. The expert’s tacit knowledge about what makes a clause a real CAC (versus something that just mentions collective action in passing) gradually becomes part of the infrastructure itself.",
+    "crumbs": [
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>A Lawyer-in-the-Loop Flywheel</span>"
+    ]
+  },
+  {
+    "objectID": "chapter3.html#how-evaluation-works",
+    "href": "chapter3.html#how-evaluation-works",
+    "title": "A Lawyer-in-the-Loop Flywheel",
+    "section": "How Evaluation Works",
+    "text": "How Evaluation Works\nWe borrow the concept of “evals” from AI development — systematic quality measurement that improves with every round of expert feedback. Three key ideas:\n\nBinary Judgments with Reasoning\nA candidate appears on screen. Is this a collective action clause? Yes or no. If no, a brief note on why — wrong section, mentions CAC but isn’t the clause itself, truncated. These corrections are what make the system learn.\nOver time, the tacit knowledge that experienced sovereign debt lawyers carry — knowing at a glance that a passage is boilerplate versus a meaningful clause — gets embedded in the evaluation data.\n\n\nDisagreement as Signal\nIf two lawyers look at the same passage and disagree, that’s not noise — it’s research signal. It likely means the clause uses novel language. That’s exactly the kind of variation that matters for understanding how contract terms evolve across markets (see Gelpern 2019).\n\n\nThe Flywheel Compounds\nWith traditional annotation, reviewing 100 documents gives you 100 annotated documents. With this approach, reviewing 100 documents trains a system that can surface high-quality candidates across thousands. The expert’s time compounds rather than being spent once and forgotten.",
+    "crumbs": [
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>A Lawyer-in-the-Loop Flywheel</span>"
+    ]
+  },
+  {
+    "objectID": "chapter3.html#the-long-term-vision",
+    "href": "chapter3.html#the-long-term-vision",
+    "title": "A Lawyer-in-the-Loop Flywheel",
+    "section": "The Long-Term Vision",
+    "text": "The Long-Term Vision\nIn the early stages, legal experts review many candidates — building the system’s understanding of what counts as a real collective action clause versus a passing mention. But as edge cases get worked through and patterns accumulate, standard cases resolve automatically. A contract with a textbook ICMA model CAC doesn’t need human review — the system recognizes it with high confidence. Expert attention focuses only on the genuinely ambiguous cases, which is where it’s most valuable anyway.\nThe end state is a system that ingests new prospectuses as they’re filed with the SEC and FCA, automatically identifies and tags key clauses with high confidence, and flags the ones that are unusual or novel for expert review. That’s when things get really interesting.\nBuilding on work studying how sovereign debt boilerplate evolves (Gelpern 2019), we’d be able to see — in near-real-time — when clause language changes in ways that should raise eyebrows. A new CAC formulation from a frequent issuer. A pari passu clause that departs from market standard. An unusual governing law choice. These are the signals that matter for oversight, for research, and for the markets.\nAnd at scale, we’d be able to see aggregated trends across time, geography, and issuer type — how contract terms are actually evolving across the sovereign debt landscape, not based on a sample of hand-reviewed documents, but across the full universe of publicly filed prospectuses.",
+    "crumbs": [
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>A Lawyer-in-the-Loop Flywheel</span>"
+    ]
+  },
+  {
+    "objectID": "chapter3.html#what-were-proposing",
+    "href": "chapter3.html#what-were-proposing",
+    "title": "A Lawyer-in-the-Loop Flywheel",
+    "section": "What We’re Proposing",
+    "text": "What We’re Proposing\n\n\n\n\n\n\nTipWhat would help\n\n\n\n\nA shared methodology for what “trustworthy” means. The sovereign debt legal, academic, and policy communities all need to be able to rely on automated clause identification. If it’s not seen as credible, no one will use it. If it is, it becomes an extraordinary shared resource. The first step is investing in rigorous evaluation standards together — what does it mean for an automated identification to be good enough to trust?\nA small group to run the first structured evaluation round. #PublicDebtIsPublic as the organizing secretariat, drawing reviewers from the broader sovereign debt community: law students, sovereign debt lawyers interested in pro bono contributions, legal scholars.\nGuidance on which clause families matter most for accountability and oversight research.\n\n\n\n\n\n\n\n\n\nNoteWhat we don’t need\n\n\n\n\nMoney — this work is grant-funded and open source (MIT licensed, meaning anyone can use it for free — it’s a public resource).\nOfficial endorsement — we understand institutional constraints.\nAccess to confidential materials — we work exclusively with publicly filed documents.",
+    "crumbs": [
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>A Lawyer-in-the-Loop Flywheel</span>"
+    ]
+  },
+  {
+    "objectID": "chapter3.html#a-note-on-the-author",
+    "href": "chapter3.html#a-note-on-the-author",
+    "title": "A Lawyer-in-the-Loop Flywheel",
+    "section": "A Note on the Author",
+    "text": "A Note on the Author\nI spent seven years as a sovereign debt analyst at Morgan Stanley Investment Management before pivoting to building open-source tools for sovereign debt analysis — which is a polite way of saying I’m a sovereign debt nerd who now spends most of his time writing code and wrangling data. I’d be glad to help with the technical side of this as a collaborating partner.",
+    "crumbs": [
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>A Lawyer-in-the-Loop Flywheel</span>"
+    ]
+  },
+  {
+    "objectID": "chapter3.html#closing",
+    "href": "chapter3.html#closing",
+    "title": "A Lawyer-in-the-Loop Flywheel",
+    "section": "Closing",
+    "text": "Closing\n#PublicDebtIsPublic has identified that transparency requires infrastructure — information, technology, and legal frameworks working together. This proof of concept is a small contribution to the technology pillar: demonstrating how expert legal knowledge can be made catalytic, so that every annotation reaches further across the growing universe of publicly filed sovereign debt documents.",
+    "crumbs": [
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>A Lawyer-in-the-Loop Flywheel</span>"
+    ]
+  },
+  {
+    "objectID": "chapter3.html#references",
+    "href": "chapter3.html#references",
+    "title": "A Lawyer-in-the-Loop Flywheel",
+    "section": "References",
+    "text": "References\n\n\n\n\nGelpern, Anna. 2019. “If Boilerplate Could Talk: The Work of Standard Terms in Sovereign Bond Contracts.” Law & Social Inquiry 44 (3): 617–46.",
+    "crumbs": [
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>A Lawyer-in-the-Loop Flywheel</span>"
+    ]
+  }
+]
