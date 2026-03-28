@@ -631,11 +631,14 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
                 storage_key = record.get("storage_key", "")
                 file_path = record.get("file_path")
                 if file_path:
-                    files_to_parse.append((storage_key, Path(file_path)))
+                    p = Path(file_path)
+                    if not p.is_absolute():
+                        p = _PROJECT_ROOT / p
+                    files_to_parse.append((storage_key, p))
 
     # Also check legacy PDIP path
     if source in ("pdip", "all"):
-        pdip_pdf_dir = Path("data/pdfs/pdip")
+        pdip_pdf_dir = _PROJECT_ROOT / "data/pdfs/pdip"
         if pdip_pdf_dir.exists():
             seen_keys = {sk for sk, _ in files_to_parse}
             for pdf_path in pdip_pdf_dir.rglob("*.pdf"):
@@ -875,9 +878,25 @@ def grep_run(run_id: str, pattern_names: tuple[str, ...], source: str, limit: in
     with (_PROJECT_ROOT / "sql/001_corpus.sql").open() as _f:
         con.execute(_f.read())
 
-    # Delete only results from THIS run_id (idempotent re-run).
-    # Prior runs are preserved for traceability.
-    con.execute("DELETE FROM grep_matches WHERE run_id = ?", [run_id])
+    # Delete only results from THIS run_id + selected patterns + selected
+    # source (idempotent partial re-run). Prior runs are preserved.
+    pattern_name_list = [p.name for p in patterns]
+    placeholders = ", ".join("?" for _ in pattern_name_list)
+    if source == "all":
+        con.execute(
+            f"DELETE FROM grep_matches WHERE run_id = ? AND pattern_name IN ({placeholders})",
+            [run_id, *pattern_name_list],
+        )
+    else:
+        con.execute(
+            f"""DELETE FROM grep_matches
+                WHERE run_id = ?
+                  AND pattern_name IN ({placeholders})
+                  AND document_id IN (
+                      SELECT document_id FROM documents WHERE source = ?
+                  )""",
+            [run_id, *pattern_name_list, source],
+        )
 
     # Prefetch storage_key -> document_id mapping
     doc_id_map: dict[str, int] = {}
@@ -968,7 +987,84 @@ def grep_run(run_id: str, pattern_names: tuple[str, ...], source: str, limit: in
 def extract(ctx: click.Context) -> None:
     """Extract structured clause data from grep matches."""
     if ctx.invoked_subcommand is None:
-        click.echo("Extract not yet implemented. Use --help for subcommands.")
+        click.echo("Use --help for subcommands.")
+
+
+@extract.command("pdip")
+@click.option("--run-id", required=True, help="Unique run identifier.")
+def extract_pdip(run_id: str) -> None:
+    """Extract PDIP clause annotations → JSONL + DuckDB."""
+    import json as _json
+
+    import duckdb
+
+    from corpus.extraction.pdip_clause_extractor import process_raw_files
+
+    config = _load_config()
+    raw_dir = _resolve_path(config, "paths", "pdip_raw_dir", "data/pdip/annotations/raw")
+    output_path = _resolve_path(
+        config, "paths", "pdip_clauses_jsonl", "data/pdip/clause_annotations.jsonl"
+    )
+    db_path = _resolve_path(config, "paths", "db_path", "data/db/corpus.duckdb")
+
+    if not raw_dir.exists():
+        click.echo(f"Raw PDIP annotations not found: {raw_dir}", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"Extracting clauses from {raw_dir}...")
+    summary = process_raw_files(raw_dir=raw_dir, output_path=output_path)
+
+    click.echo(
+        f"Extracted {summary['total_clauses']} clauses from "
+        f"{summary['documents_processed']} documents "
+        f"({summary['clauses_with_text']} with text, "
+        f"{summary['zero_clause_documents']} zero-clause docs)"
+    )
+
+    if summary["unmapped_labels"]:
+        click.echo(f"Unmapped labels: {len(summary['unmapped_labels'])}")
+
+    # Ingest into DuckDB
+    click.echo("Loading into DuckDB...")
+    con = duckdb.connect(str(db_path))
+    with (_PROJECT_ROOT / "sql/001_corpus.sql").open() as _f:
+        con.execute(_f.read())
+
+    con.execute("DELETE FROM pdip_clauses")
+
+    with output_path.open() as f:
+        for line in f:
+            r = _json.loads(line)
+            storage_key = f"pdip__{r['doc_id']}"
+            con.execute(
+                """INSERT INTO pdip_clauses (doc_id, storage_key, clause_id,
+                    label, label_family, page_index, text, text_status,
+                    bbox, original_dims, country, instrument_type,
+                    governing_law, currency, document_title)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                [
+                    r["doc_id"],
+                    storage_key,
+                    r["clause_id"],
+                    r["label"],
+                    r.get("label_family"),
+                    r.get("page_index"),
+                    r.get("text"),
+                    r["text_status"],
+                    _json.dumps(r.get("bbox")),
+                    _json.dumps(r.get("original_dims")),
+                    r.get("country"),
+                    r.get("instrument_type"),
+                    r.get("governing_law"),
+                    r.get("currency"),
+                    r.get("document_title"),
+                ],
+            )
+
+    con.commit()
+    count = con.execute("SELECT COUNT(*) FROM pdip_clauses").fetchone()
+    con.close()
+    click.echo(f"Loaded {count[0] if count else 0} records into pdip_clauses")
 
 
 # ── Ingest command ──────────────────────────────────────────────────

@@ -84,7 +84,7 @@ def extract_clause_record(
             "width": value.get("width"),
             "height": value.get("height"),
         },
-        "original_dimensions": {
+        "original_dims": {
             "width": clause.get("original_width"),
             "height": clause.get("original_height"),
         },
