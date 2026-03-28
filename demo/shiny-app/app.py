@@ -56,7 +56,7 @@ app_ui = ui.page_sidebar(
             "clause_family",
             "Clause Family",
             choices=PATTERN_CHOICES,
-            selected=list(PATTERN_CHOICES.keys())[0] if PATTERN_CHOICES else None,
+            selected=next(iter(PATTERN_CHOICES.keys())) if PATTERN_CHOICES else None,
         ),
         ui.hr(),
         ui.p(
