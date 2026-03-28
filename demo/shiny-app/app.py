@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -143,37 +144,68 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
             return ui.TagList(ui.p("Row out of range."))
         row = df.iloc[row_idx]
 
-        country = row.get("country", "")
-        doc_title = row.get("document_title", "")
-        page = row.get("page_number", "")
-        before = row.get("context_before", "")
-        matched = row.get("matched_text", "")
-        after = row.get("context_after", "")
+        page_text = str(row.get("page_text", "") or "")
+        matched = str(row.get("matched_text", "") or "")
+        country = str(row.get("country", "") or "Unknown")
+        doc_title = str(row.get("document_title", "") or row.get("storage_key", ""))
+        page_num = str(row.get("page_number", "") or "?")
+
+        # Highlight matched text within page text
+        if page_text and matched:
+            # Create a pattern that matches the text with flexible whitespace
+            escaped = re.escape(matched)
+            flex_pattern = re.sub(r" ", r"\\s+", escaped)
+            highlighted = re.sub(
+                f"({flex_pattern})",
+                r'<mark style="background-color: #fff3cd; padding: 2px 4px; font-weight: bold;">\1</mark>',
+                page_text,
+                count=0,
+                flags=re.IGNORECASE,
+            )
+            display_html = highlighted.replace("\n\n", "</p><p>").replace("\n", " ")
+            display_html = f"<p>{display_html}</p>"
+        elif page_text:
+            display_html = page_text.replace("\n\n", "</p><p>").replace("\n", " ")
+            display_html = f"<p>{display_html}</p>"
+        else:
+            # Fallback to old context_before/after display
+            from html import escape as _esc
+
+            ctx_before = _esc(str(row.get("context_before", "") or ""))
+            ctx_after = _esc(str(row.get("context_after", "") or ""))
+            matched_esc = _esc(matched)
+            display_html = (
+                f'<p style="color: #666;">{ctx_before}</p>'
+                f'<p><mark style="background-color: #fff3cd; padding: 2px 4px; font-weight: bold;">{matched_esc}</mark></p>'
+                f'<p style="color: #666;">{ctx_after}</p>'
+            )
 
         return ui.TagList(
-            ui.p(
-                ui.strong(f"{country}"),
-                " — ",
-                doc_title,
-                " (page ",
-                str(page),
-                ")",
-                style="font-size: 0.9em; margin-bottom: 0.5em;",
+            ui.tags.h6(
+                f"{country} — {doc_title} (page {page_num})",
+                style="margin-bottom: 12px;",
             ),
-            ui.div(
-                ui.tags.span(before, style="color: #666;"),
-                ui.tags.span(
-                    matched,
-                    style="background-color: #fff176; font-weight: 600;",
-                ),
-                ui.tags.span(after, style="color: #666;"),
+            ui.tags.div(
+                ui.HTML(display_html),
                 style=(
-                    "font-family: monospace; font-size: 0.82em; "
-                    "white-space: pre-wrap; word-break: break-word; "
-                    "background: #f8f8f8; border: 1px solid #ddd; "
-                    "padding: 1em; border-radius: 4px; max-height: 300px; "
-                    "overflow-y: auto;"
+                    "font-family: Georgia, 'Times New Roman', serif; "
+                    "font-size: 14px; line-height: 1.7; "
+                    "max-height: 500px; overflow-y: auto; "
+                    "padding: 16px; background: #fafafa; "
+                    "border: 1px solid #eee; border-radius: 4px;"
                 ),
+            ),
+            ui.tags.hr(),
+            ui.tags.small(
+                f"{row['storage_key']} · Pattern: {row['pattern_name']}",
+                class_="text-muted",
+            ),
+            ui.tags.p(
+                ui.tags.em(
+                    "In a production version, each candidate would link "
+                    "to the original source document."
+                ),
+                class_="text-muted small mt-2",
             ),
         )
 
