@@ -1,6 +1,7 @@
 issuer_pattern,country_name,country_code
 ISRAEL,Israel,ISR
 MEXICO,Mexico,MEX
+MEXICAN,Mexico,MEX
 TURKEY,Turkey,TUR
 COLOMBIA,Colombia,COL
 BRAZIL,Brazil,BRA
@@ -51,3 +52,12 @@ EL SALVADOR,El Salvador,SLV
 VENEZUELA,Venezuela,VEN
 JORDAN,Jordan,JOR
 MOROCCO,Morocco,MAR
+ANGOLA,Angola,AGO
+UZBEKISTAN,Uzbekistan,UZB
+QATAR,Qatar,QAT
+OMAN,Oman,OMN
+MONTENEGRO,Montenegro,MNE
+HONG KONG,Hong Kong SAR China,HKG
+CHINA,China,CHN
+BAHRAIN,Bahrain,BHR
+GEORGIA,Georgia,GEO
