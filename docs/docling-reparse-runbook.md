@@ -484,6 +484,188 @@ from concurrent.futures.process import BrokenProcessPool
 **Prevention:** Test on the target Python version before committing. The
 MacBook Air may have a different Python version than the Mac Mini.
 
+### Issue 5: Dropbox silently switched the active git branch
+
+**Symptom:** We checked out `feature/30-docling-reparse` on the Mac Mini at
+12:07 and launched the Docling re-parse. When we came back ~4 hours later to
+commit the runbook, `git branch --show-current` reported
+`feature/29-shiny-display-fixes` — not the branch we checked out.
+
+The commit landed on the wrong branch. We only noticed because the commit
+output said `[feature/29-shiny-display-fixes cffbb41]` instead of
+`[feature/30-docling-reparse ...]`.
+
+**Root cause:** The git reflog tells the full story:
+
+```
+12:07 — Mac Mini: checkout feature/30-docling-reparse (our explicit checkout)
+12:11–12:19 — MacBook Air: 4 commits on feature/29-shiny-display-fixes
+12:37 — Mac Mini: checkout feature/29 → feature/30 (Dropbox synced .git/HEAD)
+```
+
+Dropbox synced the MacBook Air's `.git/HEAD` file (which contained
+`ref: refs/heads/feature/29-shiny-display-fixes`) to the Mac Mini. Since
+`.git/HEAD` is just a text file pointing to the current branch, overwriting it
+effectively changed which branch the Mac Mini thought it was on.
+
+**What saved us:** The Docling re-parse script was already running as a
+background process (`nohup`). Python had already loaded the script into memory
+and resolved all file paths to absolutes. The branch switch only affected
+git's notion of "current branch" — it didn't change any files on disk because
+both branches had the same working tree content for the files the script was
+using.
+
+**What could have gone wrong:**
+- If the two branches had divergent file content, Dropbox syncing `.git/HEAD`
+  could cause git to see "uncommitted changes" that are actually just the
+  other branch's differences
+- Commits land on the wrong branch (which is exactly what happened to us)
+- `git status` shows unexpected modified files
+- A `git stash` or `git checkout` could silently corrupt the working tree
+
+**This is the most dangerous Dropbox + git interaction** because it's
+completely silent. There's no error, no warning — git just starts operating
+on a different branch.
+
+### Issue 6: git index write failure after lock file removal
+
+**Symptom:** After removing `.git/index.lock` (Issue 3), the next
+`git checkout` failed with:
+```
+fatal: unable to write new index file
+```
+
+**Root cause:** Dropbox was actively syncing the `.git/` directory. The lock
+file removal succeeded, but Dropbox was still writing to `.git/index` or
+other `.git/` internal files. Git couldn't get a clean write.
+
+**Fix:** Wait a few seconds for Dropbox sync to settle, then retry. The
+checkout succeeded on the next attempt.
+
+**Implication:** Even after fixing a git lock issue, Dropbox may still be
+holding other files in the `.git/` directory. A brief pause (5-10 seconds)
+between git operations helps when Dropbox is actively syncing.
+
+### Issue 7: uv sync replaces dependency sets, not unions them
+
+**Symptom:** After the Docling run completed, we ran
+`uv sync --extra dev` to install ruff/pyright/pytest. This **uninstalled
+all 85 Docling packages** and installed only the dev dependencies.
+
+**Root cause:** `uv sync` installs exactly what's specified — it's not
+additive. Since `docling` was added via `uv add` during a session where the
+`pyproject.toml` change may not have persisted (branch switch, Dropbox sync),
+the dev sync saw only the base + dev dependencies and removed everything else.
+
+**Impact:** None for this session — the Docling run was already complete. But
+if we had needed to re-run or resume the parse, we would have had to
+reinstall Docling.
+
+**Prevention:** If a long-running process depends on packages not in
+`pyproject.toml`, either:
+1. Ensure the `uv add` changes are committed before starting the run
+2. Don't run `uv sync` on the same venv while the process is running
+3. Use separate venvs for different dependency sets (e.g., one for Docling
+   runs, one for dev tools)
+
+### Summary: Complete timeline of Dropbox + git interactions
+
+Here is the full chronological sequence of events on March 28, 2026, showing
+how Dropbox sync interacted with git operations across both machines:
+
+```
+10:56  MacBook Air: creates feature/29-shiny-display-fixes from main
+11:50  MacBook Air: creates feature/30-docling-reparse, commits docling plan
+11:51  MacBook Air: switches back to feature/29-shiny-display-fixes
+11:54  MacBook Air: commits on feature/29 (Dropbox starts syncing)
+
+12:04  Mac Mini: session starts on feature/29 (synced from MacBook Air)
+12:07  Mac Mini: git stash → index.lock error (Dropbox synced lock file)
+       Mac Mini: rm .git/index.lock → git checkout fails ("unable to write")
+       Mac Mini: wait, retry → checkout feature/30-docling-reparse succeeds
+12:07  Mac Mini: uv add docling → stalls (Python 3.14 incompatibility)
+       Mac Mini: kill uv, install Python 3.12, create external venv
+12:11  MacBook Air: commits on feature/29 (4 commits between 12:11-12:19)
+12:21  Mac Mini: test docling parse → BrokenProcessPool import error → fix
+12:22  Mac Mini: test succeeds, launch full background run (PID 40153)
+
+12:37  Dropbox syncs MacBook Air's .git/HEAD to Mac Mini
+       Mac Mini's active branch SILENTLY changes from feature/30 → feature/29
+       (The Docling process keeps running — unaffected)
+
+12:38  MacBook Air: creates PR #31 for feature/29-shiny-display-fixes
+13:00–16:20  Mac Mini: Docling run processes 1,468 documents (no issues)
+16:22  Mac Mini: Docling run completes — 0 failures
+
+16:35  Mac Mini: commit runbook — lands on feature/29 (not feature/30!)
+       (We notice only because git output shows the wrong branch name)
+16:35  Mac Mini: push to feature/29 → appends to existing PR #31
+```
+
+### The Dropbox + git problem, fully stated
+
+Dropbox treats `.git/` as just another directory of files to sync. But `.git/`
+contains **mutable state files** that git expects to control exclusively:
+
+| File | Purpose | Dropbox risk |
+|---|---|---|
+| `.git/HEAD` | Current branch pointer | **Silent branch switch** (Issue 5) |
+| `.git/index` | Staging area | Corrupted staging, phantom changes |
+| `.git/index.lock` | Operation lock | **Blocks all git operations** (Issue 3) |
+| `.git/refs/heads/*` | Branch tips | Branch pointer corruption |
+| `.git/MERGE_HEAD` | Merge state | Phantom merge conflicts |
+| `.git/rebase-merge/` | Rebase state | Corrupted interactive rebases |
+| `.git/COMMIT_EDITMSG` | Commit message buffer | Overwritten commit messages |
+
+The `.git/objects/` and `.git/refs/` directories are mostly safe to sync
+because objects are content-addressed (immutable once written) and ref updates
+are atomic. The dangerous files are the ones in the `.git/` root that
+represent **mutable session state**.
+
+### Recommended solutions (in order of increasing robustness)
+
+#### Option A: Discipline-based (current approach)
+- Only one machine does git operations at a time
+- Wait 30+ seconds after switching machines for Dropbox to settle
+- Always check `git branch --show-current` before committing
+- Accept that Dropbox may silently change branches
+
+**Risk:** Human error. Silent branch switches have no warning.
+
+#### Option B: Exclude `.git/` from Dropbox sync
+Use Dropbox selective sync (Preferences → Sync → Selective Sync) to exclude
+the `.git/` directory. Each machine maintains its own git state. Coordinate
+via GitHub (push/pull).
+
+**Tradeoff:** Must explicitly push/pull between machines. Can't rely on
+Dropbox to propagate commits. But this is actually safer — git push/pull
+are designed for multi-machine coordination; Dropbox file sync is not.
+
+**Setup:**
+1. On each machine, push all local branches to GitHub
+2. Exclude `.git/` from Dropbox selective sync on both machines
+3. On each machine, `git init` + `git remote add origin <url>` + `git fetch`
+4. Use `git push` / `git pull` to coordinate
+
+#### Option C: Move repo out of Dropbox entirely
+Keep the git repo in `~/Projects/sovereign-prospectus-corpus/` (outside
+Dropbox). Symlink or configure Dropbox to sync only the `data/` directory.
+
+**Tradeoff:** Loses automatic code sync. Must use git for all code sharing.
+Data files still sync via Dropbox (which is their strength). This is the
+cleanest separation but requires the most workflow change.
+
+#### Option D: Use Dropbox for data, git for code (hybrid)
+```
+~/Projects/sovereign-prospectus-corpus/     # git repo, NOT in Dropbox
+  src/, tests/, scripts/, docs/              # code — synced via git
+  data -> ~/Dropbox/sovereign-corpus-data/   # symlink to Dropbox for data
+```
+
+**Tradeoff:** Best of both worlds — git handles code (with proper branch
+management), Dropbox handles large data files (PDFs, parsed output). Requires
+initial setup to split the directory structure.
+
 ### Summary: The Dropbox + dual-machine workflow
 
 The core problem is that Dropbox tries to make two machines look identical, but
@@ -515,6 +697,11 @@ should sync from what must be machine-local:
 - Add `UV_PROJECT_ENVIRONMENT` to a machine-local `.env` file (not synced)
 - Exclude `.venv/` and `__pycache__/` from Dropbox sync via Dropbox
   selective sync settings
-- Consider excluding `.git/` from Dropbox entirely and using a bare git
-  remote (e.g., GitHub) as the sync mechanism instead — this would eliminate
-  all git lock file issues, at the cost of requiring explicit push/pull
+- **Exclude `.git/` from Dropbox sync** — this is the single highest-impact
+  change. See Part 5 "Recommended solutions" for options B, C, and D. The
+  silent branch switch (Issue 5) is the strongest argument: Dropbox syncing
+  `.git/HEAD` can silently change your active branch with zero warning, causing
+  commits to land on the wrong branch.
+- Consider the hybrid approach (Option D): git repo outside Dropbox, symlink
+  `data/` into Dropbox. This gives proper git branch management while keeping
+  Dropbox's strength (syncing large data files between machines).
