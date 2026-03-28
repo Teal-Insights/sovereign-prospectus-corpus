@@ -705,3 +705,217 @@ should sync from what must be machine-local:
 - Consider the hybrid approach (Option D): git repo outside Dropbox, symlink
   `data/` into Dropbox. This gives proper git branch management while keeping
   Dropbox's strength (syncing large data files between machines).
+
+---
+
+## Part 5 Addendum: MacBook Air Perspective
+
+Investigation performed on the MacBook Air at 2026-03-28 ~17:30 EDT to
+correlate with the Mac Mini timeline above.
+
+### MacBook Air reflog — correlated with Mac Mini timeline
+
+```
+10:56  MBA: creates feature/29-shiny-display-fixes from main
+11:33  MBA: commit on feature/29 (docs: updated spec)
+11:50  MBA: checkout main → create feature/30-docling-reparse → commit plan
+11:50  MBA: checkout back to feature/29
+11:54  MBA: commit on feature/29 (docs: implementation plans)
+12:11  MBA: commit on feature/29 (feat: reflow broken text)
+12:15  MBA: commit on feature/29 (refactor: extract column constant)
+12:17  MBA: commit on feature/29 (feat: Shiny app — full page text)
+12:19  MBA: commit on feature/29 (fix: regex whitespace matching)
+
+12:37:38  MBA: TWO reflog entries at the exact same second:
+          1. reset: moving to HEAD   ← Dropbox overwrote .git/HEAD with Mac Mini's version (feature/30)
+          2. checkout: moving from feature/30 → feature/29  ← immediately reconciled back
+
+12:38  MBA: (continued work on feature/29, created PR #31)
+```
+
+**Key finding — bidirectional HEAD thrashing:** At 12:37:38, Dropbox synced
+the Mac Mini's `.git/HEAD` (pointing to feature/30) to this machine. The
+MacBook Air's reflog shows a phantom visit to feature/30 that was immediately
+resolved back to feature/29 — both entries at the same second. The Mac Mini's
+runbook documents the reverse: its HEAD was overwritten from feature/30 to
+feature/29 at the same time.
+
+This means Dropbox was racing `.git/HEAD` writes between both machines. The
+MacBook Air "won" (stayed on feature/29) because it had more recent commits
+on that branch, but the Mac Mini "lost" (switched to feature/29 silently).
+Neither machine reported an error.
+
+### The ghost .venv — worse here than on the Mac Mini
+
+The MacBook Air has a `.venv` directory that is **actively in use** (unlike
+the Mac Mini, which uses `UV_PROJECT_ENVIRONMENT` to bypass it).
+
+**Critical finding: `UV_PROJECT_ENVIRONMENT` is NOT set on the MacBook Air.**
+This means uv and the project are using the in-repo `.venv` — the same one
+Dropbox is syncing between machines.
+
+#### .venv contents show cross-machine contamination
+
+| File | Points to | Machine |
+|---|---|---|
+| `.venv/pyvenv.cfg` | `/opt/anaconda3/bin` (Python 3.13.5) | MacBook Air |
+| `.venv/pyvenv (conflicted copy).cfg` | `/Users/teal_mac_mini_25/.local/share/uv/python/cpython-3.12` | Mac Mini |
+| `.venv/bin/python` (symlink) | `/opt/anaconda3/bin/python3` | MacBook Air |
+| `.venv/bin/python (conflicted copy)` (symlink) | `/Users/teal_mac_mini_25/...python3.12` | Mac Mini |
+| `.venv/bin/python3.13` | symlink to `python` | MacBook Air |
+| `.venv/bin/python3.12` | symlink to `python` (conflicted) | Mac Mini |
+
+The Mac Mini created a Python 3.12 venv at 12:22 (during the Docling setup).
+Dropbox synced it here, conflicting with the existing Python 3.13 venv. The
+MacBook Air's version "won" (it's the active `pyvenv.cfg`), but Dropbox
+preserved the Mac Mini's version as conflicted copies.
+
+**The Python version mismatch is a latent bug:** The MacBook Air runs Python
+3.13.5 (anaconda3). The Mac Mini runs Python 3.12 (uv-installed). Code written
+on one machine may not work on the other (as already demonstrated by Issue 4:
+`BrokenProcessPool` import path). This mismatch is invisible unless you
+explicitly check — both machines just run `python3` or `uv run` and get
+different interpreters.
+
+#### MacBook Air Python versions
+
+```
+python3 --version → Python 3.13.5  (anaconda3, default)
+Homebrew has 3.12.10
+System has 3.9.6
+No uv-managed Python 3.12 installed
+```
+
+### Additional issues visible only from the MacBook Air
+
+#### Issue 8: Bidirectional .git/HEAD thrashing
+
+Documented above in the reflog correlation. The Mac Mini runbook only captured
+one direction (Mac Mini's branch changed from 30→29). The MacBook Air reflog
+reveals the other direction happened simultaneously (MacBook Air briefly
+showed 29→30→29). Dropbox was racing HEAD writes in both directions; the
+"winner" was whichever machine wrote last.
+
+#### Issue 9: MacBook Air is using the contaminated .venv
+
+Unlike the Mac Mini (which set `UV_PROJECT_ENVIRONMENT` to escape the ghost
+venv), the MacBook Air has no such override. Every `uv run` command on this
+machine uses `.venv/` — the Dropbox-synced, cross-contaminated directory with
+conflicted Python symlinks.
+
+This has been working by accident: the MacBook Air's `pyvenv.cfg` won the
+Dropbox conflict, so the venv points to the local Python 3.13.5. But any
+Dropbox sync hiccup could replace it with the Mac Mini's Python 3.12 config,
+breaking the local venv silently.
+
+**Immediate fix needed on MacBook Air:**
+
+```bash
+mkdir -p ~/.local/venvs
+uv venv --python 3.13 ~/.local/venvs/sovereign-corpus
+export UV_PROJECT_ENVIRONMENT=~/.local/venvs/sovereign-corpus
+uv sync
+```
+
+Add to `~/.zshrc` or a machine-local `.env`:
+```bash
+export UV_PROJECT_ENVIRONMENT=~/.local/venvs/sovereign-corpus
+```
+
+---
+
+## Recommendation: Option B — Exclude `.git/` from Dropbox Sync
+
+After investigating from both machines, **Option B is the clear choice** for
+the following reasons:
+
+### Why Option B
+
+1. **Fixes the most dangerous issue** (silent branch switch, Issues 5 & 8)
+   with the least disruption. Dropbox stops touching `.git/HEAD`, `.git/index`,
+   and lock files entirely.
+
+2. **Under 15 minutes to set up.** Push all branches to GitHub, exclude
+   `.git/` from Dropbox selective sync on both machines, verify with
+   `git status` on each.
+
+3. **Data files keep syncing via Dropbox** — the `data/` directory (PDFs,
+   parsed output) is Dropbox's strength. No change needed there.
+
+4. **Code files keep syncing via Dropbox** — `src/`, `scripts/`, `tests/`,
+   `docs/` still sync. The only thing excluded is git's internal metadata.
+
+5. **Git push/pull is how multi-machine coordination is designed to work.**
+   We already push to GitHub for PRs. This just makes it the only mechanism
+   instead of having Dropbox as an unreliable second channel.
+
+### Why not the others
+
+- **Option A (discipline-based):** Already failed today. Issue 5 happened
+  despite knowing the risks. Silent failures can't be solved with discipline.
+
+- **Option C (repo out of Dropbox entirely):** Correct long-term, but
+  requires restructuring the directory layout. Too risky 2 days before the
+  Georgetown roundtable. Code file sync is convenient for quick edits.
+
+- **Option D (hybrid with symlinks):** Best architecture, but same timing
+  concern as C. Would require moving the repo, setting up symlinks, and
+  verifying nothing breaks. Save for after the roundtable.
+
+### Setup steps (both machines, ~15 minutes total)
+
+```bash
+# 1. Push ALL local branches to GitHub (from whichever machine has them)
+git push origin --all
+
+# 2. On EACH machine, note the current branch
+git branch --show-current
+
+# 3. Exclude .git/ from Dropbox sync
+#    Dropbox → Preferences → Sync → Selective Sync
+#    Navigate into the repo folder and UNCHECK .git/
+#
+#    If .git/ doesn't appear in selective sync (Dropbox sometimes hides
+#    dotfiles), use the CLI:
+#    On Mac: Go to Dropbox settings → Selective Sync → uncheck .git folder
+#    Or use Dropbox's "ignore" feature:
+xattr -w com.dropbox.ignored 1 .git
+
+# 4. Verify .git/ is now Dropbox-ignored
+xattr -p com.dropbox.ignored .git  # should print "1"
+
+# 5. On each machine, verify git still works
+git status
+git log --oneline -3
+
+# 6. Set up the venv fix on MacBook Air while we're at it
+mkdir -p ~/.local/venvs
+uv venv --python 3.13 ~/.local/venvs/sovereign-corpus
+echo 'export UV_PROJECT_ENVIRONMENT=~/.local/venvs/sovereign-corpus' >> ~/.zshrc
+export UV_PROJECT_ENVIRONMENT=~/.local/venvs/sovereign-corpus
+uv sync
+```
+
+### New workflow after Option B
+
+```
+MacBook Air (development):
+  1. Write code, run tests
+  2. git commit, git push origin <branch>
+
+Mac Mini (compute):
+  3. git pull origin <branch>
+  4. Set UV_PROJECT_ENVIRONMENT, uv sync
+  5. Launch background job (output syncs to MBA via Dropbox)
+  6. git commit results, git push
+
+MacBook Air:
+  7. git pull — get Mac Mini's commits
+  8. Read output files (already synced via Dropbox)
+```
+
+### Post-roundtable: migrate to Option D
+
+After March 30, move the repo out of Dropbox entirely and set up the symlink
+structure. This eliminates the remaining Dropbox risks (code file conflicts,
+`.venv` resurrection) while keeping data sync.
