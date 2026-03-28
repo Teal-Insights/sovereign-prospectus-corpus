@@ -1,3 +1,37 @@
 # Preliminary Findings
 
-*Content in progress.*
+::: {.callout-warning}
+These are preliminary results from a one-week proof of concept. We
+present them as evidence that the approach works and merits expert
+methodology review — not as finished research.
+:::
+
+## The Corpus
+
+We collected over 4,800 sovereign bond prospectuses from three public
+sources. The map below shows geographic coverage — the number of
+documents per country across all three sources.
+
+*Visualization: world map of corpus coverage — coming in next iteration.*
+
+## What #PublicDebtIsPublic Annotations Reveal
+
+The #PublicDebtIsPublic corpus contains 122 documents with over 6,200
+expert clause annotations across 25 clause families.
+
+*Visualization: clause family coverage chart — coming in next iteration.*
+
+## Retrieval Validation
+
+Using patterns derived from #PublicDebtIsPublic annotations, we searched
+the corpus for key clause families. Results will be presented here with
+precision/recall metrics against the expert ground truth.
+
+*Table: precision/recall for key clause families — coming in next iteration.*
+
+## Try It Yourself: The Eval Explorer
+
+An interactive app where you can browse clause candidates, see context,
+and experience what the review workflow feels like.
+
+*Interactive Shiny app — coming in next iteration.*

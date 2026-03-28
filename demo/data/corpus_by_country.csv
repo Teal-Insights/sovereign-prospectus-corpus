@@ -1,0 +1,57 @@
+country_name,country_code,source,doc_count
+Albania,ALB,nsm,3
+Albania,ALB,pdip,1
+Argentina,ARG,edgar,37
+Brazil,BRA,edgar,220
+Cameroon,CMR,nsm,2
+Cameroon,CMR,pdip,1
+Canada,CAN,edgar,62
+Canada,CAN,nsm,2
+Chile,CHL,edgar,186
+Colombia,COL,edgar,246
+Cyprus,CYP,nsm,23
+Ecuador,ECU,pdip,5
+Egypt,EGY,nsm,36
+Finland,FIN,edgar,3
+Finland,FIN,nsm,28
+Ghana,GHA,nsm,21
+Hungary,HUN,edgar,30
+Hungary,HUN,nsm,21
+Iceland,ISL,nsm,28
+Indonesia,IDN,edgar,92
+Indonesia,IDN,pdip,18
+Israel,ISR,edgar,1155
+Israel,ISR,nsm,144
+Italy,ITA,edgar,43
+Italy,ITA,pdip,1
+Jamaica,JAM,edgar,43
+Jamaica,JAM,pdip,18
+Jordan,JOR,nsm,6
+Kazakhstan,KAZ,nsm,24
+Kenya,KEN,nsm,5
+Kenya,KEN,pdip,16
+Korea Republic of,KOR,edgar,55
+Moldova,MDA,pdip,2
+Morocco,MAR,nsm,2
+Netherlands,NLD,pdip,13
+Nigeria,NGA,nsm,41
+Panama,PAN,edgar,126
+Peru,PER,edgar,85
+Peru,PER,pdip,9
+Philippines,PHL,edgar,171
+Philippines,PHL,pdip,15
+Rwanda,RWA,nsm,2
+Rwanda,RWA,pdip,1
+Saudi Arabia,SAU,nsm,23
+Senegal,SEN,pdip,1
+Serbia,SRB,nsm,24
+Sierra Leone,SLE,pdip,10
+South Africa,ZAF,edgar,68
+South Africa,ZAF,nsm,2
+Sri Lanka,LKA,nsm,3
+Sweden,SWE,nsm,65
+Turkey,TUR,edgar,261
+United Arab Emirates,ARE,nsm,35
+Uruguay,URY,edgar,150
+Uruguay,URY,nsm,2
+Venezuela,VEN,pdip,1
