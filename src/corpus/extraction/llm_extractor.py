@@ -81,6 +81,15 @@ CLAUSE_DESCRIPTIONS = {
         "Pari Passu Clause — provisions establishing that the bonds rank equally in right "
         "of payment with other unsecured and unsubordinated obligations of the issuer."
     ),
+    "governing_law": "Governing Law Clause -- provisions specifying which jurisdiction's laws govern the contract.",
+    "sovereign_immunity": "Sovereign Immunity Waiver -- provisions where the sovereign waives immunity from suit, jurisdiction, and/or execution.",
+    "negative_pledge": "Negative Pledge Clause -- provisions restricting the borrower from granting security interests over assets, with permitted exceptions.",
+    "events_of_default": "Events of Default -- provisions defining circumstances that constitute a default and their consequences (acceleration, remedies).",
+    "acceleration": "Acceleration Clause -- provisions allowing creditors to declare obligations immediately due and payable upon default.",
+    "dispute_resolution": "Dispute Resolution Clause -- provisions specifying how disputes are resolved (arbitration, court jurisdiction, governing forum).",
+    "additional_amounts": "Additional Amounts / Gross-Up -- provisions requiring the issuer to pay additional amounts to compensate for tax withholding.",
+    "redemption": "Redemption Clause -- provisions for optional, mandatory, or tax-related early redemption of the securities.",
+    "indebtedness_definition": "Indebtedness Definition -- the contractual definition of what constitutes 'indebtedness' or 'external debt'.",
 }
 
 
@@ -109,11 +118,18 @@ def build_extraction_prompt(
     country: str,
     few_shot_examples: list[FewShotExample],
     icma_reference: str = "",
+    instrument_type: str = "Bond",
 ) -> list[dict]:
     """Build the message list for extraction (used as reference for Claude Code)."""
+    # I1: Derive instrument_label and use it everywhere
+    instrument_label = "bond prospectus" if instrument_type == "Bond" else "loan agreement"
+
     # Note: "system" role is used for reference/documentation. When calling
     # the Anthropic API directly, system would be a top-level parameter.
-    messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    system = SYSTEM_PROMPT.replace("bond prospectuses", f"{instrument_label}s").replace(
+        "bond contracts", "sovereign debt contracts"
+    )
+    messages: list[dict] = [{"role": "system", "content": system}]
 
     clause_desc = CLAUSE_DESCRIPTIONS.get(clause_family, clause_family)
 
@@ -143,7 +159,7 @@ def build_extraction_prompt(
                 "role": "user",
                 "content": (
                     f"Extract the {clause_desc} from this section of a {ex.country} "
-                    f"bond prospectus:\n\n{ex.section_text}"
+                    f"{instrument_label}:\n\n{ex.section_text}"
                 ),
             }
         )
@@ -177,7 +193,7 @@ def build_extraction_prompt(
             "role": "user",
             "content": (
                 f"Extract the {clause_desc} from this section of a {country} "
-                f'bond prospectus (section heading: "{candidate.section_heading}"'
+                f'{instrument_label} (section heading: "{candidate.section_heading}"'
                 f"{page_info}):\n\n"
                 f"{candidate.section_text}"
             ),

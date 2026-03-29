@@ -5,8 +5,14 @@ import re
 
 from corpus.extraction.cue_families import (
     CAC_CUES,
+    DISPUTE_RESOLUTION_CUES,
+    EVENTS_OF_DEFAULT_CUES,
+    GOVERNING_LAW_CUES,
+    INDEBTEDNESS_DEFINITION_CUES,
     NEGATIVE_PATTERNS,
+    NEGATIVE_PLEDGE_CUES,
     PARI_PASSU_CUES,
+    SOVEREIGN_IMMUNITY_CUES,
     get_cue_families,
 )
 
@@ -76,3 +82,132 @@ def test_negative_toc_dot_leaders() -> None:
     patterns = NEGATIVE_PATTERNS["table_of_contents"]
     text = "Collective Action .......................... 47"
     assert any(re.search(p, text, re.IGNORECASE) for p in patterns)
+
+
+# ---------------------------------------------------------------------------
+# New families: Round 1 + Round 2
+# ---------------------------------------------------------------------------
+
+
+def test_governing_law_cues_have_heading_family() -> None:
+    assert "heading" in GOVERNING_LAW_CUES
+
+
+def test_governing_law_heading_matches() -> None:
+    heading_patterns = GOVERNING_LAW_CUES["heading"]
+    assert any(re.search(p, "Governing Law", re.IGNORECASE) for p in heading_patterns)
+    assert any(re.search(p, "Applicable Law", re.IGNORECASE) for p in heading_patterns)
+
+
+def test_sovereign_immunity_cues_have_heading_family() -> None:
+    assert "heading" in SOVEREIGN_IMMUNITY_CUES
+
+
+def test_sovereign_immunity_heading_matches() -> None:
+    patterns = SOVEREIGN_IMMUNITY_CUES["heading"]
+    assert any(re.search(p, "Sovereign Immunity", re.IGNORECASE) for p in patterns)
+    assert any(re.search(p, "Waiver of Immunity", re.IGNORECASE) for p in patterns)
+    assert any(re.search(p, "No Immunity", re.IGNORECASE) for p in patterns)
+
+
+def test_negative_pledge_cues_have_heading_family() -> None:
+    assert "heading" in NEGATIVE_PLEDGE_CUES
+
+
+def test_negative_pledge_heading_matches_covenants() -> None:
+    patterns = NEGATIVE_PLEDGE_CUES["heading"]
+    # Should match "Restrictive Covenants" but NOT bare "Covenants"
+    assert any(re.search(p, "Restrictive Covenants", re.IGNORECASE) for p in patterns)
+
+
+def test_events_of_default_cues_have_heading_family() -> None:
+    assert "heading" in EVENTS_OF_DEFAULT_CUES
+
+
+def test_events_of_default_heading_no_bare_acceleration() -> None:
+    """C8: bare 'acceleration' must NOT be in EoD headings (too broad)."""
+    patterns = EVENTS_OF_DEFAULT_CUES["heading"]
+    for p in patterns:
+        m = re.search(p, "acceleration", re.IGNORECASE)
+        if m:
+            assert "default" in p.lower(), f"Heading pattern '{p}' matches bare 'acceleration'"
+
+
+def test_dispute_resolution_heading_no_bare_jurisdiction() -> None:
+    """I3: bare 'jurisdiction' must NOT be in heading."""
+    patterns = DISPUTE_RESOLUTION_CUES["heading"]
+    for p in patterns:
+        m = re.fullmatch(p, "jurisdiction", re.IGNORECASE)
+        assert m is None, f"Heading pattern '{p}' matches bare 'jurisdiction'"
+
+
+def test_indebtedness_heading_no_bare_indebtedness() -> None:
+    """I3: bare 'indebtedness' must NOT be in heading."""
+    patterns = INDEBTEDNESS_DEFINITION_CUES["heading"]
+    for p in patterns:
+        m = re.fullmatch(p, "indebtedness", re.IGNORECASE)
+        assert m is None, f"Heading pattern '{p}' matches bare 'indebtedness'"
+
+
+def test_get_cue_families_governing_law() -> None:
+    assert get_cue_families("governing_law") is GOVERNING_LAW_CUES
+
+
+def test_get_cue_families_all_round1() -> None:
+    for family in ["governing_law", "sovereign_immunity", "negative_pledge", "events_of_default"]:
+        assert get_cue_families(family) is not None, f"Missing cue family: {family}"
+
+
+def test_get_cue_families_all_round2() -> None:
+    for family in [
+        "acceleration",
+        "dispute_resolution",
+        "additional_amounts",
+        "redemption",
+        "indebtedness_definition",
+    ]:
+        assert get_cue_families(family) is not None, f"Missing cue family: {family}"
+
+
+def test_all_families_have_two_plus_non_heading_families() -> None:
+    """C2: Every family must have at least 2 non-heading cue families for body-only recall."""
+    for family_name in [
+        "collective_action",
+        "pari_passu",
+        "governing_law",
+        "sovereign_immunity",
+        "negative_pledge",
+        "events_of_default",
+        "acceleration",
+        "dispute_resolution",
+        "additional_amounts",
+        "redemption",
+        "indebtedness_definition",
+    ]:
+        cues = get_cue_families(family_name)
+        assert cues is not None, f"Missing cue family: {family_name}"
+        non_heading = [k for k in cues if k != "heading"]
+        assert len(non_heading) >= 2, (
+            f"{family_name} has only {len(non_heading)} non-heading families "
+            f"({non_heading}), need >= 2 for body-only LOCATE"
+        )
+
+
+def test_all_new_patterns_compile() -> None:
+    """Every pattern string in new families must be a valid regex."""
+    for family in [
+        "governing_law",
+        "sovereign_immunity",
+        "negative_pledge",
+        "events_of_default",
+        "acceleration",
+        "dispute_resolution",
+        "additional_amounts",
+        "redemption",
+        "indebtedness_definition",
+    ]:
+        cues = get_cue_families(family)
+        assert cues is not None
+        for _fam, patterns in cues.items():
+            for p in patterns:
+                re.compile(p, re.IGNORECASE)

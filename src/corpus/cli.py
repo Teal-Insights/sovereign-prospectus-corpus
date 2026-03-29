@@ -18,6 +18,20 @@ from corpus.extraction.country import guess_country as _guess_country
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
+_ALL_FAMILIES = [
+    "collective_action",
+    "pari_passu",
+    "governing_law",
+    "sovereign_immunity",
+    "negative_pledge",
+    "events_of_default",
+    "acceleration",
+    "dispute_resolution",
+    "additional_amounts",
+    "redemption",
+    "indebtedness_definition",
+]
+
 
 def _load_config() -> dict:
     """Load config.toml from the project root. Returns empty dict if missing."""
@@ -1159,7 +1173,7 @@ def extract_v2_group() -> None:
 @click.option(
     "--clause-family",
     required=True,
-    type=click.Choice(["collective_action", "pari_passu"]),
+    type=click.Choice(_ALL_FAMILIES),
 )
 @click.option("--docling-dir", default="data/parsed_docling", type=click.Path())
 @click.option("--flat-dir", default="data/parsed", type=click.Path())
@@ -1183,20 +1197,26 @@ def extract_v2_locate(
     from corpus.io.safe_write import safe_write
     from corpus.logging import CorpusLogger
 
-    run_id = run_id or f"locate_{int(time.time())}"
+    run_id = run_id or f"run_{int(time.time())}"
 
     config = _load_config()
-    # E9: Default output path includes clause family
-    prefix = "cac" if clause_family == "collective_action" else "pp"
-    output_path = (
-        Path(output)
-        if output
-        else _resolve_path(config, "paths", "extracted_v2_dir", "data/extracted_v2")
-        / f"{prefix}_candidates.jsonl"
-    )
+    # Output path: data/extracted_v2/<run_id>/<family>/candidates.jsonl
+    run_dir = _PROJECT_ROOT / "data" / "extracted_v2" / run_id
+    family_dir = run_dir / clause_family
+    family_dir.mkdir(parents=True, exist_ok=True)
+    output_path = Path(output) if output else family_dir / "candidates.jsonl"
     if not output_path.is_absolute():
         output_path = _PROJECT_ROOT / output_path
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    from corpus.extraction.run_manifest import (
+        create_manifest,
+        mark_family_in_progress,
+    )
+
+    manifest_path = run_dir / "RUN_MANIFEST.json"
+    if not manifest_path.exists():
+        create_manifest(run_dir, run_id, _ALL_FAMILIES)
+    mark_family_in_progress(run_dir, clause_family)
 
     log_path = (
         _resolve_path(config, "paths", "telemetry_dir", "data/telemetry") / "extract_v2.jsonl"
@@ -1207,7 +1227,7 @@ def extract_v2_locate(
     docs_with_candidates = 0
 
     # --- Docling markdown (NSM, PDIP) ---
-    docling_resolved = Path(docling_dir)
+    docling_resolved = _resolve_path(config, "extraction", "docling_dir", docling_dir)
     if not docling_resolved.is_absolute():
         docling_resolved = _PROJECT_ROOT / docling_resolved
     if docling_resolved.exists():
@@ -1238,7 +1258,7 @@ def extract_v2_locate(
 
     # --- Flat-parsed JSONL (EDGAR) ---
     if not skip_flat:
-        flat_resolved = Path(flat_dir)
+        flat_resolved = _resolve_path(config, "extraction", "flat_dir", flat_dir)
         if not flat_resolved.is_absolute():
             flat_resolved = _PROJECT_ROOT / flat_resolved
         if flat_resolved.exists():
@@ -1328,7 +1348,7 @@ def extract_v2_locate(
 @click.option(
     "--clause-family",
     required=True,
-    type=click.Choice(["collective_action", "pari_passu"]),
+    type=click.Choice(_ALL_FAMILIES),
 )
 @click.option("--output", default=None, type=click.Path())
 @click.option("--run-id", default=None)
@@ -1341,29 +1361,26 @@ def extract_v2_verify(
 
     from corpus.extraction.verify import (
         check_completeness,
+        check_section_capture,
         check_verbatim,
         compute_quality_flags,
+        is_section_capture_family,
     )
     from corpus.io.safe_write import safe_write
     from corpus.logging import CorpusLogger
 
-    run_id = run_id or f"verify_{int(time.time())}"
+    run_id = run_id or f"run_{int(time.time())}"
 
     config = _load_config()
     extractions_path = Path(extractions)
     if not extractions_path.is_absolute():
         extractions_path = _PROJECT_ROOT / extractions_path
-    # E9: Default output includes clause family prefix
-    prefix = "cac" if clause_family == "collective_action" else "pp"
-    output_path = (
-        Path(output)
-        if output
-        else _resolve_path(config, "paths", "extracted_v2_dir", "data/extracted_v2")
-        / f"{prefix}_verified.jsonl"
-    )
+    run_dir = _PROJECT_ROOT / "data" / "extracted_v2" / run_id
+    family_dir = run_dir / clause_family
+    family_dir.mkdir(parents=True, exist_ok=True)
+    output_path = Path(output) if output else family_dir / "verified.jsonl"
     if not output_path.is_absolute():
         output_path = _PROJECT_ROOT / output_path
-    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     log_path = (
         _resolve_path(config, "paths", "telemetry_dir", "data/telemetry") / "extract_v2.jsonl"
@@ -1414,7 +1431,12 @@ def extract_v2_verify(
         source_text = rec["section_text"]
 
         start = time.monotonic()
-        verbatim = check_verbatim(clause_text, source_text)
+        if is_section_capture_family(clause_family):
+            verbatim = check_section_capture(clause_text, source_text)
+            verbatim_status = "section_located" if verbatim.passes else "needs_review"
+        else:
+            verbatim = check_verbatim(clause_text, source_text)
+            verbatim_status = "verified" if verbatim.passes else "failed"
         completeness = check_completeness(clause_text, clause_family=clause_family)
         quality_flags = compute_quality_flags(extracted=clause_text, source=source_text)
         elapsed = int((time.monotonic() - start) * 1000)
@@ -1426,8 +1448,6 @@ def extract_v2_verify(
         components_total = len(completeness)
         if components_present <= 1 and components_total >= 3:
             quality_flags.append("partial_extraction")
-
-        verbatim_status = "verified" if verbatim.passes else "failed"
         rec["verification"] = {
             "status": verbatim_status,
             "verbatim_similarity": round(verbatim.similarity, 3),
@@ -1457,6 +1477,151 @@ def extract_v2_verify(
     click.echo(f"\nVerification: {pass_count}/{found} passed verbatim check.")
     if error_count:
         click.echo(f"  {error_count} error records skipped.")
+    click.echo(f"Written to {output_path}")
+
+    from corpus.extraction.run_manifest import mark_family_complete
+
+    if run_dir.exists() and (run_dir / "RUN_MANIFEST.json").exists():
+        mark_family_complete(run_dir, clause_family)
+        click.echo(f"Marked {clause_family} complete in run manifest.")
+
+
+@extract_v2_group.command("classify")
+@click.option("--docling-dir", default="data/parsed_docling", type=click.Path())
+@click.option("--flat-dir", default="data/parsed", type=click.Path())
+@click.option("--output", default=None, type=click.Path())
+@click.option("--run-id", default=None)
+@click.option("--skip-flat", is_flag=True)
+def extract_v2_classify(
+    docling_dir: str,
+    flat_dir: str,
+    output: str | None,
+    run_id: str | None,
+    skip_flat: bool,
+) -> None:
+    """Classify documents by type (instrument, role, form)."""
+    import json
+    import time
+
+    from corpus.extraction.document_classifier import classify_document
+    from corpus.extraction.run_manifest import (
+        create_manifest,
+        mark_family_complete,
+        mark_family_in_progress,
+    )
+    from corpus.logging import CorpusLogger
+
+    run_id = run_id or f"classify_{int(time.time())}"
+    config = _load_config()
+
+    docling_resolved = _resolve_path(config, "extraction", "docling_dir", docling_dir)
+    if not docling_resolved.is_absolute():
+        docling_resolved = _PROJECT_ROOT / docling_resolved
+    flat_resolved = _resolve_path(config, "extraction", "flat_dir", flat_dir)
+    if not flat_resolved.is_absolute():
+        flat_resolved = _PROJECT_ROOT / flat_resolved
+
+    run_dir = _PROJECT_ROOT / "data" / "extracted_v2" / run_id
+    class_dir = run_dir / "document_classification"
+    class_dir.mkdir(parents=True, exist_ok=True)
+    output_path = Path(output) if output else class_dir / "classification.jsonl"
+
+    log_path = (
+        _resolve_path(config, "paths", "telemetry_dir", "data/telemetry") / "extract_v2.jsonl"
+    )
+    logger = CorpusLogger(log_path, run_id=run_id)
+
+    # Wire manifest
+    manifest_path = run_dir / "RUN_MANIFEST.json"
+    _round1_families = [
+        "document_classification",
+        "governing_law",
+        "sovereign_immunity",
+        "negative_pledge",
+        "events_of_default",
+    ]
+    if not manifest_path.exists():
+        create_manifest(run_dir, run_id, _round1_families)
+    mark_family_in_progress(run_dir, "document_classification")
+
+    count = 0
+    with output_path.open("w") as out_f:
+        # Docling markdown
+        if docling_resolved.exists():
+            md_files = sorted(docling_resolved.glob("*.md"))
+            click.echo(f"Classifying {len(md_files)} Docling documents...")
+            for md_file in md_files:
+                start = time.monotonic()
+                storage_key = md_file.stem
+                text = md_file.read_text(encoding="utf-8")
+                result = classify_document(text, storage_key=storage_key)
+                elapsed = int((time.monotonic() - start) * 1000)
+                out_f.write(json.dumps(result) + "\n")
+                out_f.flush()
+                count += 1
+                logger.log(
+                    document_id=storage_key,
+                    step="classify",
+                    duration_ms=elapsed,
+                    status=result["confidence"],
+                )
+
+        # EDGAR flat JSONL
+        if not skip_flat and flat_resolved.exists():
+            jsonl_files = sorted(flat_resolved.glob("edgar__*.jsonl"))
+            click.echo(f"Classifying {len(jsonl_files)} EDGAR documents...")
+            for jsonl_file in jsonl_files:
+                start = time.monotonic()
+                storage_key = jsonl_file.stem
+                # Read first 3 pages (pages 0, 1, 2)
+                pages_text = []
+                with jsonl_file.open() as f:
+                    for i, line in enumerate(f):
+                        if i >= 3:
+                            break
+                        try:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if "text" in rec:
+                            pages_text.append(rec["text"])
+                text = "\n\n".join(pages_text)
+                result = classify_document(text, storage_key=storage_key)
+                elapsed = int((time.monotonic() - start) * 1000)
+                out_f.write(json.dumps(result) + "\n")
+                out_f.flush()
+                count += 1
+                logger.log(
+                    document_id=storage_key,
+                    step="classify",
+                    duration_ms=elapsed,
+                    status=result["confidence"],
+                )
+
+    mark_family_complete(run_dir, "document_classification")
+
+    # Summary
+    from collections import Counter
+
+    results = []
+    with output_path.open() as f:
+        for line in f:
+            try:
+                results.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    forms = Counter(r["document_form"] for r in results)
+    inst_families = Counter(r["instrument_family"] for r in results)
+    roles = Counter(r["document_role"] for r in results)
+    novel = Counter(t for r in results for t in r.get("novel_types_observed", []))
+
+    click.echo(f"\nClassified {count} documents.")
+    click.echo(f"  Instrument families: {dict(inst_families)}")
+    click.echo(f"  Document roles: {dict(roles)}")
+    click.echo(f"  Document forms: {dict(forms.most_common(10))}")
+    if novel:
+        click.echo(f"  Novel types discovered: {dict(novel.most_common(10))}")
     click.echo(f"Written to {output_path}")
 
 

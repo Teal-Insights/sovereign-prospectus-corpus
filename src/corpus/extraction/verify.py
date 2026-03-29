@@ -131,6 +131,99 @@ _PARI_PASSU_COMPONENTS: dict[str, list[str]] = {
     ],
 }
 
+_GOVERNING_LAW_COMPONENTS: dict[str, list[str]] = {
+    "jurisdiction": [
+        r"governed\s+by",
+        r"laws?\s+of",
+        r"(english|new\s+york|german)\s+law",
+        r"construed\s+in\s+accordance",
+    ],
+}
+
+_SOVEREIGN_IMMUNITY_COMPONENTS: dict[str, list[str]] = {
+    "waiver": [
+        r"waive(s|d)?\s+(any|all|its)?\s*immunit(y|ies)",
+        r"irrevocabl(e|y)\s+(waive|consent)",
+    ],
+    "execution": [
+        r"(attachment|execution|seizure)",
+    ],
+}
+
+_NEGATIVE_PLEDGE_COMPONENTS: dict[str, list[str]] = {
+    "pledge": [
+        r"(will\s+not|shall\s+not)\s+(create|grant|permit)",
+        r"no\s+(lien|security\s+interest|mortgage)",
+    ],
+    "exception": [
+        r"(except|unless|provided\s+that|permitted)",
+    ],
+}
+
+_EVENTS_OF_DEFAULT_COMPONENTS: dict[str, list[str]] = {
+    "trigger": [
+        r"(non[\s-]?payment|failure\s+to\s+pay)",
+        r"(cross[\s-]?default|insolvency|bankruptcy|moratorium)",
+        r"breach\s+of\s+(covenant|obligation)",
+    ],
+    "consequence": [
+        r"(declared|become)\s+(immediately\s+)?due\s+and\s+payable",
+        r"accelerat(e|ion|ed)",
+    ],
+}
+
+_ACCELERATION_COMPONENTS: dict[str, list[str]] = {
+    "mechanism": [
+        r"declared\s+(immediately\s+)?due\s+and\s+payable",
+        r"accelerat(e|ion|ed)",
+    ],
+}
+
+_DISPUTE_RESOLUTION_COMPONENTS: dict[str, list[str]] = {
+    "forum": [
+        r"(ICSID|ICC|LCIA|UNCITRAL|courts?)",
+        r"(jurisdiction|arbitration|tribunal)",
+    ],
+}
+
+_ADDITIONAL_AMOUNTS_COMPONENTS: dict[str, list[str]] = {
+    "obligation": [
+        r"additional\s+amounts",
+        r"gross[\s-]?up",
+        r"without\s+(withholding|deduction)",
+    ],
+}
+
+_REDEMPTION_COMPONENTS: dict[str, list[str]] = {
+    "mechanism": [
+        r"redeem(ed)?",
+        r"redemption\s+price",
+        r"(call|make[\s-]?whole)",
+    ],
+}
+
+_INDEBTEDNESS_DEFINITION_COMPONENTS: dict[str, list[str]] = {
+    "definition": [
+        r"indebtedness\s+means",
+        r"(obligation|liability)",
+        r"borrowed\s+money",
+    ],
+}
+
+_COMPLETENESS_COMPONENTS: dict[str, dict[str, list[str]]] = {
+    "collective_action": _CAC_COMPONENTS,
+    "pari_passu": _PARI_PASSU_COMPONENTS,
+    "governing_law": _GOVERNING_LAW_COMPONENTS,
+    "sovereign_immunity": _SOVEREIGN_IMMUNITY_COMPONENTS,
+    "negative_pledge": _NEGATIVE_PLEDGE_COMPONENTS,
+    "events_of_default": _EVENTS_OF_DEFAULT_COMPONENTS,
+    "acceleration": _ACCELERATION_COMPONENTS,
+    "dispute_resolution": _DISPUTE_RESOLUTION_COMPONENTS,
+    "additional_amounts": _ADDITIONAL_AMOUNTS_COMPONENTS,
+    "redemption": _REDEMPTION_COMPONENTS,
+    "indebtedness_definition": _INDEBTEDNESS_DEFINITION_COMPONENTS,
+}
+
 
 def check_completeness(
     extracted_text: str,
@@ -138,18 +231,68 @@ def check_completeness(
     clause_family: str,
 ) -> dict[str, bool]:
     """Check which clause components are present in the extracted text."""
-    components = (
-        _CAC_COMPONENTS
-        if clause_family == "collective_action"
-        else _PARI_PASSU_COMPONENTS
-        if clause_family == "pari_passu"
-        else {}
-    )
-
+    components = _COMPLETENESS_COMPONENTS.get(clause_family, {})
     report: dict[str, bool] = {}
     for component, patterns in components.items():
         report[component] = any(re.search(p, extracted_text, re.IGNORECASE) for p in patterns)
     return report
+
+
+# Mode 3 families that use section capture instead of clause extraction
+_SECTION_CAPTURE_FAMILIES = {
+    "events_of_default",
+    "conditions_precedent",
+    "payment_mechanics",
+    "trustee_duties",
+    "disbursement",
+}
+
+
+def check_section_capture(
+    extracted: str,
+    source: str,
+) -> VerbatimResult:
+    """Check section capture quality.
+
+    Uses the same normalization but reports as section_capture_similarity,
+    not verbatim. If the extraction is an exact source slice, it passes.
+    Otherwise uses SequenceMatcher ratio with a lower threshold (0.85)
+    since full sections may have minor formatting differences.
+    """
+    norm_ext = _normalize_whitespace(extracted)
+    norm_src = _normalize_whitespace(source)
+
+    if not norm_ext:
+        return VerbatimResult(
+            passes=False,
+            similarity=0.0,
+            normalized_extracted=norm_ext,
+            normalized_source=norm_src,
+        )
+
+    if norm_ext in norm_src:
+        return VerbatimResult(
+            passes=True,
+            similarity=1.0,
+            normalized_extracted=norm_ext,
+            normalized_source=norm_src,
+        )
+
+    # For long sections, use SequenceMatcher ratio (more lenient than find_longest_match)
+    matcher = SequenceMatcher(None, norm_ext, norm_src)
+    similarity = matcher.ratio()
+
+    return VerbatimResult(
+        passes=similarity >= 0.85,
+        similarity=similarity,
+        normalized_extracted=norm_ext,
+        normalized_source=norm_src,
+    )
+
+
+def is_section_capture_family(clause_family: str) -> bool:
+    """Check if a family uses section capture mode."""
+    return clause_family in _SECTION_CAPTURE_FAMILIES
 
 
 def compute_quality_flags(

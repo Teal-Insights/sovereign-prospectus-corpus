@@ -80,3 +80,38 @@ def test_parse_not_found_response() -> None:
     result = parse_extraction_response(tool_input)
     assert result.found is False
     assert result.clause_text == ""
+
+
+def test_build_prompt_includes_clause_description_governing_law() -> None:
+    from corpus.extraction.llm_extractor import CLAUSE_DESCRIPTIONS
+
+    assert "governing_law" in CLAUSE_DESCRIPTIONS
+
+
+def test_build_prompt_adapts_to_loan() -> None:
+    candidate = _make_candidate()
+    messages = build_extraction_prompt(
+        candidate=candidate,
+        clause_family="governing_law",
+        country="Indonesia",
+        few_shot_examples=[],
+        instrument_type="Loan",
+    )
+    full_text = " ".join(m["content"] for m in messages if isinstance(m["content"], str))
+    assert "loan agreement" in full_text.lower()
+
+
+def test_build_prompt_final_user_message_uses_instrument_label() -> None:
+    """I1: The final user message must use instrument_label, not hardcoded 'bond prospectus'."""
+    candidate = _make_candidate()
+    messages = build_extraction_prompt(
+        candidate=candidate,
+        clause_family="governing_law",
+        country="Kenya",
+        few_shot_examples=[],
+        instrument_type="Loan",
+    )
+    user_messages = [m for m in messages if m["role"] == "user"]
+    last_user = user_messages[-1]["content"]
+    assert "loan agreement" in last_user.lower()
+    assert "bond prospectus" not in last_user.lower()
