@@ -10,9 +10,9 @@
 
 **Architecture:** Three-stage pipeline (LOCATE → EXTRACT → VERIFY). Stage 1 parses Docling markdown into sections, filters by heading/body cues, rejects obvious false positives, and clusters adjacent hits. Stage 2 sends shortlisted sections to Claude Opus via the Anthropic API (Max plan) with multi-shot examples for verbatim extraction. Stage 3 validates extractions against source text and runs a completeness checklist. Results feed into an updated Shiny explorer designed for expert legal review.
 
-**Tech Stack:** Python 3.12+, Click CLI, DuckDB, Polars, Anthropic SDK (Claude Opus 4), Shiny for Python, pytest, ruff, pyright.
+**Tech Stack:** Python 3.12+, Click CLI, DuckDB, Polars, Anthropic SDK (Claude Opus 4.6), Shiny for Python, pytest, ruff, pyright.
 
-**Model:** Claude Opus 4 (`claude-opus-4-20250514`), NOT Sonnet. Rationale: these are billion-dollar bond contracts. Opus gets edge cases that matter for verbatim extraction and boundary detection. The cost (~$30-50 for 300 candidates) is trivial compared to the value of accurate extractions that don't waste lawyer time.
+**Model:** Claude Opus 4.6 (`claude-opus-4-6-20250603`), NOT Sonnet. Rationale: these are billion-dollar bond contracts. Opus gets edge cases that matter for verbatim extraction and boundary detection. The cost (~$30-50 for 300 candidates) is trivial compared to the value of accurate extractions that don't waste lawyer time.
 
 **Spec:** `docs/superpowers/specs/2026-03-28-clause-extraction-v2-design.md`
 **Design guide:** `docs/lawyer-centered-design.md`
@@ -398,7 +398,7 @@ Before starting the full extraction, the agent MUST run:
 uv run python3 -c "
 import anthropic
 c = anthropic.Anthropic()
-r = c.messages.create(model='claude-opus-4-20250514', max_tokens=10,
+r = c.messages.create(model='claude-opus-4-6-20250603', max_tokens=10,
     messages=[{'role':'user','content':'hi'}])
 print(f'API OK: {r.model}, stop={r.stop_reason}')
 print(f'Usage: {r.usage.input_tokens} in, {r.usage.output_tokens} out')
@@ -1749,7 +1749,7 @@ import anthropic
 
 from corpus.extraction.section_filter import Candidate
 
-MODEL = "claude-opus-4-20250514"
+MODEL = "claude-opus-4-6-20250603"
 MAX_TOKENS = 16384
 
 SYSTEM_PROMPT = """\
