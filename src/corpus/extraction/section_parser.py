@@ -82,14 +82,16 @@ def parse_docling_markdown(
             )
         ]
 
-    # E20: Determine top two heading levels
-    levels = sorted(set(h[1] for h in headings))
-    top_two_levels = set(levels[:2]) if len(levels) >= 2 else set(levels)
+    # E20: Only emit the shallowest heading level. Subsections are already
+    # absorbed by E2 (section ends at next heading of same-or-higher level),
+    # so emitting deeper levels would duplicate text.
+    shallowest_level = min(h[1] for h in headings)
+    emit_levels = {shallowest_level}
 
     sections: list[Section] = []
     for i, (heading_text, level, start) in enumerate(headings):
-        # E20: Skip headings deeper than top two levels
-        if level not in top_two_levels:
+        # E20: Skip headings deeper than the shallowest level
+        if level not in emit_levels:
             continue
 
         # E2: Section ends at next heading of SAME or HIGHER level

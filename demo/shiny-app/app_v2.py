@@ -42,6 +42,34 @@ FEEDBACK_OPTIONS: dict[str, str] = {
 
 
 def load_candidates() -> pd.DataFrame:
+    if not CANDIDATES_PATH.exists():
+        return pd.DataFrame(
+            columns=[
+                "candidate_id",
+                "storage_key",
+                "country",
+                "document_title",
+                "section_heading",
+                "page_start",
+                "page_end",
+                "heading_match",
+                "cue_families",
+                "llm_confidence",
+                "llm_reasoning",
+                "clause_text",
+                "clause_length",
+                "section_text",
+                "verbatim_status",
+                "verbatim_similarity",
+                "components_present",
+                "components_total",
+                "quality_flags",
+                "completeness",
+                "source_format",
+                "run_id",
+                "clause_family",
+            ]
+        )
     df = pd.read_csv(CANDIDATES_PATH, dtype=str).fillna("")
     return df
 
@@ -209,10 +237,13 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
         page_start = str(row.get("page_start", "") or "")
         page_end = str(row.get("page_end", "") or "")
 
-        # Format page range
-        if page_start or page_end:
+        # Format page range — empty values mean unknown (placeholder 0,0 already
+        # filtered out by export_v2.py)
+        if page_start and page_end and page_start != "0" and page_end != "0":
             page_label = (
-                f"pp. {page_start}–{page_end}" if page_end != page_start else f"p. {page_start}"
+                f"pp. {page_start}\u2013{page_end}"
+                if page_end != page_start
+                else f"p. {page_start}"
             )
         else:
             page_label = "page unknown"

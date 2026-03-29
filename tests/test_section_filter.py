@@ -136,6 +136,42 @@ def test_cluster_merges_adjacent_sections() -> None:
     assert "Part 2" in clustered[0].section_text
 
 
+def test_cluster_does_not_merge_gap_of_two() -> None:
+    """Sections with a gap of 2+ in section_index should NOT be merged."""
+    c1 = Candidate(
+        candidate_id="c1",
+        storage_key="doc1",
+        section_id="doc1__s5",
+        section_index=5,
+        section_heading="Modification",
+        page_range=(0, 0),
+        heading_match=True,
+        cue_families_hit=["heading"],
+        cue_hits=[],
+        negative_signals=[],
+        section_text="Part 1...",
+        source_format="docling_md",
+        run_id="run1",
+    )
+    c2 = Candidate(
+        candidate_id="c2",
+        storage_key="doc1",
+        section_id="doc1__s7",
+        section_index=7,
+        section_heading="Aggregation",
+        page_range=(0, 0),
+        heading_match=True,
+        cue_families_hit=["heading"],
+        cue_hits=[],
+        negative_signals=[],
+        section_text="Part 2...",
+        source_format="docling_md",
+        run_id="run1",
+    )
+    clustered = cluster_candidates([c1, c2])
+    assert len(clustered) == 2
+
+
 def test_cluster_keeps_separate_docs_separate() -> None:
     c1 = Candidate(
         candidate_id="c1",

@@ -107,7 +107,7 @@ def filter_sections(
         if heading_match:
             candidates.append(
                 Candidate(
-                    candidate_id=str(uuid.uuid4())[:8],
+                    candidate_id=str(uuid.uuid4()),
                     storage_key=section.storage_key,
                     section_id=section.section_id,
                     section_index=section.section_index,
@@ -125,7 +125,7 @@ def filter_sections(
         elif len(families_hit) >= 2 and not _negatives_dominate(negative_signals, families_hit):
             candidates.append(
                 Candidate(
-                    candidate_id=str(uuid.uuid4())[:8],
+                    candidate_id=str(uuid.uuid4()),
                     storage_key=section.storage_key,
                     section_id=section.section_id,
                     section_index=section.section_index,
@@ -144,11 +144,16 @@ def filter_sections(
     return candidates
 
 
-def cluster_candidates(candidates: list[Candidate]) -> list[Candidate]:
+def cluster_candidates(
+    candidates: list[Candidate],
+    *,
+    max_cluster_chars: int = 30000,
+) -> list[Candidate]:
     """Cluster adjacent-section candidates from the same document.
 
     E1: Uses section_index for adjacency, NOT page_range.
-    Merges candidates whose section indices are adjacent (gap <= 1).
+    Merges candidates whose section indices are strictly adjacent (diff == 1).
+    Caps merged text at max_cluster_chars to prevent defeating parser splits.
     """
     if not candidates:
         return []
@@ -164,7 +169,11 @@ def cluster_candidates(candidates: list[Candidate]) -> list[Candidate]:
 
         for c in doc_candidates[1:]:
             prev_idx = clusters[-1][-1].section_index
-            if c.section_index <= prev_idx + 2:  # adjacent: gap of 1 means index <= prev + 2
+            cluster_len = sum(len(x.section_text) for x in clusters[-1])
+            if (
+                c.section_index == prev_idx + 1
+                and cluster_len + len(c.section_text) <= max_cluster_chars
+            ):
                 clusters[-1].append(c)
             else:
                 clusters.append([c])
@@ -174,7 +183,7 @@ def cluster_candidates(candidates: list[Candidate]) -> list[Candidate]:
                 result.append(cluster[0])
             else:
                 merged = Candidate(
-                    candidate_id=str(uuid.uuid4())[:8],
+                    candidate_id=str(uuid.uuid4()),
                     storage_key=cluster[0].storage_key,
                     section_id=cluster[0].section_id,
                     section_index=cluster[0].section_index,

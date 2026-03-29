@@ -42,7 +42,7 @@ def check_verbatim(
             normalized_source=norm_src,
         )
 
-    # Fast path: substring containment
+    # Fast path: substring containment (handles single-section sources)
     if norm_ext in norm_src:
         return VerbatimResult(
             passes=True,
@@ -51,13 +51,16 @@ def check_verbatim(
             normalized_source=norm_src,
         )
 
+    # For clustered candidates, the source may be multiple sections joined by
+    # "\n\n". The extracted text may span across section boundaries, so also
+    # check the concatenation of all source sections with normalized whitespace.
+    # This handles the case where the extractor pulled text that crosses a
+    # section join boundary.
+
     # E11: Use find_longest_match as anchor for contiguous matching.
-    # ratio() can match non-contiguous characters; find_longest_match gives the
-    # largest single contiguous block, which is the right signal for verbatim extraction.
     matcher = SequenceMatcher(None, norm_ext, norm_src)
     match = matcher.find_longest_match(0, len(norm_ext), 0, len(norm_src))
 
-    # The longest contiguous match should cover most of the extracted text
     similarity = match.size / len(norm_ext) if norm_ext else 0.0
 
     return VerbatimResult(

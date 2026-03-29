@@ -22,7 +22,7 @@ CAC_CUES: dict[str, list[str]] = {
         r"extraordinary\s+resolution",
         r"written\s+resolution",
         r"two[\s-]+thirds",
-        r"66\s*[⅔2/3]",
+        r"66\s*(?:⅔|2/3)",
     ],
     "aggregation": [
         r"aggregat(ion|ed)\s+(provisions?|voting)",

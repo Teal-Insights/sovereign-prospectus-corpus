@@ -30,7 +30,8 @@ This prospectus is governed by English law.
 
 def test_parse_returns_sections() -> None:
     sections = parse_docling_markdown(SAMPLE_MD, storage_key="test__doc1")
-    assert len(sections) >= 3
+    # E20: Only shallowest level (##) emitted; ### absorbed by parent
+    assert len(sections) == 3
 
 
 def test_section_has_heading() -> None:
@@ -88,6 +89,16 @@ def test_max_section_size_split() -> None:
     # The long section should be split or capped
     for s in sections:
         assert s.char_count <= 16000  # allow some margin
+
+
+def test_subsection_not_emitted_separately() -> None:
+    """E20 regression: ### headings should NOT produce separate sections when ## exists."""
+    sections = parse_docling_markdown(SAMPLE_MD, storage_key="test__doc1")
+    headings = [s.heading for s in sections]
+    assert "Aggregation" not in headings
+    # But the text should be absorbed into the parent ## section
+    cac = next(s for s in sections if s.heading == "Collective Action Clauses")
+    assert "Cross-series modification" in cac.text
 
 
 def test_empty_input() -> None:
