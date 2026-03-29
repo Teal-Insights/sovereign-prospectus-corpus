@@ -251,8 +251,197 @@ pricing, calls by stop_reason.
 hits `max_tokens`, the tool output is silently truncated.
 
 **Fix:** Check `response.stop_reason`. If it's `"max_tokens"`, flag the
-extraction as `truncation_suspect`. Log it. Consider re-calling with
-higher `max_tokens`.
+extraction as `truncation_suspect`. Log it. Accept the truncated result
+(don't auto-retry — a truncated Opus extraction is probably better than
+nothing, and the completeness checklist will catch partials).
+
+### E18: Shiny server blocks autonomous agent (Task 8)
+
+**Bug:** `shiny run` starts a web server that never exits. An autonomous
+agent will hang forever waiting for it to complete, blocking the overnight
+run.
+
+**Fix:** Do NOT start the Shiny server during autonomous execution. Instead,
+verify the app loads without errors:
+```bash
+uv run python3 -c "import importlib; importlib.import_module('app_v2')"
+```
+The human tests the Shiny app in the morning. Add this note explicitly to
+Task 8.
+
+### E19: API errors must not be serialized as NOT_FOUND (Task 7)
+
+**Bug:** The except block writes `found=False` for transport failures,
+making API errors indistinguishable from legitimate NOT_FOUND results.
+Downstream VERIFY/export treats them identically.
+
+**Fix:** Write a distinct status for errors:
+```python
+except Exception as e:
+    output_rec = {
+        **rec,
+        "extraction": {
+            "status": "api_error",  # NOT "found": False
+            "error_type": type(e).__name__,
+            "error_message": str(e),
+        },
+    }
+```
+At the end of the run, if any `api_error` records exist, exit non-zero.
+VERIFY should skip `api_error` records entirely. The end-of-run summary
+should report error count separately.
+
+### E20: E2 creates duplicate subsection text (Task 2)
+
+**Bug:** After E2, a `## CAC` section includes `### Aggregation` text.
+But `### Aggregation` is ALSO emitted as its own section, creating
+overlapping text.
+
+**Fix:** Only emit sections at the **top two heading levels** found in the
+document (typically `##` and `#`). Skip `###` and deeper — they're now
+contained in their parent. This prevents duplicate text and duplicate
+candidates.
+
+### E21: E3 resume read loop needs JSONDecodeError handling
+
+**Bug:** If a previous run crashed mid-write, the last line of the JSONL
+is truncated. The resume logic crashes trying to read it back.
+
+**Fix:** Wrap the resume read in try/except:
+```python
+if output_path.exists():
+    with output_path.open() as f:
+        for line in f:
+            try:
+                rec = _json.loads(line)
+                processed_ids.add(rec["candidate_id"])
+            except (json.JSONDecodeError, KeyError):
+                continue  # skip truncated/malformed lines
+```
+
+### E22: macOS sleep kills overnight run (Task 10)
+
+**Bug:** macOS will sleep after ~1 hour of no user activity, killing the
+extraction process.
+
+**Fix:** Run `caffeinate -s &` before the pipeline. Add to pre-flight
+checklist.
+
+### E23: Integration test must verify found > 0 (Task 9)
+
+**Bug:** If the API key is invalid, all 5 test extractions get error
+results. The pipeline "succeeds" with an empty CSV. The agent doesn't
+notice.
+
+**Fix:** After the integration test, assert that at least one extraction
+was successful:
+```bash
+found_count=$(grep -c '"found": true' data/extracted_v2/cac_extractions.jsonl || echo 0)
+if [ "$found_count" -eq 0 ]; then
+    echo "ERROR: No clauses found. Check API key and model access."
+    exit 1
+fi
+```
+
+### E24: max_tokens should be 16384 (Task 5)
+
+**Rationale:** A 3-page CAC clause ≈ 4,500 tokens verbatim. 8192 is
+probably fine for most cases, but long clauses with extensive meeting
+provisions could hit it. At Opus output pricing, you only pay for tokens
+actually generated — extra max_tokens capacity costs nothing. Set to 16384
+for 2x headroom.
+
+Also: set `MAX_TOKENS = 16384` in the code.
+
+### E25: Running cost ticker and end-of-run summary (Task 7)
+
+**Requirement:** After each LLM call, print cumulative cost estimate to
+stdout so tailing the log shows spend rate:
+```python
+est_cost = (cum_input * 15 + cum_output * 75) / 1_000_000
+click.echo(f"  [{i+1}/{total}] ... cost so far: ${est_cost:.2f}")
+```
+
+End-of-run summary must include:
+- Candidates: total, found, not_found, api_errors
+- Confidence distribution (high/medium/low)
+- Stop reasons distribution
+- Token totals (input/output) and estimated cost
+- Timing (total, median/call, slowest)
+- Write to both stdout and `_run_summary.txt`
+
+### E26: Extended thinking incompatible with forced tool_choice
+
+**Note for implementing agent:** Do NOT enable extended thinking / chain-of-thought
+in the Anthropic API call. Anthropic documents that `tool_choice={"type":"tool",...}`
+is incompatible with extended thinking. For an overnight extraction pipeline,
+deterministic tool output is more important than agentic reasoning.
+
+If you want the model to reason about boundaries, add a `thinking` string
+field to the tool schema itself (not the API's extended thinking feature).
+
+### E27: Log full prompts for a sample only (Task 7)
+
+Log the full API request payload to `_prompt_samples.jsonl` for:
+- First 2 successful calls
+- Every call that returns NOT_FOUND, api_error, or confidence="low"
+- Include `candidate_id` for cross-reference
+
+Do NOT log all prompts — they contain full section text and would fill disk.
+
+### E28: Pre-flight checklist before overnight run (Task 10)
+
+Before starting the full extraction, the agent MUST run:
+
+```bash
+# 1. Verify API key works with Opus
+uv run python3 -c "
+import anthropic
+c = anthropic.Anthropic()
+r = c.messages.create(model='claude-opus-4-20250514', max_tokens=10,
+    messages=[{'role':'user','content':'hi'}])
+print(f'API OK: {r.model}, stop={r.stop_reason}')
+print(f'Usage: {r.usage.input_tokens} in, {r.usage.output_tokens} out')
+"
+
+# 2. Verify candidate count is sane
+candidate_count=$(wc -l < data/extracted_v2/cac_candidates.jsonl)
+echo "Candidates: $candidate_count"
+if [ "$candidate_count" -gt 1000 ]; then
+    echo "WARNING: >1000 candidates. Consider --skip-flat or tighter patterns."
+fi
+
+# 3. Prevent macOS sleep
+caffeinate -s &
+echo "caffeinate PID: $!"
+
+# 4. Disk space
+df -h .
+
+# 5. Estimate time and cost
+echo "Est. time: ~$(echo "$candidate_count * 50 / 3600" | bc -l | head -c5) hours"
+echo "Est. cost: ~\$$(echo "$candidate_count * 0.15" | bc -l | head -c5)"
+
+# 6. Canary run: 3 candidates through full pipeline
+uv run corpus extract-v2 extract \
+  --candidates data/extracted_v2/cac_candidates.jsonl \
+  --clause-family collective_action \
+  --output data/extracted_v2/_canary.jsonl \
+  --limit 3
+
+# Verify canary succeeded
+found=$(grep -c '"found": true' data/extracted_v2/_canary.jsonl || echo 0)
+errors=$(grep -c '"api_error"' data/extracted_v2/_canary.jsonl || echo 0)
+echo "Canary: $found found, $errors errors"
+if [ "$errors" -gt 0 ] || [ "$found" -eq 0 ]; then
+    echo "CANARY FAILED. Do not start overnight run."
+    exit 1
+fi
+echo "Canary passed. Safe to start overnight run."
+rm data/extracted_v2/_canary.jsonl
+```
+
+If any check fails, STOP. Do not start the overnight run. Log the failure.
 
 ---
 
@@ -1561,7 +1750,7 @@ import anthropic
 from corpus.extraction.section_filter import Candidate
 
 MODEL = "claude-opus-4-20250514"
-MAX_TOKENS = 8192
+MAX_TOKENS = 16384
 
 SYSTEM_PROMPT = """\
 You are a legal document analyst specializing in sovereign bond contracts.
