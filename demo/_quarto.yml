@@ -9,9 +9,14 @@ book:
   date: "March 2026"
   chapters:
     - index.qmd
-    - chapter1.qmd
-    - chapter2.qmd
-    - chapter3.qmd
+    - findings.qmd
+    - eval-workflow.qmd
+    - call-to-action.qmd
+  appendices:
+    - appendix-technical.qmd
+    - appendix-validation.qmd
+    - appendix-coverage.qmd
+    - appendix-sovtech.qmd
   page-navigation: true
 
 bibliography: references.bib
