@@ -102,20 +102,45 @@ if parsed_dir.exists() and not any(parsed_dir.iterdir()):
     raise RuntimeError("data/parsed_docling/ exists but is empty — check Dropbox offline status")
 ```
 
+### DuckDB safety
+
+DuckDB concurrent access is not a risk because only the MacBook Air runs
+DuckDB queries, and the Mac Mini writes JSONL only. If both machines ever
+need DuckDB, copy it to a machine-local path outside the symlink.
+
 ### Completion protocol for extraction results
 
-Each extraction run writes to an isolated directory:
+Each family run writes to its own directory with its own completion sentinel:
 ```
 data/extracted_v2/<run_id>/
-├── <family>_candidates.jsonl
-├── batch_results/
-│   └── <family>_batch_NNNN.jsonl
-├── <family>_extractions.jsonl
-├── <family>_verified.jsonl
-└── COMPLETE.json   <- written LAST, signals safe to read
+├── governing_law/
+│   ├── candidates.jsonl
+│   ├── batch_results/
+│   │   └── batch_NNNN.jsonl
+│   ├── extractions.jsonl
+│   ├── verified.jsonl
+│   └── COMPLETE.json        <- per-family, written LAST
+├── sovereign_immunity/
+│   ├── ...
+│   └── COMPLETE.json
+├── document_classification/
+│   ├── classification.jsonl
+│   └── COMPLETE.json
+└── RUN_MANIFEST.json         <- tracks which families are done
 ```
 
-The MacBook Air should only analyze directories containing `COMPLETE.json`.
+`RUN_MANIFEST.json` is updated after each family completes:
+```json
+{
+  "run_id": "2026-03-29_round1",
+  "families_completed": ["governing_law", "sovereign_immunity"],
+  "families_in_progress": ["negative_pledge"],
+  "families_pending": ["events_of_default"]
+}
+```
+
+The MacBook Air reads any family directory containing `COMPLETE.json`
+without waiting for the entire round to finish.
 
 ---
 
@@ -190,7 +215,10 @@ total EXTRACT time before proceeding. If total exceeds budget, defer EoD to Roun
 | 1d | `negative_pledge` | 51 | Moderate | Pledge + definitions |
 | 1e | `events_of_default` | 74 | Hard (simplified) | Full-section only, last in round |
 
-**Budget checkpoint after LOCATE:** If total candidates > 15K, move EoD to Round 2.
+**Budget checkpoint after LOCATE:** Compute total section chars and estimate
+wall time per family (at ~33 candidates/min for short clauses, ~15/min for
+long sections). If estimated total exceeds 4 hours, defer EoD to Round 2.
+Candidate count >15K is a secondary warning signal.
 
 ### Round 2 — "Expand"
 
@@ -254,16 +282,52 @@ Docling markdown has no reliable page mapping. Do NOT use "pages 0-2."
   "storage_key": "nsm__228117819_...",
   "instrument_family": "Bond",
   "document_role": "Base document",
-  "document_form": "Base Prospectus",
+  "document_form": "Prospectus",
   "confidence": "high",
   "reasoning": "'Base Prospectus' appears as heading in first paragraph",
   "evidence_text": "BASE PROSPECTUS dated 15 March 2024",
   "evidence_page": null,
+  "novel_types_observed": [],
   "schema_version": "1.0"
 }
 ```
 
-Written to: `data/extracted_v2/<run_id>/document_classification.jsonl`
+### Taxonomy discovery mode
+
+The taxonomy was built from a ~20-document sample. With 4,685 documents, the
+classifier will encounter forms we haven't seen. When the document doesn't fit
+any existing category cleanly, the classifier should:
+
+1. Classify as the closest match (or "Other" if truly novel)
+2. Populate `novel_types_observed` with the specific document type language found
+3. Include `evidence_text` showing what the document calls itself
+
+Example of a novel type:
+```json
+{
+  "storage_key": "edgar__0001234567-...",
+  "document_form": "Other",
+  "confidence": "medium",
+  "reasoning": "Document identifies as 'Consent Solicitation Statement' which is not in current taxonomy",
+  "novel_types_observed": ["Consent Solicitation Statement"],
+  "evidence_text": "CONSENT SOLICITATION STATEMENT dated March 15, 2024"
+}
+```
+
+After the run, aggregate `novel_types_observed` to discover new categories:
+```python
+# Post-run: what new document types did we find?
+from collections import Counter
+novel = Counter()
+for rec in classifications:
+    for t in rec.get("novel_types_observed", []):
+        novel[t] += 1
+# → {"Consent Solicitation Statement": 12, "Exchange Offer Memorandum": 8, ...}
+```
+
+This costs nothing and gives taxonomy evolution for free.
+
+Written to: `data/extracted_v2/<run_id>/document_classification/classification.jsonl`
 
 ### Validation (no ground truth, but sanity checks)
 
@@ -272,6 +336,8 @@ Written to: `data/extracted_v2/<run_id>/document_classification.jsonl`
 2. **Distribution check:** If >30% of documents are "Other", something is wrong.
 3. **PDIP metadata cross-check:** PDIP annotations include `instrument_type`
    (Bond/Loan). Our `instrument_family` should agree.
+4. **Novelty summary:** Report all `novel_types_observed` with counts. These
+   inform taxonomy evolution for future rounds.
 
 ---
 
@@ -341,10 +407,36 @@ rate value, day count convention).
 Families: `interest`, `currency`, `fees`, `purpose`, `use_of_proceeds`,
 `information_covenants`, `books_records`, `indebtedness_definition`
 
-**Implementation note:** Modes 1 and 2 use the existing pipeline. Mode 3 needs
-a relaxed verbatim threshold (long sections will have minor variations).
-Mode 4 may need a different output schema (key-value pairs, not just clause_text).
-Round 3 families should be evaluated for which mode they need before extraction.
+### Evaluation per mode
+
+| Mode | Evaluation unit | Verbatim check | Trust metric |
+|------|----------------|----------------|--------------|
+| 1 | Clause boundary span | Standard verbatim (95% threshold) | Holdout recall + precision |
+| 2 | Short field text | Standard verbatim | Holdout recall + precision |
+| 3 | Section location | **`section_capture_similarity`** (separate metric, NOT "verbatim pass") | Section located vs PDIP annotation presence |
+| 4 | Key-value fields | Per-field exact match | Field-level accuracy |
+
+**Mode 3 does NOT relax the verbatim standard.** Instead, it uses a separate
+`section_capture_similarity` diagnostic. If the extracted section text is an
+exact source slice, it passes verbatim. If OCR or boundary uncertainty prevents
+exact match, the record is flagged as `needs_review` — never silently passed.
+
+**Mode 4 output schema** is deferred to post-Round-1. Round 1 results will
+inform what fields matter for comparative analysis. The implementation plan
+covers Rounds 1-2 only; Mode 4 families (Round 3) get a design spike task.
+
+**Instrument-aware prompting:** The existing extraction prompt says "sovereign
+bond prospectuses" but Round 1 families are mixed-instrument (governing_law:
+42 bond / 29 loan in PDIP; negative_pledge: 27 bond / 24 loan). The prompt
+must adapt to the document's instrument type. Use document classification
+results (run first) to set instrument context, or infer from storage key
+(pdip__*: check annotations; nsm__*: bonds; edgar__*: bonds). Calibration
+few-shot pools should include both bond and loan examples.
+
+**Implementation note:** Modes 1 and 2 use the existing pipeline with
+instrument-aware prompt variants. Mode 3 uses LOCATE + full-section EXTRACT
+but a different VERIFY path. Mode 4 requires a new output schema designed
+after Round 1 learning.
 
 ---
 
