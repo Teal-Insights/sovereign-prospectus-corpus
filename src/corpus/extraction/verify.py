@@ -57,11 +57,35 @@ def check_verbatim(
     # This handles the case where the extractor pulled text that crosses a
     # section join boundary.
 
-    # E11: Use find_longest_match as anchor for contiguous matching.
+    # E11: Use find_longest_match to find the best region in source,
+    # then compute a localized fuzzy score within that window.
+    # This handles minor OCR noise (typos, ligature splits) while still
+    # requiring the match to be contiguous (not scattered).
     matcher = SequenceMatcher(None, norm_ext, norm_src)
     match = matcher.find_longest_match(0, len(norm_ext), 0, len(norm_src))
 
-    similarity = match.size / len(norm_ext) if norm_ext else 0.0
+    if match.size == 0:
+        return VerbatimResult(
+            passes=False,
+            similarity=0.0,
+            normalized_extracted=norm_ext,
+            normalized_source=norm_src,
+        )
+
+    # Extract a window around the best match in source, padded to cover
+    # the full extracted text length. Padding is proportional (5%) so it
+    # doesn't dilute the score for short clauses while still accommodating
+    # OCR insertions in longer ones.
+    window_start = max(0, match.b - (match.a))
+    # Pad is 5% of extracted length so minor OCR insertions fit without
+    # diluting the score on short clauses (no fixed minimum).
+    pad = len(norm_ext) // 20
+    window_end = min(len(norm_src), window_start + len(norm_ext) + pad)
+    window = norm_src[window_start:window_end]
+
+    # Compute localized ratio within the window
+    local_matcher = SequenceMatcher(None, norm_ext, window)
+    similarity = local_matcher.ratio()
 
     return VerbatimResult(
         passes=similarity >= threshold,

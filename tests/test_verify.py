@@ -70,6 +70,16 @@ def test_quality_flags_truncation() -> None:
     assert "truncation_suspect" in flags
 
 
+def test_verbatim_fuzzy_match_minor_typo() -> None:
+    """Minor OCR noise (1-2 char differences) should still pass verification."""
+    # Simulate a ligature split: "fi" -> "f i"
+    extracted = "The Bonds may be modif ied by holders of not less than 75%."
+    source = "Preamble. The Bonds may be modified by holders of not less than 75%. End."
+    result = check_verbatim(extracted, source)
+    assert result.passes is True
+    assert result.similarity >= 0.95
+
+
 def test_quality_flags_ocr_suspect() -> None:
     # High non-alpha ratio suggests OCR issues
     source = "Th3 B0nds m@y b3 m0d!f!3d by h0ld3rs 0f n0t l3ss th@n 75%."
