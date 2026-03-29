@@ -21,8 +21,14 @@ _EDGAR_FORM_MAP: dict[str, tuple[str, str, str]] = {
     "424B2": ("Bond", "Supplement", "Pricing Supplement"),
     "424B3": ("Bond", "Base document", "Prospectus"),
     "424B1": ("Bond", "Base document", "Prospectus"),
-    "FWP": ("Bond", "Supplement", "Other"),
+    "FWP": (
+        "Bond",
+        "Supplement",
+        "Pricing Supplement",
+    ),  # Changed from "Other" — most FWPs are term sheets
     "F-4": ("Bond", "Base document", "Other"),
+    "18-K": ("Bond", "Other", "Annual Report"),
+    "18-K/A": ("Bond", "Other", "Annual Report"),
 }
 
 # Keyword patterns for text-based classification, ordered by specificity
@@ -32,6 +38,21 @@ _FORM_PATTERNS: list[tuple[str, str, str, str]] = [
     (r"(?i)financing\s+agreement", "Loan", "Standalone", "Loan Agreement"),
     (r"(?i)loan\s+contract", "Loan", "Standalone", "Loan Agreement"),
     (r"(?i)credit\s+agreement", "Loan", "Standalone", "Loan Agreement"),
+    (
+        r"(?i)application\s+for\s+admission\s+of\s+securities\s+to\s+the\s+official\s+list",
+        "Bond",
+        "Other",
+        "Regulatory Filing",
+    ),
+    (
+        r"(?i)dissemination\s+of\s+a\s+regulatory\s+announcement",
+        "Bond",
+        "Other",
+        "Regulatory Filing",
+    ),
+    (r"(?i)contrato\s+de\s+pr[eé]stamo", "Loan", "Standalone", "Loan Agreement"),
+    (r"(?i)\bfacility\s+agreement\b", "Loan", "Standalone", "Loan Agreement"),
+    (r"(?i)\bform\s+18-k\b", "Bond", "Other", "Annual Report"),
     (r"(?i)indenture", "Bond", "Standalone", "Indenture"),
     (r"(?i)trust\s+deed", "Bond", "Standalone", "Trust Deed"),
     (r"(?i)fiscal\s+agency\s+agreement", "Bond", "Standalone", "Fiscal Agency Agreement"),
@@ -49,9 +70,11 @@ _FORM_PATTERNS: list[tuple[str, str, str, str]] = [
 
 # I4: Handle both raw header ("424B5\n") and "Filed Pursuant to Rule 424(b)(5)"
 _EDGAR_FORM_RE = re.compile(
-    r"(?:^(424B[1-5]|FWP|F-4|S-\d+)\s*\n)"
+    r"(?:^(424B[1-5]|FWP|F-4|18-K(?:/A)?|S-\d+)\s*\n)"
     r"|"
-    r"(?:Filed\s+Pursuant\s+to\s+Rule\s+(\d+\([a-z]\)\(\d+\)))",
+    r"(?:Filed\s+Pursuant\s+to\s+Rule\s+(\d+\([a-z]\)\(\d+\)))"
+    r"|"
+    r"(?:^Rule\s+(\d+\([a-z]\)\(\d+\)))",
     re.MULTILINE,
 )
 
@@ -77,6 +100,8 @@ def parse_edgar_form_code(text: str) -> str | None:
         return m.group(1)
     if m.group(2):
         return _EDGAR_RULE_MAP.get(m.group(2))
+    if m.group(3):
+        return _EDGAR_RULE_MAP.get(m.group(3))
     return None
 
 

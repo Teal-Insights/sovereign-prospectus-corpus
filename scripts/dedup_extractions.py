@@ -56,7 +56,7 @@ def dedup_family(verified_path: Path, output_path: Path) -> dict:
     # Select best per document
     primary = []
     duplicates = []
-    for storage_key, candidates in by_doc.items():
+    for _storage_key, candidates in by_doc.items():
         candidates.sort(key=_sort_key, reverse=True)
         best = candidates[0]
         best["dedup"] = {"is_primary": True, "duplicates_count": len(candidates) - 1}

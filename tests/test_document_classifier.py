@@ -90,3 +90,37 @@ def test_classify_no_match_low_confidence() -> None:
     text = "Random text with no recognizable document type patterns at all."
     result = classify_document(text, storage_key="unknown__1")
     assert result["confidence"] == "low"
+
+
+def test_classify_fwp_as_pricing_supplement() -> None:
+    """FWP should now default to Pricing Supplement, not Other."""
+    text = "FWP\n1\nFinal Term Sheet"
+    result = classify_document(text, storage_key="edgar__fwp1")
+    assert result["document_form"] == "Pricing Supplement"
+    assert result["confidence"] == "high"
+
+
+def test_parse_edgar_form_code_18k() -> None:
+    text = "18-K\n1\nANNUAL REPORT"
+    code = parse_edgar_form_code(text)
+    assert code == "18-K"
+
+
+def test_parse_edgar_form_code_rule_424b3() -> None:
+    """Handle 'Rule 424(b)(3)' format (without 'Filed Pursuant to')."""
+    text = "Rule 424(b)(3)\nRegistration No. 333-123456"
+    code = parse_edgar_form_code(text)
+    assert code == "424B3"
+
+
+def test_classify_facility_agreement() -> None:
+    text = "FACILITY AGREEMENT\n\nDATED 15 MARCH 2024\n\nFOR THE REPUBLIC OF GHANA"
+    result = classify_document(text, storage_key="pdip__GHA99")
+    assert result["instrument_family"] == "Loan"
+    assert result["document_form"] == "Loan Agreement"
+
+
+def test_classify_annual_report() -> None:
+    text = "FORM 18-K\nFor Foreign Governments and Political Subdivisions\nRepublic of Turkey"
+    result = classify_document(text, storage_key="edgar__18k1")
+    assert result["document_form"] == "Annual Report"

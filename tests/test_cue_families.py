@@ -193,6 +193,30 @@ def test_all_families_have_two_plus_non_heading_families() -> None:
         )
 
 
+def test_negative_pledge_pledge_matches_real_text() -> None:
+    """Fixed patterns should match real sovereign bond negative pledge language."""
+    patterns = NEGATIVE_PLEDGE_CUES["pledge"]
+    # Colombia: "will not create or permit to exist any lien"
+    assert any(
+        re.search(p, "will not create or permit to exist any lien", re.IGNORECASE)
+        for p in patterns
+    )
+    # Brazil: "will not create or permit to subsist any Security Interest"
+    assert any(
+        re.search(p, "will not create or permit to subsist any Security Interest", re.IGNORECASE)
+        for p in patterns
+    )
+    # Chile: "will not grant or allow any lien"
+    assert any(re.search(p, "will not grant or allow any lien", re.IGNORECASE) for p in patterns)
+
+
+def test_negative_pledge_exception_matches_secured_equally() -> None:
+    """Fixed exception pattern matches real word order: 'secured equally and ratably'."""
+    patterns = NEGATIVE_PLEDGE_CUES["exception"]
+    assert any(re.search(p, "secured equally and ratably", re.IGNORECASE) for p in patterns)
+    assert any(re.search(p, "secured equally and rateably", re.IGNORECASE) for p in patterns)
+
+
 def test_all_new_patterns_compile() -> None:
     """Every pattern string in new families must be a valid regex."""
     for family in [

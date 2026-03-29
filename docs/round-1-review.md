@@ -98,52 +98,65 @@ per document using: (1) highest confidence, (2) heading-matched preferred,
 
 ---
 
-## 3. Negative Pledge EDGAR Gap (P2 — investigated)
+## 3. Negative Pledge EDGAR Gap (P2 — fixed)
 
 **Problem:** LOCATE found 331 negative_pledge candidates — all from Docling
-(NSM/PDIP), zero from EDGAR (3,217 documents). This is a significant coverage
-gap.
+(NSM/PDIP), zero from EDGAR (3,217 documents). Yet 1,036 EDGAR files contain
+"negative pledge" in their text.
 
-**Root cause (under investigation):** The negative pledge cue patterns require
-2+ non-heading family hits for body-only candidates. On EDGAR page-level text,
-the pledge language and exception language may appear on different pages, so
-no single page hits both families. Additionally, EDGAR section_parser creates
-one "section" per page — if "Negative Pledge" is a sub-heading within a
-larger "Covenants" page, the heading pattern may not match the page-level
-heading.
+**Root cause (3 bugs found by investigation):**
 
-**Recommended fix for Round 2:**
-- Add broader body cues that can match on a single page (e.g., standalone
-  `"security interest"`, `"permitted lien"`)
-- Consider reducing the non-heading family threshold from 2 to 1 for
-  families where EDGAR recall is known to be zero
-- Accept that some clause types inherently have lower EDGAR recall due to
-  page-level parsing limitations
+1. **`pledge` patterns failed on real-world language.** The patterns required
+   `"will not create (or permit )?(any )?lien"` but real sovereign bonds say
+   `"will not create or permit to exist any lien"` (Colombia), `"permit to
+   subsist"` (Brazil), or `"grant or allow"` (Chile). The `"to exist/subsist"`
+   gap and alternative verbs meant 0 matches across all 3,217 EDGAR files.
+
+2. **`exception` pattern had reversed word order.** Pattern expected `"equally
+   ... secured"` but real text says `"secured equally and ratably"`. Also
+   missed UK spelling `"rateably"`.
+
+3. **Heading detection can't work for EDGAR.** EDGAR flat JSONL creates
+   sections with heading `"(page N)"` — the heading cue path can never fire.
+   Body cues alone needed to carry the full detection burden, amplifying the
+   impact of bugs 1 and 2.
+
+**Fix applied:** Replaced all `pledge` and `exception` patterns with versions
+tested against real Colombia, Brazil, Chile, Turkey, and Peru language.
+Expected impact: ~1,426 EDGAR candidate sections across ~1,035 files.
 
 ---
 
-## 4. Document Classification "Other" Rate (P2 — investigated)
+## 4. Document Classification "Other" Rate (P2 — fixed)
 
 **Problem:** 1,889 documents (40%) were classified as `document_form = "Other"`.
 Breakdown: 1,613 EDGAR, 151 PDIP, 125 NSM.
 
-**Root cause (under investigation):** Most EDGAR "Other" documents have
-`confidence: high` (1,592) — meaning an SEC form code was matched, but the
-code mapped to "Other" in `_EDGAR_FORM_MAP`. The map only covers 424B1-5,
-FWP, and F-4. Common unmapped form codes include 18-K (annual report for
-foreign private issuers), S-3 (registration statement), and others.
+**Root cause (investigation found):** All 1,592 high-confidence "Other" docs
+were FWP filings. The `_EDGAR_FORM_MAP` mapped FWP to `("Bond", "Supplement",
+"Other")`. In reality, ~80% of FWPs are Final Pricing Term Sheets and should
+be classified as "Pricing Supplement". The remaining are Israel Development
+Corporation rate cards.
 
-**Recommended fix:**
-- Expand `_EDGAR_FORM_MAP` with 18-K, S-3, and other common sovereign filing
-  types
-- Add text patterns for "annual report", "registration statement", etc.
-- The 270 `confidence: low` documents (no pattern matched at all) need
-  separate investigation — some may be non-English documents or unusual
-  filing types
+The 270 low-confidence "Other" docs break down as: ~39 bond prospectuses
+starting with bank logos (no text keywords), ~38 NSM listing applications,
+~33 Spanish IDB loan contracts ("CONTRATO DE PRESTAMO"), ~17 facility
+agreements, ~8 EDGAR 18-K annual reports, and ~135 misc (garbled PDFs,
+non-English docs, government ordinances).
+
+**Fixes applied:**
+- Changed FWP default mapping to `"Pricing Supplement"` (from "Other")
+- Added `18-K` and `18-K/A` to `_EDGAR_FORM_MAP` → "Annual Report"
+- Extended `_EDGAR_FORM_RE` to handle `Rule 424(b)(3)` format (without "Filed
+  Pursuant to")
+- Added 5 new text patterns: facility agreement, contrato de prestamo,
+  admission-to-official-list, regulatory announcement, form 18-K
+- Expected impact: ~1,723 of 1,889 "Other" docs reclassified, leaving ~166
+  legitimately unclassifiable documents
 
 ---
 
-## 5. Zero-Extraction Documents (P3 — investigated)
+## 5. Zero-Extraction Documents (P3 — under investigation)
 
 **Problem:** 3,107 of 4,685 documents (66%) had zero extractions across all
 4 Round 1 families.
@@ -154,12 +167,13 @@ foreign private issuers), S-3 (registration statement), and others.
   extractions is correct.
 - "Other" form documents (1,889): Many are regulatory filings, tender offers,
   or non-prospectus documents. Zero extractions expected.
-- Some prospectuses and offering circulars may have been missed due to the
-  negative pledge EDGAR gap or cue pattern limitations.
+- FWP term sheets (now reclassified): Short pricing documents without
+  operative clauses.
 
-**Recommendation:** Spot-check a sample of zero-extraction documents
-classified as "Prospectus" or "Indenture" to verify they genuinely lack
-clause language vs. our LOCATE missed them.
+**Recommendation:** With the negative pledge cue fix and EDGAR form code
+expansion, re-running LOCATE should recover additional candidates from
+previously-missed EDGAR documents. The spot-check investigation is still
+running to verify specific documents.
 
 ---
 

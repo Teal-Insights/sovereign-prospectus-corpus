@@ -109,13 +109,23 @@ NEGATIVE_PLEDGE_CUES: dict[str, list[str]] = {
         r"restrictive\s+covenants",
     ],
     "pledge": [
-        r"will\s+not\s+create\s+(or\s+permit\s+)?(any\s+)?(lien|security\s+interest|encumbrance|mortgage)",
+        # Active voice: "will not create or permit to exist any lien" (Colombia, Brazil, Peru)
+        r"will\s+not[^.]{0,60}create\s+(or\s+(permit|allow)(\s+to\s+(exist|subsist))?\s+)?(any\s+)?(lien|security\s+interest|encumbrance|mortgage)",
+        # Mid-sentence: "create or permit to exist ... any Lien" (Turkey with qualifying clause)
+        r"create\s+or\s+(permit|allow)\s+(to\s+(?:exist|subsist)\s+)?[^.]{0,40}?(lien|security\s+interest|encumbrance|mortgage)",
+        # Grant/allow variant: "will not grant or allow any lien" (Chile)
+        r"not\s+(to\s+)?(grant|create)\s+(or\s+(allow|permit)\s+)?(any\s+)?(lien|security\s+interest|encumbrance|mortgage)",
+        # Passive voice fallback
         r"no\s+(lien|security\s+interest|mortgage|charge)\s+(shall|will)\s+be\s+created",
-        r"not\s+(to\s+)?grant\s+(or\s+permit\s+)?(any\s+)?(security|lien)",
     ],
     "exception": [
         r"permitted\s+(lien|security|encumbrance|exception)",
-        r"(except|unless|provided\s+that).{0,50}(equally|ratabl|pari\s+passu)\s+secured",
+        # Fixed: real text says "secured equally and ratably" not "equally secured"
+        r"(except|unless|provided\s+that).{0,80}secured\s+(?:equally|ratabl|pari\s+passu)",
+        # Standalone "secured equally/ratably/pari passu"
+        r"secured\s+(equally|ratabl|rateabl|pari\s+passu)",
+        # "equally and ratably/rateably" (handles UK spelling)
+        r"equally\s+and\s+(ratabl|rateabl)",
     ],
 }
 
