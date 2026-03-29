@@ -171,19 +171,9 @@ def test_get_cue_families_all_round2() -> None:
 
 def test_all_families_have_two_plus_non_heading_families() -> None:
     """C2: Every family must have at least 2 non-heading cue families for body-only recall."""
-    for family_name in [
-        "collective_action",
-        "pari_passu",
-        "governing_law",
-        "sovereign_immunity",
-        "negative_pledge",
-        "events_of_default",
-        "acceleration",
-        "dispute_resolution",
-        "additional_amounts",
-        "redemption",
-        "indebtedness_definition",
-    ]:
+    from corpus.extraction.cue_families import get_all_families
+
+    for family_name in get_all_families():
         cues = get_cue_families(family_name)
         assert cues is not None, f"Missing cue family: {family_name}"
         non_heading = [k for k in cues if k != "heading"]
@@ -228,18 +218,10 @@ def test_get_all_families_returns_all_registered() -> None:
 
 
 def test_all_new_patterns_compile() -> None:
-    """Every pattern string in new families must be a valid regex."""
-    for family in [
-        "governing_law",
-        "sovereign_immunity",
-        "negative_pledge",
-        "events_of_default",
-        "acceleration",
-        "dispute_resolution",
-        "additional_amounts",
-        "redemption",
-        "indebtedness_definition",
-    ]:
+    """Every pattern string in all families must be a valid regex."""
+    from corpus.extraction.cue_families import get_all_families
+
+    for family in get_all_families():
         cues = get_cue_families(family)
         assert cues is not None
         for _fam, patterns in cues.items():

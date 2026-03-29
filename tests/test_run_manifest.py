@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from corpus.extraction.run_manifest import (
     create_manifest,
@@ -12,6 +12,9 @@ from corpus.extraction.run_manifest import (
     mark_family_complete,
     mark_family_in_progress,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_create_manifest(tmp_path: Path) -> None:
