@@ -8,10 +8,7 @@ Entry point registered in pyproject.toml as ``corpus = "corpus.cli:main"``.
 
 from __future__ import annotations
 
-import json as _json
-import time as _time
 from pathlib import Path
-from pathlib import Path as _Path
 
 import click
 
@@ -1151,6 +1148,66 @@ def status(source: str | None) -> None:
 
 # ── Extract-v2 group ────────────────────────────────────────────────
 
+_COUNTRY_FROM_PREFIX: dict[str, str] = {
+    "AGO": "Angola",
+    "ARG": "Argentina",
+    "AUT": "Austria",
+    "BHR": "Bahrain",
+    "BIH": "Bosnia and Herzegovina",
+    "BRA": "Brazil",
+    "BRB": "Barbados",
+    "CAN": "Canada",
+    "CHN": "China",
+    "CMR": "Cameroon",
+    "CYP": "Cyprus",
+    "ECU": "Ecuador",
+    "EGY": "Egypt",
+    "ETH": "Ethiopia",
+    "GHA": "Ghana",
+    "GIN": "Guinea",
+    "GUY": "Guyana",
+    "HUN": "Hungary",
+    "IDN": "Indonesia",
+    "ISL": "Iceland",
+    "ISR": "Israel",
+    "ITA": "Italy",
+    "JAM": "Jamaica",
+    "JOR": "Jordan",
+    "JPN": "Japan",
+    "KAZ": "Kazakhstan",
+    "KEN": "Kenya",
+    "KGZ": "Kyrgyzstan",
+    "KWT": "Kuwait",
+    "LKA": "Sri Lanka",
+    "LVA": "Latvia",
+    "MAR": "Morocco",
+    "MDA": "Moldova",
+    "MNE": "Montenegro",
+    "NGA": "Nigeria",
+    "NLD": "Netherlands",
+    "PER": "Peru",
+    "PHL": "Philippines",
+    "RWA": "Rwanda",
+    "SAU": "Saudi Arabia",
+    "SEN": "Senegal",
+    "SLE": "Sierra Leone",
+    "SRB": "Serbia",
+    "SWE": "Sweden",
+    "UGA": "Uganda",
+    "UZB": "Uzbekistan",
+    "VEN": "Venezuela",
+}
+
+
+def _guess_country(storage_key: str) -> str:
+    """Guess country name from a PDIP storage key (e.g. 'pdip__KEN68' → 'Kenya')."""
+    if storage_key.startswith("pdip__"):
+        suffix = storage_key[6:]
+        for code, country in _COUNTRY_FROM_PREFIX.items():
+            if suffix.startswith(code):
+                return country
+    return ""
+
 
 @cli.group("extract-v2")
 def extract_v2_group() -> None:
@@ -1177,25 +1234,43 @@ def extract_v2_locate(
     skip_flat: bool,
 ) -> None:
     """Stage 1: Parse sections, filter by cues, reject negatives, cluster."""
+    import json
+    import time
+
     from corpus.extraction.section_filter import cluster_candidates, filter_sections
     from corpus.extraction.section_parser import parse_docling_markdown, parse_flat_jsonl
+    from corpus.io.safe_write import safe_write
+    from corpus.logging import CorpusLogger
 
-    run_id = run_id or f"locate_{int(_time.time())}"
+    run_id = run_id or f"locate_{int(time.time())}"
 
+    config = _load_config()
     # E9: Default output path includes clause family
     prefix = "cac" if clause_family == "collective_action" else "pp"
     output_path = (
-        _Path(output) if output else _Path(f"data/extracted_v2/{prefix}_candidates.jsonl")
+        Path(output)
+        if output
+        else _resolve_path(config, "paths", "extracted_v2_dir", "data/extracted_v2")
+        / f"{prefix}_candidates.jsonl"
     )
+    if not output_path.is_absolute():
+        output_path = _PROJECT_ROOT / output_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    log_path = (
+        _resolve_path(config, "paths", "telemetry_dir", "data/telemetry") / "extract_v2.jsonl"
+    )
+    logger = CorpusLogger(log_path, run_id=run_id)
 
     all_candidates: list = []
     docs_with_candidates = 0
 
     # --- Docling markdown (NSM, PDIP) ---
-    docling_path = _Path(docling_dir)
-    if docling_path.exists():
-        md_files = sorted(docling_path.glob("*.md"))
+    docling_resolved = Path(docling_dir)
+    if not docling_resolved.is_absolute():
+        docling_resolved = _PROJECT_ROOT / docling_resolved
+    if docling_resolved.exists():
+        md_files = sorted(docling_resolved.glob("*.md"))
         click.echo(f"Scanning {len(md_files)} Docling markdown files for {clause_family}...")
 
         for md_file in md_files:
@@ -1206,16 +1281,24 @@ def extract_v2_locate(
             if candidates:
                 docs_with_candidates += 1
                 all_candidates.extend(candidates)
+                logger.log(
+                    document_id=storage_key,
+                    step="locate",
+                    status="candidates_found",
+                    candidate_count=len(candidates),
+                )
 
         click.echo(f"  Docling: {len(all_candidates)} candidates from {docs_with_candidates} docs")
     else:
-        click.echo(f"  Docling dir not found: {docling_path}")
+        click.echo(f"  Docling dir not found: {docling_resolved}")
 
     # --- Flat-parsed JSONL (EDGAR) ---
     if not skip_flat:
-        flat_path = _Path(flat_dir)
-        if flat_path.exists():
-            jsonl_files = sorted(flat_path.glob("edgar__*.jsonl"))
+        flat_resolved = Path(flat_dir)
+        if not flat_resolved.is_absolute():
+            flat_resolved = _PROJECT_ROOT / flat_resolved
+        if flat_resolved.exists():
+            jsonl_files = sorted(flat_resolved.glob("edgar__*.jsonl"))
             click.echo(
                 f"Scanning {len(jsonl_files)} EDGAR flat-parsed files for {clause_family}..."
             )
@@ -1228,8 +1311,8 @@ def extract_v2_locate(
                 with jsonl_file.open() as f:
                     for line in f:
                         try:
-                            rec = _json.loads(line)
-                        except _json.JSONDecodeError:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
                             continue  # E10: skip malformed lines
                         # E6: Skip header by field presence, not line number
                         if "page" not in rec:
@@ -1241,42 +1324,53 @@ def extract_v2_locate(
                     edgar_docs += 1
                     edgar_candidates += len(candidates)
                     all_candidates.extend(candidates)
+                    logger.log(
+                        document_id=storage_key,
+                        step="locate",
+                        status="candidates_found",
+                        candidate_count=len(candidates),
+                    )
 
             docs_with_candidates += edgar_docs
             click.echo(f"  EDGAR: {edgar_candidates} candidates from {edgar_docs} docs")
         else:
-            click.echo(f"  Flat dir not found: {flat_path}")
+            click.echo(f"  Flat dir not found: {flat_resolved}")
 
     # Cluster adjacent candidates
     clustered = cluster_candidates(all_candidates)
 
-    # Write JSONL
-    with output_path.open("w") as f:
-        for c in clustered:
-            record = {
-                "candidate_id": c.candidate_id,
-                "storage_key": c.storage_key,
-                "section_id": c.section_id,
-                "section_index": c.section_index,
-                "section_heading": c.section_heading,
-                "page_range": list(c.page_range),
-                "heading_match": c.heading_match,
-                "cue_families_hit": c.cue_families_hit,
-                "cue_hits": [
-                    {
-                        "family": h.family,
-                        "pattern": h.pattern,
-                        "matched_text": h.matched_text,
-                    }
-                    for h in c.cue_hits
-                ],
-                "negative_signals": c.negative_signals,
-                "section_text": c.section_text,
-                "source_format": c.source_format,
-                "run_id": c.run_id,
-                "clause_family": clause_family,
-            }
-            f.write(_json.dumps(record) + "\n")
+    # Write JSONL (atomic: .part → rename)
+    all_records = []
+    for c in clustered:
+        record = {
+            "candidate_id": c.candidate_id,
+            "storage_key": c.storage_key,
+            "country": _guess_country(c.storage_key),
+            "document_title": "",
+            "section_id": c.section_id,
+            "section_index": c.section_index,
+            "section_heading": c.section_heading,
+            "page_range": list(c.page_range),
+            "heading_match": c.heading_match,
+            "cue_families_hit": c.cue_families_hit,
+            "cue_hits": [
+                {
+                    "family": h.family,
+                    "pattern": h.pattern,
+                    "matched_text": h.matched_text,
+                }
+                for h in c.cue_hits
+            ],
+            "negative_signals": c.negative_signals,
+            "section_text": c.section_text,
+            "source_format": c.source_format,
+            "run_id": c.run_id,
+            "clause_family": clause_family,
+        }
+        all_records.append(record)
+
+    content = "".join(json.dumps(record) + "\n" for record in all_records)
+    safe_write(output_path, content.encode(), overwrite=True)
 
     click.echo(f"Found {len(clustered)} candidates from {docs_with_candidates} documents.")
     click.echo(f"Written to {output_path}")
@@ -1290,26 +1384,51 @@ def extract_v2_locate(
     type=click.Choice(["collective_action", "pari_passu"]),
 )
 @click.option("--output", default=None, type=click.Path())
-def extract_v2_verify(extractions: str, clause_family: str, output: str | None) -> None:
+@click.option("--run-id", default=None)
+def extract_v2_verify(
+    extractions: str, clause_family: str, output: str | None, run_id: str | None
+) -> None:
     """Stage 3: Verify extractions — verbatim check, completeness, quality flags."""
+    import json
+    import time
+
     from corpus.extraction.verify import (
         check_completeness,
         check_verbatim,
         compute_quality_flags,
     )
+    from corpus.io.safe_write import safe_write
+    from corpus.logging import CorpusLogger
 
-    extractions_path = _Path(extractions)
+    run_id = run_id or f"verify_{int(time.time())}"
+
+    config = _load_config()
+    extractions_path = Path(extractions)
+    if not extractions_path.is_absolute():
+        extractions_path = _PROJECT_ROOT / extractions_path
     # E9: Default output includes clause family prefix
     prefix = "cac" if clause_family == "collective_action" else "pp"
-    output_path = _Path(output) if output else _Path(f"data/extracted_v2/{prefix}_verified.jsonl")
+    output_path = (
+        Path(output)
+        if output
+        else _resolve_path(config, "paths", "extracted_v2_dir", "data/extracted_v2")
+        / f"{prefix}_verified.jsonl"
+    )
+    if not output_path.is_absolute():
+        output_path = _PROJECT_ROOT / output_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    log_path = (
+        _resolve_path(config, "paths", "telemetry_dir", "data/telemetry") / "extract_v2.jsonl"
+    )
+    logger = CorpusLogger(log_path, run_id=run_id)
 
     records: list[dict] = []
     with extractions_path.open() as f:
         for line in f:
             try:
-                records.append(_json.loads(line))
-            except _json.JSONDecodeError:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
                 click.echo(f"  Warning: skipping malformed line in {extractions_path}", err=True)
                 continue
 
@@ -1319,16 +1438,27 @@ def extract_v2_verify(extractions: str, clause_family: str, output: str | None) 
 
     for rec in records:
         ext = rec.get("extraction", {})
+        candidate_id = rec.get("candidate_id", "")
 
         # E19: Skip api_error records entirely
         if ext.get("status") == "api_error":
             rec["verification"] = {"status": "error_skipped"}
             verified.append(rec)
+            logger.log(
+                document_id=candidate_id,
+                step="verify",
+                status="error_skipped",
+            )
             continue
 
         if not ext.get("found"):
             rec["verification"] = {"status": "not_found"}
             verified.append(rec)
+            logger.log(
+                document_id=candidate_id,
+                step="verify",
+                status="not_found",
+            )
             continue
 
         clause_text = ext["clause_text"]
@@ -1346,8 +1476,9 @@ def extract_v2_verify(extractions: str, clause_family: str, output: str | None) 
         if components_present <= 1 and components_total >= 3:
             quality_flags.append("partial_extraction")
 
+        verbatim_status = "verified" if verbatim.passes else "failed"
         rec["verification"] = {
-            "status": "verified" if verbatim.passes else "failed",
+            "status": verbatim_status,
             "verbatim_similarity": round(verbatim.similarity, 3),
             "completeness": completeness,
             "quality_flags": quality_flags,
@@ -1358,11 +1489,16 @@ def extract_v2_verify(extractions: str, clause_family: str, output: str | None) 
         if verbatim.passes:
             pass_count += 1
 
+        logger.log(
+            document_id=candidate_id,
+            step="verify",
+            status=verbatim_status,
+        )
+
         verified.append(rec)
 
-    with output_path.open("w") as f:
-        for r in verified:
-            f.write(_json.dumps(r) + "\n")
+    content = "".join(json.dumps(r) + "\n" for r in verified)
+    safe_write(output_path, content.encode(), overwrite=True)
 
     found = sum(1 for r in verified if r.get("extraction", {}).get("found"))
     error_count = sum(1 for r in verified if r.get("extraction", {}).get("status") == "api_error")

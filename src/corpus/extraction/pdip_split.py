@@ -25,7 +25,10 @@ def create_split(
     doc_ids: set[str] = set()
     with annotations_path.open() as f:
         for line in f:
-            record = json.loads(line)
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             if record.get("label_family") == clause_family:
                 doc_ids.add(record["doc_id"])
 
@@ -53,8 +56,10 @@ def create_split(
     }
 
 
-def save_split(split: dict, path: Path) -> None:
+def save_split(split: dict, path: Path, *, overwrite: bool = False) -> None:
     """Save split manifest to JSON file."""
+    if path.exists() and not overwrite:
+        raise FileExistsError(f"Split manifest already exists: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(split, indent=2) + "\n")
 

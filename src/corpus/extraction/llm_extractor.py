@@ -111,6 +111,8 @@ def build_extraction_prompt(
     icma_reference: str = "",
 ) -> list[dict]:
     """Build the message list for extraction (used as reference for Claude Code)."""
+    # Note: "system" role is used for reference/documentation. When calling
+    # the Anthropic API directly, system would be a top-level parameter.
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     clause_desc = CLAUSE_DESCRIPTIONS.get(clause_family, clause_family)
@@ -165,13 +167,17 @@ def build_extraction_prompt(
                 }
             )
 
+    page_info = ""
+    if candidate.page_range not in ((-1, -1), (0, 0)):
+        page_info = f", pages {candidate.page_range[0] + 1}-{candidate.page_range[1] + 1}"
+
     messages.append(
         {
             "role": "user",
             "content": (
                 f"Extract the {clause_desc} from this section of a {country} "
-                f'bond prospectus (section heading: "{candidate.section_heading}", '
-                f"pages {candidate.page_range[0]}-{candidate.page_range[1]}):\n\n"
+                f'bond prospectus (section heading: "{candidate.section_heading}"'
+                f"{page_info}):\n\n"
                 f"{candidate.section_text}"
             ),
         }

@@ -147,7 +147,7 @@ def filter_sections(
 def cluster_candidates(
     candidates: list[Candidate],
     *,
-    max_cluster_chars: int = 30000,
+    max_cluster_chars: int = 15000,
 ) -> list[Candidate]:
     """Cluster adjacent-section candidates from the same document.
 
