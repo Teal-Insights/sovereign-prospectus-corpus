@@ -8,7 +8,10 @@ Entry point registered in pyproject.toml as ``corpus = "corpus.cli:main"``.
 
 from __future__ import annotations
 
+import json as _json
+import time as _time
 from pathlib import Path
+from pathlib import Path as _Path
 
 import click
 
@@ -1144,6 +1147,229 @@ def status(source: str | None) -> None:
         # Cross-source summary
         statuses = [get_source_status(s) for s in sources]
         click.echo(format_status_summary(statuses))
+
+
+# ── Extract-v2 group ────────────────────────────────────────────────
+
+
+@cli.group("extract-v2")
+def extract_v2_group() -> None:
+    """Clause extraction v2: section-aware pipeline."""
+
+
+@extract_v2_group.command("locate")
+@click.option(
+    "--clause-family",
+    required=True,
+    type=click.Choice(["collective_action", "pari_passu"]),
+)
+@click.option("--docling-dir", default="data/parsed_docling", type=click.Path())
+@click.option("--flat-dir", default="data/parsed", type=click.Path())
+@click.option("--output", default=None, type=click.Path())
+@click.option("--run-id", default=None)
+@click.option("--skip-flat", is_flag=True, help="Skip flat-parsed EDGAR documents")
+def extract_v2_locate(
+    clause_family: str,
+    docling_dir: str,
+    flat_dir: str,
+    output: str | None,
+    run_id: str | None,
+    skip_flat: bool,
+) -> None:
+    """Stage 1: Parse sections, filter by cues, reject negatives, cluster."""
+    from corpus.extraction.section_filter import cluster_candidates, filter_sections
+    from corpus.extraction.section_parser import parse_docling_markdown, parse_flat_jsonl
+
+    run_id = run_id or f"locate_{int(_time.time())}"
+
+    # E9: Default output path includes clause family
+    prefix = "cac" if clause_family == "collective_action" else "pp"
+    output_path = (
+        _Path(output) if output else _Path(f"data/extracted_v2/{prefix}_candidates.jsonl")
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    all_candidates: list = []
+    docs_with_candidates = 0
+
+    # --- Docling markdown (NSM, PDIP) ---
+    docling_path = _Path(docling_dir)
+    if docling_path.exists():
+        md_files = sorted(docling_path.glob("*.md"))
+        click.echo(f"Scanning {len(md_files)} Docling markdown files for {clause_family}...")
+
+        for md_file in md_files:
+            storage_key = md_file.stem
+            markdown_text = md_file.read_text(encoding="utf-8")
+            sections = parse_docling_markdown(markdown_text, storage_key=storage_key)
+            candidates = filter_sections(sections, clause_family=clause_family, run_id=run_id)
+            if candidates:
+                docs_with_candidates += 1
+                all_candidates.extend(candidates)
+
+        click.echo(f"  Docling: {len(all_candidates)} candidates from {docs_with_candidates} docs")
+    else:
+        click.echo(f"  Docling dir not found: {docling_path}")
+
+    # --- Flat-parsed JSONL (EDGAR) ---
+    if not skip_flat:
+        flat_path = _Path(flat_dir)
+        if flat_path.exists():
+            jsonl_files = sorted(flat_path.glob("edgar__*.jsonl"))
+            click.echo(
+                f"Scanning {len(jsonl_files)} EDGAR flat-parsed files for {clause_family}..."
+            )
+
+            edgar_candidates = 0
+            edgar_docs = 0
+            for jsonl_file in jsonl_files:
+                storage_key = jsonl_file.stem
+                pages = []
+                with jsonl_file.open() as f:
+                    for line in f:
+                        try:
+                            rec = _json.loads(line)
+                        except _json.JSONDecodeError:
+                            continue  # E10: skip malformed lines
+                        # E6: Skip header by field presence, not line number
+                        if "page" not in rec:
+                            continue
+                        pages.append(rec)
+                sections = parse_flat_jsonl(pages, storage_key=storage_key)
+                candidates = filter_sections(sections, clause_family=clause_family, run_id=run_id)
+                if candidates:
+                    edgar_docs += 1
+                    edgar_candidates += len(candidates)
+                    all_candidates.extend(candidates)
+
+            docs_with_candidates += edgar_docs
+            click.echo(f"  EDGAR: {edgar_candidates} candidates from {edgar_docs} docs")
+        else:
+            click.echo(f"  Flat dir not found: {flat_path}")
+
+    # Cluster adjacent candidates
+    clustered = cluster_candidates(all_candidates)
+
+    # Write JSONL
+    with output_path.open("w") as f:
+        for c in clustered:
+            record = {
+                "candidate_id": c.candidate_id,
+                "storage_key": c.storage_key,
+                "section_id": c.section_id,
+                "section_index": c.section_index,
+                "section_heading": c.section_heading,
+                "page_range": list(c.page_range),
+                "heading_match": c.heading_match,
+                "cue_families_hit": c.cue_families_hit,
+                "cue_hits": [
+                    {
+                        "family": h.family,
+                        "pattern": h.pattern,
+                        "matched_text": h.matched_text,
+                    }
+                    for h in c.cue_hits
+                ],
+                "negative_signals": c.negative_signals,
+                "section_text": c.section_text,
+                "source_format": c.source_format,
+                "run_id": c.run_id,
+                "clause_family": clause_family,
+            }
+            f.write(_json.dumps(record) + "\n")
+
+    click.echo(f"Found {len(clustered)} candidates from {docs_with_candidates} documents.")
+    click.echo(f"Written to {output_path}")
+
+
+@extract_v2_group.command("verify")
+@click.option("--extractions", required=True, type=click.Path(exists=True))
+@click.option(
+    "--clause-family",
+    required=True,
+    type=click.Choice(["collective_action", "pari_passu"]),
+)
+@click.option("--output", default=None, type=click.Path())
+def extract_v2_verify(extractions: str, clause_family: str, output: str | None) -> None:
+    """Stage 3: Verify extractions — verbatim check, completeness, quality flags."""
+    from corpus.extraction.verify import (
+        check_completeness,
+        check_verbatim,
+        compute_quality_flags,
+    )
+
+    extractions_path = _Path(extractions)
+    # E9: Default output includes clause family prefix
+    prefix = "cac" if clause_family == "collective_action" else "pp"
+    output_path = _Path(output) if output else _Path(f"data/extracted_v2/{prefix}_verified.jsonl")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    records: list[dict] = []
+    with extractions_path.open() as f:
+        for line in f:
+            try:
+                records.append(_json.loads(line))
+            except _json.JSONDecodeError:
+                click.echo(f"  Warning: skipping malformed line in {extractions_path}", err=True)
+                continue
+
+    click.echo(f"Verifying {len(records)} extractions...")
+    verified: list[dict] = []
+    pass_count = 0
+
+    for rec in records:
+        ext = rec.get("extraction", {})
+
+        # E19: Skip api_error records entirely
+        if ext.get("status") == "api_error":
+            rec["verification"] = {"status": "error_skipped"}
+            verified.append(rec)
+            continue
+
+        if not ext.get("found"):
+            rec["verification"] = {"status": "not_found"}
+            verified.append(rec)
+            continue
+
+        clause_text = ext["clause_text"]
+        source_text = rec["section_text"]
+
+        verbatim = check_verbatim(clause_text, source_text)
+        completeness = check_completeness(clause_text, clause_family=clause_family)
+        quality_flags = compute_quality_flags(extracted=clause_text, source=source_text)
+
+        if not verbatim.passes:
+            quality_flags.append("verification_failed")
+
+        components_present = sum(1 for v in completeness.values() if v)
+        components_total = len(completeness)
+        if components_present <= 1 and components_total >= 3:
+            quality_flags.append("partial_extraction")
+
+        rec["verification"] = {
+            "status": "verified" if verbatim.passes else "failed",
+            "verbatim_similarity": round(verbatim.similarity, 3),
+            "completeness": completeness,
+            "quality_flags": quality_flags,
+            "components_present": components_present,
+            "components_total": components_total,
+        }
+
+        if verbatim.passes:
+            pass_count += 1
+
+        verified.append(rec)
+
+    with output_path.open("w") as f:
+        for r in verified:
+            f.write(_json.dumps(r) + "\n")
+
+    found = sum(1 for r in verified if r.get("extraction", {}).get("found"))
+    error_count = sum(1 for r in verified if r.get("extraction", {}).get("status") == "api_error")
+    click.echo(f"\nVerification: {pass_count}/{found} passed verbatim check.")
+    if error_count:
+        click.echo(f"  {error_count} error records skipped.")
+    click.echo(f"Written to {output_path}")
 
 
 # ── Entry point ─────────────────────────────────────────────────────
