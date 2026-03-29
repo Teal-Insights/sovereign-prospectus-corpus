@@ -14,8 +14,7 @@ Credit PDIP as the enabler throughout. Frame the work as a proof of concept
 built in one week by one person on PDIP's foundation. The call to action
 is a genuine invitation to collaborate, not a pitch or a challenge.
 
-See `docs/private/roundtable-framing.md` (gitignored) for detailed
-positioning notes.
+Detailed positioning notes are in `docs/private/` (gitignored).
 
 ## Writing Rules
 
@@ -117,8 +116,7 @@ Three specific asks, framed as invitations:
    identification means. That question belongs to the sovereign debt
    legal community, not to one technologist.
 
-Tone: "I'm building this regardless because I believe in it. It's better
-with you. But I'll keep going either way."
+Tone: Independent but collaborative. An invitation, not a dependency.
 
 ### Appendix A: Technical Architecture (`appendix-technical.qmd`) — ~400 words
 
@@ -234,14 +232,11 @@ The same review pipeline applies to both the Quarto book and the Shiny app.
    issues before content review.
 4. **Style reviewer agent**: Check all writing rules (no em dashes, no
    AI-isms, no fluff, narrative arc, specific limitations).
-5. **Persona review agents** (all output to `docs/private/`, gitignored):
-   - **Teal**: Does this serve Teal Insights' interests? Does the work
-     look capable and serious? Well-positioned for funders?
-   - **Georgetown Law**: Is the legal framing accurate and appropriately
-     caveated? Would a sovereign debt scholar find the methodology
-     credible?
-   - **MDI**: Does PDIP look good? Is this an invitation, not a challenge?
-     Would the technical team see this as complementary?
+5. **Stakeholder persona review agents** (all output to `docs/private/`,
+   gitignored): Multiple persona agents review from different stakeholder
+   perspectives — checking legal accuracy, collaboration tone, and
+   positioning. Persona definitions and review criteria are in
+   `docs/private/roundtable-framing.md` (not tracked in git).
 6. **Fix** all flagged issues
 7. **Review markdown**: Create `docs/private/review-round-N.md` with
    summary of changes, flagged issues, and specific questions with blank
@@ -292,8 +287,8 @@ Before creating any PR:
 ## Completion Criteria
 
 - [ ] All old chapter files replaced with new descriptively-named files
-- [ ] Preface sets "proud but humble" tone, reviewed by all persona agents
-- [ ] Call to action has three clear asks, approved by MDI persona
+- [ ] Preface sets "proud but humble" tone, reviewed by all stakeholder personas
+- [ ] Call to action has three clear asks, approved by all stakeholder personas
 - [ ] Findings chapter uses computed variables, charts render correctly
 - [ ] Eval workflow chapter links to working Shiny app
 - [ ] Shiny app has new clause families, country filter, flywheel callouts
@@ -303,6 +298,6 @@ Before creating any PR:
 - [ ] Pre-commit hook blocks private content
 - [ ] Playwright visual inspection passes for all rendered pages
 - [ ] Style review passes (no em dashes, no AI-isms, no fluff)
-- [ ] All three persona reviews pass
+- [ ] All stakeholder persona reviews pass
 - [ ] Export script handles all data sources, re-run produces correct output
 - [ ] No private content in any git commit or PR
