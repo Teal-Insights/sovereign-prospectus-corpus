@@ -153,8 +153,11 @@ EVENTS_OF_DEFAULT_CUES: dict[str, list[str]] = {
 
 ACCELERATION_CUES: dict[str, list[str]] = {
     "heading": [
-        r"acceleration",
+        # Tightened: bare "acceleration" matched "Industrial Acceleration Zones",
+        # "Growth Acceleration Program", and "Cross-acceleration" sub-clauses.
+        r"acceleration\s+of\s+(maturity|the\s+notes|the\s+bonds|the\s+securities)",
         r"enforcement\s+of\s+(the\s+)?(notes|bonds|securities)",
+        r"default\s*;\s*acceleration",
     ],
     "mechanism": [
         r"declared\s+(immediately\s+)?due\s+and\s+payable",
@@ -192,6 +195,8 @@ ADDITIONAL_AMOUNTS_CUES: dict[str, list[str]] = {
         r"additional\s+amounts",
         r"gross[\s-]?up",
         r"tax(ation)?\s+(gross[\s-]?up|indemnit)",
+        # Operative gross-up clauses often live in "Taxation" conditions sections
+        r"taxation\s+and\s+additional\s+amounts",
     ],
     "obligation": [
         r"additional\s+amounts\s+(as\s+)?will\s+result\s+in",
@@ -227,7 +232,11 @@ REDEMPTION_CUES: dict[str, list[str]] = {
 INDEBTEDNESS_DEFINITION_CUES: dict[str, list[str]] = {
     "heading": [
         r"(definition|interpretation)\s+of\s+indebtedness",
-        r"(external|public)\s+(indebtedness|debt)",
+        # Tightened: bare "external debt" / "public debt" matched country debt
+        # statistics sections (748 false positives in Round 2). Now requires
+        # "definition" or "means" context, or the specific compound term.
+        r"(external|public)\s+(indebtedness|debt)\s+(definition|means)",
+        r"(relevant|financial)\s+indebtedness",
         r"certain\s+definitions",
     ],
     "definition": [
