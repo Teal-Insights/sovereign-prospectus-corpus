@@ -248,7 +248,9 @@ NEGATIVE_PLEDGE_CUES: dict[str, list[str]] = {
         r"negative\s+pledge",
         r"limitation\s+on\s+liens",
         r"restriction\s+on\s+(security|liens|encumbrances)",
-        r"covenants",
+        r"negative\s+pledge\s+covenant",
+        r"restrictive\s+covenants",
+        # Note: bare r"covenants" removed — too broad, matches "Particular Covenants", "6. Covenants"
     ],
     "pledge": [
         r"will\s+not\s+create\s+(or\s+permit\s+)?(any\s+)?(lien|security\s+interest|encumbrance|mortgage)",
@@ -473,13 +475,9 @@ def extract_v2_locate(
 
     config = _load_config()
 
-    # I7: use config-backed paths via _resolve_path
-    docling_resolved = _resolve_path(
-        docling_dir or config.get("extraction", {}).get("docling_dir", "data/parsed_docling")
-    )
-    flat_resolved = _resolve_path(
-        flat_dir or config.get("extraction", {}).get("flat_dir", "data/parsed")
-    )
+    # I7: use config-backed paths via _resolve_path (4-arg pattern: config, section, key, default)
+    docling_resolved = _resolve_path(config, "extraction", "docling_dir", docling_dir or "data/parsed_docling")
+    flat_resolved = _resolve_path(config, "extraction", "flat_dir", flat_dir or "data/parsed")
 
     # Output path: data/extracted_v2/<run_id>/<family>/candidates.jsonl
     run_dir = _PROJECT_ROOT / "data" / "extracted_v2" / run_id
@@ -510,20 +508,16 @@ def extract_v2_verify(
     """VERIFY phase: check extraction quality."""
     import time
 
-    from corpus.extraction.verify import check_verbatim, check_section_capture, is_section_capture_family
+    from corpus.extraction.verify import check_verbatim
 
     # C7: default run_id when None
     run_id = run_id or f"run_{int(time.time())}"
 
     config = _load_config()
 
-    # I7: use config-backed paths
-    docling_resolved = _resolve_path(
-        docling_dir or config.get("extraction", {}).get("docling_dir", "data/parsed_docling")
-    )
-    flat_resolved = _resolve_path(
-        flat_dir or config.get("extraction", {}).get("flat_dir", "data/parsed")
-    )
+    # I7: use config-backed paths (4-arg pattern: config, section, key, default)
+    docling_resolved = _resolve_path(config, "extraction", "docling_dir", docling_dir or "data/parsed_docling")
+    flat_resolved = _resolve_path(config, "extraction", "flat_dir", flat_dir or "data/parsed")
 
     # Output path: data/extracted_v2/<run_id>/<family>/verified.jsonl
     run_dir = _PROJECT_ROOT / "data" / "extracted_v2" / run_id
@@ -532,15 +526,12 @@ def extract_v2_verify(
     output_path = Path(output) if output else family_dir / "verified.jsonl"
 
     log_path = _PROJECT_ROOT / "data" / "telemetry" / "extract_v2.jsonl"
-    # ... rest of verify implementation, with the branching logic from Task 3:
+    # ... rest of verify implementation using only check_verbatim:
     #
     # For each record:
-    #     if is_section_capture_family(clause_family):
-    #         verbatim = check_section_capture(clause_text, source_text)
-    #         status_label = "section_located" if verbatim.passes else "needs_review"
-    #     else:
-    #         verbatim = check_verbatim(clause_text, source_text)
-    #         status_label = "verified" if verbatim.passes else "failed"
+    #     # Note: section_capture_similarity branching added in Task 3
+    #     verbatim = check_verbatim(clause_text, source_text)
+    #     status_label = "verified" if verbatim.passes else "failed"
 ```
 
 - [ ] **Step 4: Test that new families are accepted**
@@ -847,10 +838,28 @@ def is_section_capture_family(clause_family: str) -> bool:
 Run: `uv run pytest tests/test_verify.py -v`
 Expected: All tests PASS
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Update verify CLI command to use section_capture branching**
+
+Now that `check_section_capture` and `is_section_capture_family` exist, update `extract_v2_verify` in `src/corpus/cli.py` to import and use them:
+
+```python
+    from corpus.extraction.verify import check_verbatim, check_section_capture, is_section_capture_family
+
+    # ... rest of verify implementation, now with the branching logic:
+    #
+    # For each record:
+    #     if is_section_capture_family(clause_family):
+    #         verbatim = check_section_capture(clause_text, source_text)
+    #         status_label = "section_located" if verbatim.passes else "needs_review"
+    #     else:
+    #         verbatim = check_verbatim(clause_text, source_text)
+    #         status_label = "verified" if verbatim.passes else "failed"
+```
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/corpus/extraction/verify.py tests/test_verify.py
+git add src/corpus/extraction/verify.py tests/test_verify.py src/corpus/cli.py
 git commit -m "feat: completeness checklist + section_capture_similarity for Mode 3 families"
 ```
 
@@ -949,22 +958,25 @@ def build_extraction_prompt(
     messages: list[dict] = [{"role": "system", "content": system}]
 
     # Few-shot examples — also use instrument_label
+    # Note: FewShotExample fields are section_text, extracted_text, country, is_negative
     for ex in few_shot_examples:
-        ex_label = "bond prospectus" if ex.instrument_type == "Bond" else "loan agreement"
         messages.append({
             "role": "user",
             "content": (
                 f"Extract the {clause_desc} from this section of a "
-                f"{ex.country} {ex_label}:\n\n{ex.input_text}"
+                f"{ex.country} {instrument_label}:\n\n{ex.section_text}"
             ),
         })
         messages.append({
             "role": "assistant",
-            "content": ex.expected_output,
+            "content": ex.extracted_text,
         })
 
     # Final user message — uses instrument_label from function parameter
-    page_info = f", pages {candidate.start_page}-{candidate.end_page}" if candidate.start_page else ""
+    # Note: Candidate has page_range: tuple[int, int], not start_page/end_page
+    page_info = ""
+    if candidate.source_format == "flat_jsonl":
+        page_info = f", pages {candidate.page_range[0] + 1}-{candidate.page_range[1] + 1}"
     messages.append({
         "role": "user",
         "content": (
@@ -1500,16 +1512,8 @@ mark_family_complete(run_dir, clause_family)
 click.echo(f"Marked {clause_family} complete in run manifest.")
 ```
 
-Also wire into classify command:
-
-```python
-# At the END of extract_v2_classify:
-from corpus.extraction.run_manifest import create_manifest, mark_family_complete
-manifest_path = run_dir.parent / "RUN_MANIFEST.json"
-if not manifest_path.exists():
-    create_manifest(run_dir.parent, run_id, ["document_classification"])
-mark_family_complete(run_dir.parent, "document_classification")
-```
+# Note: classify command manifest wiring is handled in Task 10, which creates the
+# extract_v2_classify command. Do NOT wire manifest calls here for classify.
 
 - [ ] **Step 4: Run tests, commit**
 
@@ -2025,7 +2029,7 @@ def extract_v2_classify(
     import time
 
     from corpus.extraction.document_classifier import classify_document
-    from corpus.extraction.run_manifest import create_manifest, mark_family_complete
+    from corpus.extraction.run_manifest import create_manifest, mark_family_in_progress, mark_family_complete
     from corpus.io.safe_write import safe_write
     from corpus.logging import CorpusLogger
 
@@ -2033,13 +2037,9 @@ def extract_v2_classify(
     run_id = run_id or f"classify_{int(time.time())}"
     config = _load_config()
 
-    # I7: config-backed paths
-    docling_resolved = _resolve_path(
-        docling_dir or config.get("extraction", {}).get("docling_dir", "data/parsed_docling")
-    )
-    flat_resolved = _resolve_path(
-        flat_dir or config.get("extraction", {}).get("flat_dir", "data/parsed")
-    )
+    # I7: config-backed paths (4-arg pattern: config, section, key, default)
+    docling_resolved = _resolve_path(config, "extraction", "docling_dir", docling_dir or "data/parsed_docling")
+    flat_resolved = _resolve_path(config, "extraction", "flat_dir", flat_dir or "data/parsed")
 
     run_dir = _PROJECT_ROOT / "data" / "extracted_v2" / run_id / "document_classification"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -2048,11 +2048,18 @@ def extract_v2_classify(
     log_path = _PROJECT_ROOT / "data" / "telemetry" / "extract_v2.jsonl"
     logger = CorpusLogger(log_path, run_id=run_id)
 
-    # C4: Wire manifest
+    # C4/Fix 6: Wire manifest — create with ALL Round 1 families if manifest doesn't exist yet.
+    # Classification may run FIRST (before locate), so seed manifest with all families
+    # to ensure locate commands can find and update the correct pending list.
     manifest_dir = run_dir.parent
     manifest_path = manifest_dir / "RUN_MANIFEST.json"
+    _ALL_ROUND1_FAMILIES = [
+        "document_classification", "governing_law", "sovereign_immunity",
+        "negative_pledge", "events_of_default",
+    ]
     if not manifest_path.exists():
-        create_manifest(manifest_dir, run_id, ["document_classification"])
+        create_manifest(manifest_dir, run_id, _ALL_ROUND1_FAMILIES)
+    mark_family_in_progress(manifest_dir, "document_classification")
 
     # I11: Write incrementally instead of buffering all results
     count = 0
