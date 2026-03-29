@@ -84,10 +84,11 @@ def generate_family_report(
 
         if pdip_doc_ids:
             # Match PDIP doc_ids to storage_keys using the suffix after "__"
-            # to avoid false substring matches (e.g., "GHA1" matching "GHA10")
+            # to avoid false substring matches (e.g., "GHA1" matching "GHA10").
+            # Use verified (not just found) to exclude hallucinated extractions.
             extracted_doc_ids = {
                 k.split("__", 1)[-1] if "__" in k else k
-                for k in (r.get("storage_key", "") for r in found)
+                for k in (r.get("storage_key", "") for r in verified)
             }
             pdip_found = sum(1 for d in pdip_doc_ids if d in extracted_doc_ids)
             report["pdip_recall"] = round(pdip_found / len(pdip_doc_ids), 3) if pdip_doc_ids else 0

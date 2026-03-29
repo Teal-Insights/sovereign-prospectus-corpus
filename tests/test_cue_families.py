@@ -217,6 +217,16 @@ def test_negative_pledge_exception_matches_secured_equally() -> None:
     assert any(re.search(p, "secured equally and rateably", re.IGNORECASE) for p in patterns)
 
 
+def test_get_all_families_returns_all_registered() -> None:
+    """Guard against accidental deletion from _CLAUSE_CUES."""
+    from corpus.extraction.cue_families import get_all_families
+
+    families = get_all_families()
+    assert len(families) == 11
+    assert "collective_action" in families
+    assert "indebtedness_definition" in families
+
+
 def test_all_new_patterns_compile() -> None:
     """Every pattern string in new families must be a valid regex."""
     for family in [

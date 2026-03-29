@@ -1529,19 +1529,15 @@ def extract_v2_classify(
     )
     logger = CorpusLogger(log_path, run_id=run_id)
 
-    # Wire manifest
+    # Wire manifest — use all registered families plus classification
     manifest_path = run_dir / "RUN_MANIFEST.json"
-    _round1_families = [
-        "document_classification",
-        "governing_law",
-        "sovereign_immunity",
-        "negative_pledge",
-        "events_of_default",
-    ]
     if not manifest_path.exists():
-        create_manifest(run_dir, run_id, _round1_families)
+        create_manifest(run_dir, run_id, ["document_classification", *_ALL_FAMILIES])
     mark_family_in_progress(run_dir, "document_classification")
 
+    # Write incrementally (not atomic) for crash recovery on large corpus.
+    # Classification is pure Python (~2 min for 4,685 docs) so partial output
+    # risk is low. Use COMPLETE.json sentinel to distinguish done vs partial.
     count = 0
     with output_path.open("w") as out_f:
         # Docling markdown
