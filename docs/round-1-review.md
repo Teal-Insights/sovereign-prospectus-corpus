@@ -156,24 +156,45 @@ non-English docs, government ordinances).
 
 ---
 
-## 5. Zero-Extraction Documents (P3 — under investigation)
+## 5. Zero-Extraction Documents (P3 — investigated, key bug fixed)
 
 **Problem:** 3,107 of 4,685 documents (66%) had zero extractions across all
 4 Round 1 families.
 
-**Expected composition:**
-- Pricing supplements and final terms (540 + 338 = 878): These typically
-  contain only brief term sheets, not full operative clauses. Zero
-  extractions is correct.
-- "Other" form documents (1,889): Many are regulatory filings, tender offers,
-  or non-prospectus documents. Zero extractions expected.
-- FWP term sheets (now reclassified): Short pricing documents without
-  operative clauses.
+**Spot-check findings (10-document deep dive + full breakdown):**
 
-**Recommendation:** With the negative pledge cue fix and EDGAR form code
-expansion, re-running LOCATE should recover additional candidates from
-previously-missed EDGAR documents. The spot-check investigation is still
-running to verify specific documents.
+The 3,107 break into two buckets:
+- **Bucket A (3,059, 98.5%):** LOCATE never produced a candidate.
+  - A1 (2,642): Expected — Final Terms, Pricing Supplements, Loan Agreements,
+    and "Other" docs that genuinely lack clause text (incorporate by reference).
+  - A2 (417): Unexpected misses. Root causes:
+    - **281 Israel rate-setting addenda** (<5KB): Classified as "Prospectus" but
+      are 1-page rate updates. Classifier error, not extraction error.
+    - **94 EDGAR prospectuses filtered by `negatives_dominate` bug** (see below).
+    - **35 NSM misclassified supplements**: Economic data supplements labeled
+      "Prospectus" — classifier error.
+    - **7 PDIP misc**: Non-standard loan structures, 1-page addenda.
+- **Bucket B (48, 1.5%):** LOCATE found candidates but LLM said NOT_FOUND.
+  All 48 confirmed as correct decisions (pricing tables, ToC pages, cross-refs).
+
+### `negatives_dominate` bug (P3 — fixed)
+
+**Root cause:** `_negatives_dominate()` used `>=` (non-strict), meaning 2
+negative categories cancelled 2 positive families. For large EDGAR
+single-page sections (e.g., Chile 263K-char prospectus), the `table_of_contents`
+pattern (`\.{4,}`) fires on financial data formatting (`Central Government.....
+US$1,007`) and `cross_reference` fires on inline citations (`as set forth in`).
+Three false-positive negatives always outnumber 2 real positive families.
+
+**Impact:** ~94 real EDGAR prospectuses with full clause language were filtered
+out. Confirmed on `edgar__0001104659-25-001566` (Chile 2025) which has
+governing law, events of default, negative pledge, and sovereign immunity
+all present but rejected.
+
+**Fix applied:**
+1. Changed `>=` to `>` (strict inequality — negatives must outnumber positives)
+2. Skip negative filtering entirely for sections >50K chars (false positives
+   near-certain on full-filing sections)
 
 ---
 
