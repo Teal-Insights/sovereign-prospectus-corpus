@@ -339,9 +339,12 @@ compliance (not free-form JSON generation):
 - **Reasoning**: helps the lawyer understand why the system flagged this.
 - **NOT_FOUND is a valid answer**: better to say "not found" than force an
   extraction from a cross-reference.
-- **Model: Claude Sonnet** (not Haiku). All reviewers agree: Haiku
-  paraphrases more and follows complex extraction instructions less
-  reliably. At ~200-300 candidates, Sonnet cost is ~$2-5 total. Use Sonnet.
+- **Model: Claude Opus 4** (not Sonnet or Haiku). These are billion-dollar
+  bond contracts where accuracy on edge cases matters more than cost. Opus
+  is better at verbatim extraction, boundary detection, and following
+  complex instructions. At ~200-300 candidates, Opus cost is ~$30-50 via
+  API — trivial compared to the value of accurate extractions that don't
+  waste $1000/hr lawyer time on false positives or truncated clauses.
 - **Boundary verification**: For medium-confidence results, optionally
   run a second LLM call: "Here is the text I extracted. Here is the full
   section. Did I capture the complete clause? Are the boundaries correct?"

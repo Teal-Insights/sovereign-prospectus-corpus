@@ -1,15 +1,258 @@
 # Clause Extraction v2 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **CRITICAL: Read the Errata section below BEFORE implementing any task.**
+> The plan code blocks have known bugs identified by 3-model review.
+> Every erratum MUST be applied during implementation.
 
 **Goal:** Build a section-aware clause extraction pipeline that locates CAC clauses using document structure, extracts verbatim text via LLM, validates extractions, and presents results in a lawyer-friendly Shiny explorer.
 
-**Architecture:** Three-stage pipeline (LOCATE → EXTRACT → VERIFY). Stage 1 parses Docling markdown into sections, filters by heading/body cues, rejects obvious false positives, and clusters adjacent hits. Stage 2 sends shortlisted sections to Claude Sonnet with multi-shot examples for verbatim extraction. Stage 3 validates extractions against source text and runs a completeness checklist. Results feed into an updated Shiny explorer designed for expert legal review.
+**Architecture:** Three-stage pipeline (LOCATE → EXTRACT → VERIFY). Stage 1 parses Docling markdown into sections, filters by heading/body cues, rejects obvious false positives, and clusters adjacent hits. Stage 2 sends shortlisted sections to Claude Opus via the Anthropic API (Max plan) with multi-shot examples for verbatim extraction. Stage 3 validates extractions against source text and runs a completeness checklist. Results feed into an updated Shiny explorer designed for expert legal review.
 
-**Tech Stack:** Python 3.12+, Click CLI, DuckDB, Polars, Anthropic SDK (Claude Sonnet), Shiny for Python, pytest, ruff, pyright.
+**Tech Stack:** Python 3.12+, Click CLI, DuckDB, Polars, Anthropic SDK (Claude Opus 4), Shiny for Python, pytest, ruff, pyright.
+
+**Model:** Claude Opus 4 (`claude-opus-4-20250514`), NOT Sonnet. Rationale: these are billion-dollar bond contracts. Opus gets edge cases that matter for verbatim extraction and boundary detection. The cost (~$30-50 for 300 candidates) is trivial compared to the value of accurate extractions that don't waste lawyer time.
 
 **Spec:** `docs/superpowers/specs/2026-03-28-clause-extraction-v2-design.md`
 **Design guide:** `docs/lawyer-centered-design.md`
+
+---
+
+## Errata: Critical Fixes from 3-Model Review
+
+**These fixes MUST be applied when implementing the tasks below. Each
+erratum references the task it applies to.**
+
+### E1: Section parser page_range=(0,0) breaks clustering (Task 2 + Task 3)
+
+**Bug:** All Docling sections get `page_range=(0,0)`, so `cluster_candidates()`
+merges ALL candidates from the same document into one mega-candidate.
+
+**Fix:** Use **section index** for clustering instead of page range. Change
+`cluster_candidates()` to group by `storage_key` and merge candidates from
+**adjacent section indices** (not adjacent pages). Add a `section_index: int`
+field to `Section` and `Candidate`. Keep `page_range` for display but don't
+use it for clustering logic.
+
+### E2: Section boundary logic detaches subsections (Task 2)
+
+**Bug:** The parser takes "next heading of any level" as the section end,
+which means `### Aggregation` inside `## Collective Action` becomes a
+separate section. This splits CAC clauses from their subsections.
+
+**Fix:** A section ends at the next heading of **same or higher level**
+(i.e., `##` ends at the next `##` or `#`, not at `###`). Change line:
+```python
+# WRONG: end = headings[i + 1][2] if i + 1 < len(headings) else len(markdown_text)
+# RIGHT:
+end = len(markdown_text)
+for j in range(i + 1, len(headings)):
+    if headings[j][1] <= level:  # same or higher level
+        end = headings[j][2]
+        break
+```
+
+### E3: EXTRACT is not resumable — loses all progress on crash (Task 7)
+
+**Bug:** Results buffered in memory, written once at end. Crash = total loss.
+
+**Fix:** Write each result **incrementally** (append mode). On startup, read
+existing output to find already-processed `candidate_id`s and skip them:
+```python
+# On startup:
+processed_ids = set()
+if output_path.exists():
+    with output_path.open() as f:
+        for line in f:
+            rec = _json.loads(line)
+            processed_ids.add(rec["candidate_id"])
+    click.echo(f"Resuming: {len(processed_ids)} already processed")
+
+# In loop:
+if rec["candidate_id"] in processed_ids:
+    continue
+
+# After each extraction:
+with output_path.open("a") as f:
+    f.write(_json.dumps(output_rec) + "\n")
+```
+
+### E4: No rate limiting — will hit API limits (Task 5 + Task 7)
+
+**Bug:** Extraction loop fires requests as fast as possible. Will hit
+rate limits.
+
+**Fix:** Add `time.sleep(1.0)` between API calls. Add retry with
+exponential backoff on 429/500 errors:
+```python
+import time
+from anthropic import RateLimitError, APIError
+
+MAX_RETRIES = 3
+for attempt in range(MAX_RETRIES):
+    try:
+        response = client.messages.create(...)
+        break
+    except RateLimitError:
+        wait = 2 ** attempt * 5
+        click.echo(f"  Rate limited, waiting {wait}s...")
+        time.sleep(wait)
+    except APIError as e:
+        if attempt == MAX_RETRIES - 1:
+            raise
+        time.sleep(2 ** attempt)
+time.sleep(1.0)  # base delay between calls
+```
+
+### E5: CLI wired to wrong Click group (Task 7)
+
+**Bug:** Plan uses `@main.group("extract-v2")` but the real Click root is
+`cli` at `src/corpus/cli.py:45`. `main()` is the entry point wrapper.
+
+**Fix:** Use `@cli.group("extract-v2")`. Check the actual Click group name
+in `cli.py` before adding the command group.
+
+### E6: EDGAR header skip is fragile (Task 7)
+
+**Bug:** `if line_num == 0: continue` drops first line unconditionally.
+
+**Fix:** Check for header by field presence:
+```python
+rec = _json.loads(line)
+if "page" not in rec:
+    continue  # skip header/metadata lines
+```
+
+### E7: Country always "Unknown" (Task 7)
+
+**Bug:** LOCATE doesn't write a country field. Every LLM call gets
+`country="Unknown"`, degrading prompt quality.
+
+**Fix:** Look up country from DuckDB `document_countries` table using
+`storage_key`, or from the PDIP annotations JSONL. Add `country` and
+`document_title` to the candidate JSONL during LOCATE. If DuckDB is not
+available, try to extract from the document text (e.g., first page often
+names the issuer).
+
+### E8: create_split silent on empty (Task 4)
+
+**Bug:** If `label_family` field name is wrong, `doc_list` is empty and
+the split silently has 0 calibration docs.
+
+**Fix:** Add guard:
+```python
+if len(doc_list) < calibration_count:
+    raise ValueError(
+        f"Only {len(doc_list)} docs found for {clause_family}, "
+        f"need {calibration_count}. Check label_family field name."
+    )
+```
+
+### E9: File path mismatches across tasks (Task 7 + 8 + 9 + 10)
+
+**Bug:** Exporter defaults to `verified.jsonl` but VERIFY writes
+`cac_verified.jsonl`. Stale CSV survives failed runs.
+
+**Fix:** Use consistent paths. The exporter should accept a `--input`
+argument, not hardcode the filename. Delete stale CSV before writing new
+one. Use `Path(__file__).resolve().parent` for relative paths, not CWD.
+
+### E10: Malformed JSONL crashes pipeline (Task 7)
+
+**Bug:** One bad line in any JSONL file crashes the entire stage.
+
+**Fix:** Wrap all `_json.loads(line)` in try/except:
+```python
+try:
+    rec = _json.loads(line)
+except json.JSONDecodeError:
+    click.echo(f"  Warning: skipping malformed line in {path}", err=True)
+    continue
+```
+
+### E11: Fuzzy verifier matches non-contiguous text (Task 6)
+
+**Bug:** SequenceMatcher sums all matching blocks across the entire source,
+so scattered matches can pass validation.
+
+**Fix:** Find the best contiguous window in the source that matches the
+extracted text. Use `SequenceMatcher.find_longest_match()` as the anchor,
+then expand. Or simpler: use `difflib.get_close_matches()` on paragraph-
+level chunks and require the match to be contiguous.
+
+### E12: Few-shot examples not wired in (Task 5 + Task 7)
+
+**Bug:** `--split-manifest` is accepted but never used. Few-shot examples
+are hardcoded empty.
+
+**Fix:** The implementing agent must:
+1. Load the calibration manifest in the EXTRACT command
+2. Read PDIP annotation text for calibration doc_ids
+3. Build `FewShotExample` objects from the calibration data
+4. Pass them to `extract_clause()`
+
+### E13: Few-shot format conflicts with tool_use (Task 5)
+
+**Bug:** Few-shot examples use plain `role: assistant` messages, but
+extraction uses forced `tool_choice`. The API may reject or be confused.
+
+**Fix:** Put few-shot examples inside the system prompt as XML-tagged
+examples:
+```
+<example>
+<input>Section from Argentina bond prospectus:
+[section text]</input>
+<output>{"found": true, "clause_text": "...", "confidence": "high", "reasoning": "..."}</output>
+</example>
+```
+
+### E14: Task 10 nohup race condition (Task 10)
+
+**Bug:** Backgrounded EXTRACT with `nohup ... &` followed by VERIFY has
+no wait. An autonomous executor will race into VERIFY immediately.
+
+**Fix:** Run sequentially, not backgrounded. The whole point is an overnight
+run — sequential is fine:
+```bash
+uv run corpus extract-v2 extract ... && \
+uv run corpus extract-v2 verify ... && \
+uv run python3 demo/data/export_v2.py
+```
+
+### E15: Task 4 requires human review (Task 4)
+
+**Bug:** The stratification step says "review output and manually pick."
+Not autonomous-safe.
+
+**Fix:** Make `create_split()` stratification-aware by reading governing_law
+and publication_date from PDIP metadata. Automatically select docs covering
+different governing laws/eras. Log the selection for human review AFTER the
+run completes — don't block on it.
+
+### E16: Meticulous logging for cost visibility
+
+**Requirement (new):** Every LLM call must log:
+- `candidate_id`, `storage_key`
+- `model` name and version
+- `input_tokens`, `output_tokens` (from `response.usage`)
+- `elapsed_seconds`
+- `prompt_hash` (hash of the full prompt for reproducibility)
+- `stop_reason` (from `response.stop_reason`)
+- timestamp
+
+Write to a separate `_llm_usage.jsonl` log (append-only). After the run,
+print a summary: total calls, total tokens, estimated API cost at current
+pricing, calls by stop_reason.
+
+### E17: Handle stop_reason and max_tokens truncation (Task 5)
+
+**Bug:** The plan never checks `response.stop_reason`. If the extraction
+hits `max_tokens`, the tool output is silently truncated.
+
+**Fix:** Check `response.stop_reason`. If it's `"max_tokens"`, flag the
+extraction as `truncation_suspect`. Log it. Consider re-calling with
+higher `max_tokens`.
 
 ---
 
@@ -1317,7 +1560,7 @@ import anthropic
 
 from corpus.extraction.section_filter import Candidate
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-opus-4-20250514"
 MAX_TOKENS = 8192
 
 SYSTEM_PROMPT = """\
