@@ -74,7 +74,7 @@ GOVERNING_LAW_CUES: dict[str, list[str]] = {
     "law_reference": [
         r"(english|new\s+york|german|japanese)\s+law",
         r"laws?\s+of\s+(the\s+)?(state\s+of\s+)?(new\s+york|england|germany|japan)",
-        r"shall\s+be\s+interpreted\s+(in\s+accordance\s+)?under",
+        r"(interpreted|construed)\s+in\s+accordance\s+with\s+(the\s+)?law",
     ],
 }
 

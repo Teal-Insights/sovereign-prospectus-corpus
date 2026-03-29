@@ -238,7 +238,11 @@ def check_completeness(
     return report
 
 
-# Mode 3 families that use section capture instead of clause extraction
+# Mode 3 families use section capture instead of clause extraction.
+# These extract full sections verbatim (not individual clauses) and are
+# verified with a lower similarity threshold (0.85 vs 0.95) because
+# long sections may have minor formatting differences from OCR/page splits.
+# See docs/superpowers/specs/2026-03-29-full-extraction-design.md Section 8.
 _SECTION_CAPTURE_FAMILIES = {
     "events_of_default",
     "conditions_precedent",

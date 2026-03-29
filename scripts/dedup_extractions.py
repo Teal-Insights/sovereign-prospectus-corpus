@@ -22,13 +22,18 @@ from pathlib import Path
 _CONFIDENCE_RANK = {"high": 3, "medium": 2, "low": 1}
 
 
-def _sort_key(record: dict) -> tuple:
+_VERIFIED_STATUSES = {"verified", "section_located"}
+
+
+def _sort_key(record: dict) -> tuple[int, int, int, int]:
     """Sort key for selecting the best candidate. Higher = better."""
     ext = record.get("extraction", {})
+    # Prefer verified/section_located over failed/needs_review
+    verified = 1 if record.get("verification", {}).get("status") in _VERIFIED_STATUSES else 0
     confidence = _CONFIDENCE_RANK.get(ext.get("confidence", "low"), 0)
     heading = 1 if record.get("heading_match") else 0
     clause_len = len(ext.get("clause_text", ""))
-    return (confidence, heading, clause_len)
+    return (verified, confidence, heading, clause_len)
 
 
 def dedup_family(verified_path: Path, output_path: Path) -> dict:
@@ -65,10 +70,12 @@ def dedup_family(verified_path: Path, output_path: Path) -> dict:
             dup["dedup"] = {"is_primary": False, "primary_candidate_id": best["candidate_id"]}
             duplicates.append(dup)
 
-    # Write deduplicated output (primary + not_found only)
-    with output_path.open("w") as f:
+    # Write deduplicated output (primary + not_found only) using .part -> rename
+    part_path = output_path.with_suffix(".jsonl.part")
+    with part_path.open("w") as f:
         for r in primary + not_found:
             f.write(json.dumps(r) + "\n")
+    part_path.rename(output_path)
 
     return {
         "total_records": len(records),

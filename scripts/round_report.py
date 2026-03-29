@@ -83,8 +83,13 @@ def generate_family_report(
                     pdip_doc_ids.add(ann.get("doc_id"))
 
         if pdip_doc_ids:
-            extracted_keys = {r.get("storage_key", "") for r in found}
-            pdip_found = sum(1 for d in pdip_doc_ids if any(d in k for k in extracted_keys))
+            # Match PDIP doc_ids to storage_keys using the suffix after "__"
+            # to avoid false substring matches (e.g., "GHA1" matching "GHA10")
+            extracted_doc_ids = {
+                k.split("__", 1)[-1] if "__" in k else k
+                for k in (r.get("storage_key", "") for r in found)
+            }
+            pdip_found = sum(1 for d in pdip_doc_ids if d in extracted_doc_ids)
             report["pdip_recall"] = round(pdip_found / len(pdip_doc_ids), 3) if pdip_doc_ids else 0
             report["pdip_annotated_count"] = len(pdip_doc_ids)
             report["pdip_matched_count"] = pdip_found

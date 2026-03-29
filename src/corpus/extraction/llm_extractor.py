@@ -38,7 +38,7 @@ Rules:
 
 EXTRACTION_TOOL_SCHEMA = {
     "name": "extract_clause",
-    "description": "Extract a clause from a bond prospectus section, or report NOT_FOUND.",
+    "description": "Extract a clause from a sovereign debt document section, or report NOT_FOUND.",
     "input_schema": {
         "type": "object",
         "properties": {

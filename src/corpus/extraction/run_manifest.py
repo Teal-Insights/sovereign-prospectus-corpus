@@ -3,6 +3,11 @@
 
 Each extraction run uses a run_id directory. Each family within the run
 gets its own subdirectory with a COMPLETE.json sentinel written last.
+
+IMPORTANT: The manifest uses load-modify-save without locking. Only one
+process should modify the manifest at a time. This is safe because
+families are processed sequentially within a session. If parallel
+processing is needed in the future, add file locking.
 """
 
 from __future__ import annotations

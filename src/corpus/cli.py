@@ -15,22 +15,12 @@ import click
 import corpus
 from corpus.db.ingest import ingest_manifests
 from corpus.extraction.country import guess_country as _guess_country
+from corpus.extraction.cue_families import get_all_families
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-_ALL_FAMILIES = [
-    "collective_action",
-    "pari_passu",
-    "governing_law",
-    "sovereign_immunity",
-    "negative_pledge",
-    "events_of_default",
-    "acceleration",
-    "dispute_resolution",
-    "additional_amounts",
-    "redemption",
-    "indebtedness_definition",
-]
+# Single source of truth: derived from cue_families.py registry
+_ALL_FAMILIES = get_all_families()
 
 
 def _load_config() -> dict:
