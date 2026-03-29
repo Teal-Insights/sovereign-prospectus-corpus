@@ -345,6 +345,33 @@ def test_max_section_size_split() -> None:
 def test_empty_input() -> None:
     sections = parse_docling_markdown("", storage_key="test__empty")
     assert sections == []
+
+
+# --- EDGAR flat JSONL tests ---
+
+def test_parse_flat_jsonl_returns_page_sections() -> None:
+    """Flat JSONL (EDGAR) should produce one section per page."""
+    pages = [
+        {"page": 0, "text": "Page zero text about risk factors.", "char_count": 34},
+        {"page": 1, "text": "Page one has collective action clauses.", "char_count": 39},
+    ]
+    from corpus.extraction.section_parser import parse_flat_jsonl
+    sections = parse_flat_jsonl(pages, storage_key="edgar__test1")
+    assert len(sections) == 2
+    assert sections[0].heading == "(page 1)"  # display is 1-indexed
+    assert sections[1].heading == "(page 2)"
+    assert sections[0].source_format == "flat_jsonl"
+    assert "risk factors" in sections[0].text
+
+
+def test_parse_flat_jsonl_skips_empty_pages() -> None:
+    pages = [
+        {"page": 0, "text": "", "char_count": 0},
+        {"page": 1, "text": "Some content.", "char_count": 13},
+    ]
+    from corpus.extraction.section_parser import parse_flat_jsonl
+    sections = parse_flat_jsonl(pages, storage_key="edgar__test2")
+    assert len(sections) == 1
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -514,16 +541,60 @@ def _split_large_section(text: str, max_chars: int) -> list[str]:
     return chunks
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Add parse_flat_jsonl for EDGAR documents**
+
+Add to the end of `section_parser.py`:
+
+```python
+def parse_flat_jsonl(
+    pages: list[dict],
+    *,
+    storage_key: str,
+) -> list[Section]:
+    """Parse flat JSONL page records into sections (one per non-empty page).
+
+    Used for EDGAR documents that have been parsed into page-level text
+    without section structure. Each page becomes a section with heading
+    "(page N)" (1-indexed for display).
+
+    Args:
+        pages: List of {"page": int, "text": str, "char_count": int} dicts.
+        storage_key: Document identifier.
+
+    Returns:
+        List of Section objects, one per non-empty page.
+    """
+    sections: list[Section] = []
+    for page_rec in pages:
+        text = page_rec.get("text", "")
+        if not text.strip():
+            continue
+        page_idx = page_rec["page"]  # 0-indexed
+        sections.append(
+            Section(
+                section_id=f"{storage_key}__s{len(sections)}",
+                storage_key=storage_key,
+                heading=f"(page {page_idx + 1})",  # 1-indexed for display
+                heading_level=0,
+                text=text,
+                page_range=(page_idx, page_idx),
+                source_format="flat_jsonl",
+                char_count=len(text),
+            )
+        )
+    return sections
+```
+
+- [ ] **Step 5: Run tests to verify all pass**
 
 Run: `uv run pytest tests/test_section_parser.py -v`
-Expected: All 9 tests PASS
+Expected: All 11 tests PASS (9 original + 2 EDGAR)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/corpus/extraction/section_parser.py tests/test_section_parser.py
-git commit -m "feat: Docling markdown section parser"
+git commit -m "feat: section parser for Docling markdown + EDGAR flat JSONL"
 ```
 
 ---
@@ -1686,24 +1757,27 @@ def extract_v2_group():
 
 @extract_v2_group.command("locate")
 @click.option("--clause-family", required=True, type=click.Choice(["collective_action", "pari_passu"]))
-@click.option("--parsed-dir", default="data/parsed_docling", type=click.Path(exists=True))
+@click.option("--docling-dir", default="data/parsed_docling", type=click.Path(exists=True))
+@click.option("--flat-dir", default="data/parsed", type=click.Path(exists=True))
 @click.option("--output", default="data/extracted_v2/candidates.jsonl", type=click.Path())
 @click.option("--run-id", default=None)
-def extract_v2_locate(clause_family: str, parsed_dir: str, output: str, run_id: str | None):
+@click.option("--skip-flat", is_flag=True, help="Skip flat-parsed EDGAR documents")
+def extract_v2_locate(clause_family: str, docling_dir: str, flat_dir: str, output: str, run_id: str | None, skip_flat: bool):
     """Stage 1: Parse sections, filter by cues, reject negatives, cluster."""
-    from corpus.extraction.section_parser import parse_docling_markdown
+    from corpus.extraction.section_parser import parse_docling_markdown, parse_flat_jsonl
     from corpus.extraction.section_filter import filter_sections, cluster_candidates
 
     run_id = run_id or f"locate_{int(_time.time())}"
-    parsed_path = _Path(parsed_dir)
     output_path = _Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    md_files = sorted(parsed_path.glob("*.md"))
-    click.echo(f"Scanning {len(md_files)} Docling markdown files for {clause_family}...")
-
     all_candidates = []
     docs_with_candidates = 0
+
+    # --- Docling markdown (NSM, PDIP) ---
+    docling_path = _Path(docling_dir)
+    md_files = sorted(docling_path.glob("*.md"))
+    click.echo(f"Scanning {len(md_files)} Docling markdown files for {clause_family}...")
 
     for md_file in md_files:
         storage_key = md_file.stem
@@ -1713,6 +1787,35 @@ def extract_v2_locate(clause_family: str, parsed_dir: str, output: str, run_id: 
         if candidates:
             docs_with_candidates += 1
             all_candidates.extend(candidates)
+
+    click.echo(f"  Docling: {len(all_candidates)} candidates from {docs_with_candidates} docs")
+
+    # --- Flat-parsed JSONL (EDGAR) ---
+    if not skip_flat:
+        flat_path = _Path(flat_dir)
+        jsonl_files = sorted(flat_path.glob("edgar__*.jsonl"))
+        click.echo(f"Scanning {len(jsonl_files)} EDGAR flat-parsed files for {clause_family}...")
+
+        edgar_candidates = 0
+        edgar_docs = 0
+        for jsonl_file in jsonl_files:
+            storage_key = jsonl_file.stem
+            pages = []
+            with jsonl_file.open() as f:
+                for line_num, line in enumerate(f):
+                    rec = _json.loads(line)
+                    if line_num == 0:
+                        continue  # skip header
+                    pages.append(rec)
+            sections = parse_flat_jsonl(pages, storage_key=storage_key)
+            candidates = filter_sections(sections, clause_family=clause_family, run_id=run_id)
+            if candidates:
+                edgar_docs += 1
+                edgar_candidates += len(candidates)
+                all_candidates.extend(candidates)
+
+        docs_with_candidates += edgar_docs
+        click.echo(f"  EDGAR: {edgar_candidates} candidates from {edgar_docs} docs")
 
     # Cluster adjacent candidates
     clustered = cluster_candidates(all_candidates)
@@ -2110,15 +2213,19 @@ git commit -m "feat: end-to-end pipeline validated with sample extraction"
 **Files:**
 - No new files — this is the production run
 
-- [ ] **Step 1: Run LOCATE on full corpus**
+- [ ] **Step 1: Run LOCATE on full corpus (Docling + EDGAR)**
 
 ```bash
 uv run corpus extract-v2 locate \
   --clause-family collective_action \
+  --docling-dir data/parsed_docling \
+  --flat-dir data/parsed \
   --output data/extracted_v2/cac_candidates.jsonl
 ```
 
-Record the candidate count.
+Expected output: candidate counts from ~1,468 Docling + ~3,217 EDGAR files.
+Record the candidate count. EDGAR candidates will be body-cue-only (no heading
+match) since they lack section structure — this is expected and honest.
 
 - [ ] **Step 2: Run EXTRACT on all candidates (overnight)**
 
@@ -2151,18 +2258,27 @@ cd demo/shiny-app
 uv run shiny run app_v2.py --port 8001
 ```
 
-- [ ] **Step 5: If time permits, run pari passu**
+- [ ] **Step 5: Run pari passu (same pipeline, different clause family)**
 
 ```bash
 uv run corpus extract-v2 locate \
   --clause-family pari_passu \
+  --docling-dir data/parsed_docling \
+  --flat-dir data/parsed \
   --output data/extracted_v2/pp_candidates.jsonl
 
-uv run corpus extract-v2 extract \
+nohup uv run corpus extract-v2 extract \
   --candidates data/extracted_v2/pp_candidates.jsonl \
   --clause-family pari_passu \
-  --output data/extracted_v2/pp_extractions.jsonl
+  --output data/extracted_v2/pp_extractions.jsonl \
+  > data/extracted_v2/_pp_extract_stdout.log 2>&1 &
 
+echo "Pari passu PID $!. Monitor: tail -f data/extracted_v2/_pp_extract_stdout.log"
+```
+
+After pari passu extraction completes:
+
+```bash
 uv run corpus extract-v2 verify \
   --extractions data/extracted_v2/pp_extractions.jsonl \
   --clause-family pari_passu \
@@ -2180,6 +2296,7 @@ uv run corpus extract-v2 verify \
 | Verbatim check rejects good extractions | 95% threshold + whitespace normalization. If reject rate is high, lower to 90% | After VERIFY — check pass rate |
 | PDIP validation recall is low (<50%) | Run PDIP eval early (Task 9). Debug: are heading patterns missing? OCR issues? | Saturday morning |
 | ANTHROPIC_API_KEY not set | Extract command will fail immediately with clear error | Before overnight run |
-| Too many candidates (>500) | Check LOCATE output. If >500, tighten heading patterns or add more negative patterns | After LOCATE |
+| Too many candidates (>500) | Check LOCATE output. If >500, tighten heading patterns or add more negative patterns. EDGAR will have more body-only candidates — this is expected. | After LOCATE |
+| EDGAR body-only candidates overwhelm LLM budget | If EDGAR produces >1000 candidates, run CAC on Docling first (--skip-flat), then EDGAR separately | After LOCATE |
 | Shiny app crashes on large CSV | Test with full dataset before demo. Paginate if needed | After export |
 | Docling .md files not in data/parsed_docling/ | Check path. May need to set --parsed-dir | Before LOCATE |
