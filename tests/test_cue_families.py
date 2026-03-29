@@ -222,7 +222,7 @@ def test_get_all_families_returns_all_registered() -> None:
     from corpus.extraction.cue_families import get_all_families
 
     families = get_all_families()
-    assert len(families) == 11
+    assert len(families) == 17
     assert "collective_action" in families
     assert "indebtedness_definition" in families
 

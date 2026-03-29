@@ -250,6 +250,119 @@ INDEBTEDNESS_DEFINITION_CUES: dict[str, list[str]] = {
     ],
 }
 
+# ── Round 3 families (Modes 1-3) ──────────────────────────────────────
+
+AMENDMENT_WAIVER_CUES: dict[str, list[str]] = {
+    "heading": [
+        r"amendment\s+and\s+waiver",
+        r"modification\s+and\s+waiver",
+        r"amendments?\s+to\s+(the\s+)?(conditions|terms)",
+        r"waiver\s+and\s+amendment",
+    ],
+    "mechanism": [
+        r"(amend|modify|supplement|waive)\s+(any|all|the)\s+(provisions?|conditions?|terms?)",
+        r"(written\s+)?consent\s+of\s+(the\s+)?holders?\s+of",
+        r"without\s+the\s+consent\s+of\s+(any\s+)?holder",
+    ],
+    "threshold": [
+        r"\d+%\s+of\s+the\s+(aggregate|outstanding)\s+principal",
+        r"extraordinary\s+resolution",
+        r"(unanimous|majority)\s+consent",
+    ],
+}
+
+CONDITIONS_PRECEDENT_CUES: dict[str, list[str]] = {
+    "heading": [
+        r"conditions?\s+precedent",
+        r"conditions?\s+to\s+(effectiveness|disbursement|drawdown|closing)",
+        r"conditions?\s+for\s+(effectiveness|disbursement|drawdown)",
+    ],
+    "condition": [
+        r"(shall|will)\s+not\s+(be\s+)?obligat?ed\s+to\s+(make|disburse|fund)",
+        r"condition\s+precedent\s+to\s+(each|the|any)",
+        r"(effectiveness|availability)\s+of\s+(the\s+)?(loan|facility|credit)",
+    ],
+    "requirement": [
+        r"(legal\s+opinion|certificate|evidence)\s+(satisfactory|acceptable)\s+to",
+        r"no\s+(event\s+of\s+)?default\s+(shall\s+have\s+)?occurred",
+        r"representations?\s+and\s+warranties?\s+(are|shall\s+be)\s+true",
+    ],
+}
+
+PAYMENT_MECHANICS_CUES: dict[str, list[str]] = {
+    "heading": [
+        r"payments?\s+(of\s+)?(principal|interest)",
+        r"method\s+of\s+payment",
+        r"payments?\s+(and\s+)?calculations?",
+        r"payments?\s+on\s+the\s+(notes|bonds|securities)",
+    ],
+    "mechanism": [
+        r"(principal|interest)\s+(shall|will)\s+be\s+(payable|paid)\s+(on|at|in)",
+        r"payments?\s+(shall|will)\s+be\s+made\s+(in|by|through)",
+        r"(paying|fiscal)\s+agent",
+    ],
+    "timing": [
+        r"(interest|coupon)\s+payment\s+date",
+        r"(maturity|redemption)\s+date",
+        r"(business|banking)\s+day\s+convention",
+    ],
+}
+
+TRUSTEE_DUTIES_CUES: dict[str, list[str]] = {
+    "heading": [
+        r"(duties|responsibilities|role)\s+of\s+(the\s+)?trustee",
+        r"trustee\s+(duties|responsibilities|obligations)",
+        r"the\s+trustee",
+    ],
+    "duty": [
+        r"trustee\s+(shall|will|may)\s+(not\s+)?(be\s+)?(liable|responsible|obligat?ed)",
+        r"(indemnif|compensat)(y|ied|ion)\s+(the\s+)?trustee",
+        r"trustee\s+(shall|will)\s+(act|exercise|perform)",
+    ],
+    "limitation": [
+        r"trustee\s+(shall\s+)?not\s+be\s+(required|bound|obligat?ed)\s+to",
+        r"(no|without)\s+(liability|responsibility)\s+on\s+the\s+part\s+of\s+(the\s+)?trustee",
+        r"(reasonable|due)\s+(care|diligence)",
+    ],
+}
+
+DISBURSEMENT_CUES: dict[str, list[str]] = {
+    "heading": [
+        r"disbursement",
+        r"drawdown",
+        r"(loan|credit)\s+disbursement",
+        r"availability\s+of\s+(the\s+)?(loan|facility|credit)",
+    ],
+    "mechanism": [
+        r"(disburse|draw\s*down|withdraw)\s+(the\s+)?(loan|proceeds|funds)",
+        r"(disbursement|drawdown|withdrawal)\s+(request|application|notice)",
+        r"(special|designated)\s+account",
+    ],
+    "condition": [
+        r"(disbursement|drawdown)\s+(shall|will)\s+be\s+(made|available)",
+        r"(proceeds|funds)\s+(shall|will)\s+be\s+(deposited|credited|transferred)",
+        r"(tranche|instalment|installment)",
+    ],
+}
+
+COMMITMENT_CUES: dict[str, list[str]] = {
+    "heading": [
+        r"commitment\s+of\s+the\s+(bank|lender|issuer)",
+        r"the\s+commitment",
+        r"commitment\s+to\s+(lend|provide|make\s+available)",
+    ],
+    "obligation": [
+        r"(agrees|commits|undertakes)\s+to\s+(lend|make\s+available|provide)",
+        r"commitment\s+(amount|sum|total)",
+        r"(aggregate|total)\s+commitment",
+    ],
+    "terms": [
+        r"commitment\s+(fee|period|termination)",
+        r"(reduce|cancel|terminate)\s+(the\s+)?commitment",
+        r"(unutilized|undrawn|available)\s+(commitment|amount|portion)",
+    ],
+}
+
 NEGATIVE_PATTERNS: dict[str, list[str]] = {
     "cross_reference": [
         r"""(see|refer\s+to|described\s+(under|in))\s+["']""",
@@ -268,17 +381,27 @@ NEGATIVE_PATTERNS: dict[str, list[str]] = {
 }
 
 _CLAUSE_CUES: dict[str, dict[str, list[str]]] = {
+    # Round 0
     "collective_action": CAC_CUES,
     "pari_passu": PARI_PASSU_CUES,
+    # Round 1
     "governing_law": GOVERNING_LAW_CUES,
     "sovereign_immunity": SOVEREIGN_IMMUNITY_CUES,
     "negative_pledge": NEGATIVE_PLEDGE_CUES,
     "events_of_default": EVENTS_OF_DEFAULT_CUES,
+    # Round 2
     "acceleration": ACCELERATION_CUES,
     "dispute_resolution": DISPUTE_RESOLUTION_CUES,
     "additional_amounts": ADDITIONAL_AMOUNTS_CUES,
     "redemption": REDEMPTION_CUES,
     "indebtedness_definition": INDEBTEDNESS_DEFINITION_CUES,
+    # Round 3
+    "amendment_waiver": AMENDMENT_WAIVER_CUES,
+    "conditions_precedent": CONDITIONS_PRECEDENT_CUES,
+    "payment_mechanics": PAYMENT_MECHANICS_CUES,
+    "trustee_duties": TRUSTEE_DUTIES_CUES,
+    "disbursement": DISBURSEMENT_CUES,
+    "commitment": COMMITMENT_CUES,
 }
 
 

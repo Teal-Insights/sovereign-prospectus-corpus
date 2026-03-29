@@ -90,6 +90,12 @@ CLAUSE_DESCRIPTIONS = {
     "additional_amounts": "Additional Amounts / Gross-Up -- provisions requiring the issuer to pay additional amounts to compensate for tax withholding.",
     "redemption": "Redemption Clause -- provisions for optional, mandatory, or tax-related early redemption of the securities.",
     "indebtedness_definition": "Indebtedness Definition -- the contractual definition of what constitutes 'indebtedness' or 'external debt'.",
+    "amendment_waiver": "Amendment and Waiver -- provisions governing how the terms of the instrument may be amended or waived, including consent thresholds.",
+    "conditions_precedent": "Conditions Precedent -- conditions that must be satisfied before the lender is obligated to disburse or the instrument becomes effective.",
+    "payment_mechanics": "Payment Mechanics -- provisions specifying how, when, and where payments of principal and interest are made.",
+    "trustee_duties": "Trustee Duties -- provisions defining the role, duties, and liability limitations of the trustee or fiscal agent.",
+    "disbursement": "Disbursement -- provisions governing how loan proceeds are drawn down, disbursed, or made available to the borrower.",
+    "commitment": "Commitment -- provisions establishing the lender's commitment to provide funds, including amount, period, and termination.",
 }
 
 
