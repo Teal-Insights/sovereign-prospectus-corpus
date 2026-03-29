@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 from pathlib import Path
@@ -87,17 +88,19 @@ def export_v2_candidates(
                 if not ext.get("found"):
                     continue
 
-                # Handle placeholder page ranges: (0,0) means unknown
+                # Determine page display
                 page_range = rec.get("page_range", [])
+                source_fmt = rec.get("source_format", "")
                 if (
                     isinstance(page_range, list)
                     and len(page_range) >= 2
-                    and not (page_range[0] == 0 and page_range[1] == 0)
+                    and source_fmt == "flat_jsonl"  # EDGAR has real pages
                 ):
                     # Display as 1-indexed
                     page_start = str(page_range[0] + 1)
                     page_end = str(page_range[1] + 1)
                 else:
+                    # Docling pages are placeholders
                     page_start = ""
                     page_end = ""
 
@@ -167,4 +170,18 @@ def export_v2_candidates(
 
 
 if __name__ == "__main__":
-    export_v2_candidates()
+    parser = argparse.ArgumentParser(description="Export v2 extraction results")
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=VERIFIED_DIR,
+        help="Directory containing *_verified.jsonl files",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=OUTPUT_PATH,
+        help="Output CSV path",
+    )
+    args = parser.parse_args()
+    export_v2_candidates(verified_dir=args.input, output_path=args.output)
