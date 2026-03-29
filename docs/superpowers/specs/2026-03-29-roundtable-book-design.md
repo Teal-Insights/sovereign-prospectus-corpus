@@ -272,7 +272,6 @@ patterns. Blocks commits that contain:
 - Content from persona review artifacts accidentally pasted into tracked
   files
 - Framing language that belongs in `docs/private/`, not public content
-  (e.g., "upstaging", "make them look good", "positioning")
 - References to the private review process itself
 
 ### Layer 3: PR Verification
