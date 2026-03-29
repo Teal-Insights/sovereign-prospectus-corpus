@@ -40,3 +40,13 @@ repos:
       - id: no-commit-to-branch
         args: ['--branch', 'main']
       - id: detect-private-key
+
+  # === PRIVATE CONTENT GUARD ===
+  - repo: local
+    hooks:
+      - id: private-content-check
+        name: block private framing content in public files
+        entry: uv run python3 scripts/pre_commit_private_check.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
