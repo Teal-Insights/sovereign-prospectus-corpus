@@ -36,84 +36,149 @@
 
 | File | Change |
 |------|--------|
-| `src/corpus/extraction/cue_families.py` | Add cue definitions for 9 new clause families (Round 1 + Round 2) |
+| `src/corpus/extraction/cue_families.py` | Add cue definitions for 9 new clause families (Round 1 + Round 2), each with 2+ non-heading body families |
 | `src/corpus/extraction/verify.py` | Add completeness checklist patterns for new families + section_capture_similarity |
 | `src/corpus/extraction/llm_extractor.py` | Instrument-aware prompt variants, clause descriptions for new families |
 | `src/corpus/cli.py` | Dynamic clause family choices, run_id directory structure, document classification command |
-| `tests/test_cue_families.py` | Tests for new cue patterns |
+| `tests/test_cue_families.py` | Tests for new cue patterns, including 2+ non-heading families check |
 
 ---
 
-## Task 1: Extend Cue Families for Round 1
+## Task 0: Create Feature Branch
+
+- [ ] **Step 1: Create branch**
+
+```bash
+git checkout -b feature/full-extraction-round-1
+```
+
+---
+
+## Task 1: Extend Cue Families for Round 1 + Round 2
 
 **Files:**
 - Modify: `src/corpus/extraction/cue_families.py`
 - Test: `tests/test_cue_families.py`
+
+**Critical fix (C2):** Every family MUST have at least 2 non-heading cue families, because `filter_sections()` requires 2+ non-heading cue families for body-only candidates. Six families previously had only 1 non-heading family, which would give zero EDGAR body-only recall.
 
 - [ ] **Step 1: Write tests for new cue families**
 
 Add to `tests/test_cue_families.py`:
 
 ```python
-# --- Round 1 family tests ---
+# --- Round 1 + Round 2 family tests ---
+
+import re
+
+from corpus.extraction.cue_families import (
+    GOVERNING_LAW_CUES,
+    SOVEREIGN_IMMUNITY_CUES,
+    NEGATIVE_PLEDGE_CUES,
+    EVENTS_OF_DEFAULT_CUES,
+    ACCELERATION_CUES,
+    DISPUTE_RESOLUTION_CUES,
+    ADDITIONAL_AMOUNTS_CUES,
+    REDEMPTION_CUES,
+    INDEBTEDNESS_DEFINITION_CUES,
+    get_cue_families,
+)
+
 
 def test_governing_law_cues_have_heading_family() -> None:
-    from corpus.extraction.cue_families import GOVERNING_LAW_CUES
     assert "heading" in GOVERNING_LAW_CUES
 
 
 def test_governing_law_heading_matches() -> None:
-    from corpus.extraction.cue_families import GOVERNING_LAW_CUES
-    import re
     heading_patterns = GOVERNING_LAW_CUES["heading"]
     assert any(re.search(p, "Governing Law", re.IGNORECASE) for p in heading_patterns)
     assert any(re.search(p, "Applicable Law", re.IGNORECASE) for p in heading_patterns)
 
 
 def test_sovereign_immunity_cues_have_heading_family() -> None:
-    from corpus.extraction.cue_families import SOVEREIGN_IMMUNITY_CUES
     assert "heading" in SOVEREIGN_IMMUNITY_CUES
 
 
 def test_sovereign_immunity_heading_matches() -> None:
-    from corpus.extraction.cue_families import SOVEREIGN_IMMUNITY_CUES
-    import re
     patterns = SOVEREIGN_IMMUNITY_CUES["heading"]
     assert any(re.search(p, "Sovereign Immunity", re.IGNORECASE) for p in patterns)
     assert any(re.search(p, "Waiver of Immunity", re.IGNORECASE) for p in patterns)
+    assert any(re.search(p, "No Immunity", re.IGNORECASE) for p in patterns)
 
 
 def test_negative_pledge_cues_have_heading_family() -> None:
-    from corpus.extraction.cue_families import NEGATIVE_PLEDGE_CUES
     assert "heading" in NEGATIVE_PLEDGE_CUES
 
 
+def test_negative_pledge_heading_matches_covenants() -> None:
+    patterns = NEGATIVE_PLEDGE_CUES["heading"]
+    assert any(re.search(p, "Covenants", re.IGNORECASE) for p in patterns)
+
+
 def test_events_of_default_cues_have_heading_family() -> None:
-    from corpus.extraction.cue_families import EVENTS_OF_DEFAULT_CUES
     assert "heading" in EVENTS_OF_DEFAULT_CUES
 
 
+def test_events_of_default_heading_no_bare_acceleration() -> None:
+    """C8: bare 'acceleration' must NOT be in EoD headings (too broad)."""
+    patterns = EVENTS_OF_DEFAULT_CUES["heading"]
+    # None of the heading patterns should match bare "acceleration" without "default"
+    for p in patterns:
+        m = re.search(p, "acceleration", re.IGNORECASE)
+        if m:
+            # Only OK if the pattern requires "default" context
+            assert "default" in p.lower(), f"Heading pattern '{p}' matches bare 'acceleration'"
+
+
+def test_dispute_resolution_heading_no_bare_jurisdiction() -> None:
+    """I3: bare 'jurisdiction' must NOT be in heading (too broad, matches risk factors)."""
+    patterns = DISPUTE_RESOLUTION_CUES["heading"]
+    for p in patterns:
+        m = re.fullmatch(p, "jurisdiction", re.IGNORECASE)
+        assert m is None, f"Heading pattern '{p}' matches bare 'jurisdiction'"
+
+
+def test_indebtedness_heading_no_bare_indebtedness() -> None:
+    """I3: bare 'indebtedness' must NOT be in heading (too broad)."""
+    patterns = INDEBTEDNESS_DEFINITION_CUES["heading"]
+    for p in patterns:
+        m = re.fullmatch(p, "indebtedness", re.IGNORECASE)
+        assert m is None, f"Heading pattern '{p}' matches bare 'indebtedness'"
+
+
 def test_get_cue_families_governing_law() -> None:
-    from corpus.extraction.cue_families import get_cue_families, GOVERNING_LAW_CUES
     assert get_cue_families("governing_law") is GOVERNING_LAW_CUES
 
 
 def test_get_cue_families_all_round1() -> None:
-    from corpus.extraction.cue_families import get_cue_families
     for family in ["governing_law", "sovereign_immunity", "negative_pledge", "events_of_default"]:
         assert get_cue_families(family) is not None, f"Missing cue family: {family}"
 
 
 def test_get_cue_families_all_round2() -> None:
-    from corpus.extraction.cue_families import get_cue_families
     for family in ["acceleration", "dispute_resolution", "additional_amounts", "redemption", "indebtedness_definition"]:
         assert get_cue_families(family) is not None, f"Missing cue family: {family}"
 
 
+def test_all_families_have_two_plus_non_heading_families() -> None:
+    """C2: Every family must have at least 2 non-heading cue families for body-only recall."""
+    for family_name in [
+        "collective_action", "pari_passu",
+        "governing_law", "sovereign_immunity", "negative_pledge",
+        "events_of_default", "acceleration", "dispute_resolution",
+        "additional_amounts", "redemption", "indebtedness_definition",
+    ]:
+        cues = get_cue_families(family_name)
+        assert cues is not None, f"Missing cue family: {family_name}"
+        non_heading = [k for k in cues if k != "heading"]
+        assert len(non_heading) >= 2, (
+            f"{family_name} has only {len(non_heading)} non-heading families "
+            f"({non_heading}), need >= 2 for body-only LOCATE"
+        )
+
+
 def test_all_new_patterns_compile() -> None:
     """Every pattern string in new families must be a valid regex."""
-    import re
-    from corpus.extraction.cue_families import get_cue_families
     for family in [
         "governing_law", "sovereign_immunity", "negative_pledge",
         "events_of_default", "acceleration", "dispute_resolution",
@@ -128,12 +193,12 @@ def test_all_new_patterns_compile() -> None:
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `uv run pytest tests/test_cue_families.py -v -k "round1 or round2 or governing or sovereign or negative or events or acceleration or dispute or additional or redemption or indebtedness or new_patterns"`
-Expected: FAIL — ImportError for new constants
+Run: `uv run pytest tests/test_cue_families.py -v -k "round1 or round2 or governing or sovereign or negative or events or acceleration or dispute or additional or redemption or indebtedness or new_patterns or two_plus"`
+Expected: FAIL -- ImportError for new constants
 
 - [ ] **Step 3: Add Round 1 cue families**
 
-Add to `src/corpus/extraction/cue_families.py`:
+Add to `src/corpus/extraction/cue_families.py`. Each family has 2+ non-heading body families to satisfy `filter_sections()` requirements:
 
 ```python
 GOVERNING_LAW_CUES: dict[str, list[str]] = {
@@ -142,12 +207,17 @@ GOVERNING_LAW_CUES: dict[str, list[str]] = {
         r"applicable\s+law",
         r"choice\s+of\s+law",
         r"law\s+and\s+jurisdiction",
+        r"governing\s+law\s+and\s+enforcement",
     ],
     "jurisdiction": [
         r"governed\s+by\s+(the\s+)?law(s)?\s+of",
         r"construed\s+in\s+accordance\s+with",
         r"subject\s+to\s+(the\s+)?(law(s)?|jurisdiction)\s+of",
-        r"(english|new\s+york|german)\s+law",
+    ],
+    "law_reference": [
+        r"(english|new\s+york|german|japanese)\s+law",
+        r"laws?\s+of\s+(the\s+)?(state\s+of\s+)?(new\s+york|england|germany|japan)",
+        r"shall\s+be\s+interpreted\s+(in\s+accordance\s+)?under",
     ],
 }
 
@@ -157,6 +227,7 @@ SOVEREIGN_IMMUNITY_CUES: dict[str, list[str]] = {
         r"waiver\s+of\s+immunit(y|ies)",
         r"immunit(y|ies)\s+from\s+(jurisdiction|execution|suit)",
         r"consent\s+to\s+(jurisdiction|service|suit)",
+        r"no\s+immunit(y|ies)",
     ],
     "waiver": [
         r"irrevocabl(e|y)\s+(waive|consent)",
@@ -177,6 +248,7 @@ NEGATIVE_PLEDGE_CUES: dict[str, list[str]] = {
         r"negative\s+pledge",
         r"limitation\s+on\s+liens",
         r"restriction\s+on\s+(security|liens|encumbrances)",
+        r"covenants",
     ],
     "pledge": [
         r"will\s+not\s+create\s+(or\s+permit\s+)?(any\s+)?(lien|security\s+interest|encumbrance|mortgage)",
@@ -193,7 +265,7 @@ EVENTS_OF_DEFAULT_CUES: dict[str, list[str]] = {
     "heading": [
         r"events?\s+of\s+default",
         r"default\s+and\s+enforcement",
-        r"acceleration",
+        r"default.{0,40}acceleration",
     ],
     "trigger": [
         r"(non[\s-]?payment|failure\s+to\s+pay)",
@@ -214,7 +286,7 @@ EVENTS_OF_DEFAULT_CUES: dict[str, list[str]] = {
 
 - [ ] **Step 4: Add Round 2 cue families**
 
-Add to `src/corpus/extraction/cue_families.py`:
+Add to `src/corpus/extraction/cue_families.py`. Each family has 2+ non-heading body families:
 
 ```python
 ACCELERATION_CUES: dict[str, list[str]] = {
@@ -224,9 +296,12 @@ ACCELERATION_CUES: dict[str, list[str]] = {
     ],
     "mechanism": [
         r"declared\s+(immediately\s+)?due\s+and\s+payable",
-        r"accelerat(e|ion|ed)",
         r"principal\s+amount.{0,30}(become|declared)\s+(immediately\s+)?due",
+    ],
+    "trigger_reference": [
+        r"accelerat(e|ion|ed)",
         r"shall\s+become\s+(immediately\s+)?due",
+        r"upon\s+(the\s+)?occurrence\s+of",
     ],
 }
 
@@ -234,15 +309,19 @@ DISPUTE_RESOLUTION_CUES: dict[str, list[str]] = {
     "heading": [
         r"dispute\s+resolution",
         r"arbitration",
-        r"jurisdiction",
         r"submission\s+to\s+jurisdiction",
         r"forum\s+selection",
+        r"law\s+and\s+jurisdiction",
     ],
-    "mechanism": [
+    "forum": [
         r"(ICSID|ICC|LCIA|UNCITRAL|AAA)\s+(arbitration|rules)",
         r"submit(s|ted)?\s+to\s+the\s+(exclusive\s+)?jurisdiction",
         r"(courts?\s+of|tribunal)\s+(England|New\s+York|the\s+State)",
+    ],
+    "mechanism": [
         r"arbitrat(e|ion|ed|or)",
+        r"exclusive\s+jurisdiction",
+        r"(irrevocably\s+)?submit",
     ],
 }
 
@@ -255,35 +334,48 @@ ADDITIONAL_AMOUNTS_CUES: dict[str, list[str]] = {
     "obligation": [
         r"additional\s+amounts\s+(as\s+)?will\s+result\s+in",
         r"(pay|paying)\s+(such\s+)?additional\s+amounts",
-        r"without\s+(withholding|deduction)\s+for\s+(or\s+on\s+account\s+of\s+)?(any\s+)?tax",
         r"gross[\s-]?up",
+    ],
+    "tax_context": [
+        r"without\s+(withholding|deduction)\s+for\s+(or\s+on\s+account\s+of\s+)?(any\s+)?tax",
+        r"(withholding|deduction)\s+(is\s+)?required\s+by\s+law",
+        r"tax(es)?\s+(imposed|levied|assessed)\s+by",
     ],
 }
 
 REDEMPTION_CUES: dict[str, list[str]] = {
     "heading": [
-        r"(optional|early|mandatory)\s+redemption",
+        r"(optional|early|mandatory|scheduled|partial)\s+redemption",
         r"redemption\s+(and\s+)?purchase",
         r"(repurchase|repayment)\s+(at\s+the\s+option|upon\s+request)",
+        r"no\s+(other\s+)?redemption",
     ],
     "mechanism": [
         r"redeem(ed)?\s+(all\s+or\s+(a\s+)?part|in\s+whole\s+or\s+in\s+part)",
-        r"(call|make[\s-]?whole)\s+(premium|amount|price)",
-        r"tax\s+redemption",
         r"at\s+a\s+redemption\s+price",
+        r"tax\s+redemption",
+    ],
+    "terms": [
+        r"(call|make[\s-]?whole)\s+(premium|amount|price)",
+        r"redemption\s+date",
+        r"notice\s+of\s+redemption",
     ],
 }
 
 INDEBTEDNESS_DEFINITION_CUES: dict[str, list[str]] = {
     "heading": [
         r"(definition|interpretation)\s+of\s+indebtedness",
-        r"indebtedness",
         r"(external|public)\s+(indebtedness|debt)",
+        r"certain\s+definitions",
     ],
     "definition": [
         r"indebtedness\s+means",
         r"(external|public)\s+(indebtedness|debt)\s+(means|shall\s+mean)",
+    ],
+    "scope": [
         r"(obligation|liability)\s+for\s+(borrowed\s+money|the\s+payment)",
+        r"(guarantee|guaranty|indemnity)\s+of\s+(any\s+)?indebtedness",
+        r"(bonds?|notes?|debentures?|loan\s+stock)",
     ],
 }
 ```
@@ -308,6 +400,14 @@ _CLAUSE_CUES: dict[str, dict[str, list[str]]] = {
 }
 ```
 
+Also add a helper for the CLI:
+
+```python
+def get_all_families() -> list[str]:
+    """Return all registered clause family names."""
+    return sorted(_CLAUSE_CUES.keys())
+```
+
 - [ ] **Step 6: Run tests to verify all pass**
 
 Run: `uv run pytest tests/test_cue_families.py -v`
@@ -317,7 +417,7 @@ Expected: All tests PASS (existing + new)
 
 ```bash
 git add src/corpus/extraction/cue_families.py tests/test_cue_families.py
-git commit -m "feat: cue families for Round 1 + Round 2 clause types (9 new families)"
+git commit -m "feat: cue families for Round 1 + Round 2 clause types (9 new families, 2+ body families each)"
 ```
 
 ---
@@ -327,70 +427,149 @@ git commit -m "feat: cue families for Round 1 + Round 2 clause types (9 new fami
 **Files:**
 - Modify: `src/corpus/cli.py`
 
-- [ ] **Step 1: Replace hardcoded Click.Choice with dynamic lookup**
+**Fixes applied:** C6 (exact verify code), C7 (run_id=None default), I7 (_resolve_path), M1 (explicit family list).
 
-In `src/corpus/cli.py`, find the two `click.Choice(["collective_action", "pari_passu"])` at lines ~1162 and ~1331. Replace both with a callback that validates against `_CLAUSE_CUES`:
+- [ ] **Step 1: Add family list constant and replace hardcoded Click.Choice**
+
+In `src/corpus/cli.py`, add a constant for all families and replace both `click.Choice(["collective_action", "pari_passu"])` at the locate and verify commands:
 
 ```python
-def _validate_clause_family(ctx, param, value):
-    """Validate clause family against registered cue families."""
-    from corpus.extraction.cue_families import get_cue_families
-    if get_cue_families(value) is None:
-        raise click.BadParameter(
-            f"Unknown clause family '{value}'. "
-            f"Check _CLAUSE_CUES in cue_families.py."
-        )
-    return value
+_ALL_FAMILIES = [
+    "collective_action", "pari_passu", "governing_law", "sovereign_immunity",
+    "negative_pledge", "events_of_default", "acceleration", "dispute_resolution",
+    "additional_amounts", "redemption", "indebtedness_definition",
+]
 ```
 
-Replace:
+Replace both occurrences:
 ```python
+# Before:
 @click.option("--clause-family", required=True, type=click.Choice(["collective_action", "pari_passu"]))
-```
-With:
-```python
-@click.option("--clause-family", required=True, callback=_validate_clause_family, is_eager=True)
+# After:
+@click.option("--clause-family", required=True, type=click.Choice(_ALL_FAMILIES))
 ```
 
-Do this for BOTH the `locate` and `verify` commands.
+- [ ] **Step 2: Update locate command with run_id default and config-backed paths**
 
-- [ ] **Step 2: Add run-id directory structure to locate**
-
-In the `extract_v2_locate` command, update the output path to use run_id-scoped directories:
+In the `extract_v2_locate` command:
 
 ```python
+@extract_v2_group.command("locate")
+@click.option("--clause-family", required=True, type=click.Choice(_ALL_FAMILIES))
+@click.option("--docling-dir", default=None, type=click.Path())
+@click.option("--flat-dir", default=None, type=click.Path())
+@click.option("--output", default=None, type=click.Path())
+@click.option("--run-id", default=None)
+@click.option("--skip-flat", is_flag=True)
+def extract_v2_locate(
+    clause_family: str, docling_dir: str | None, flat_dir: str | None,
+    output: str | None, run_id: str | None, skip_flat: bool,
+) -> None:
+    """LOCATE phase: find candidate sections for a clause family."""
+    import time
+
+    # C7: default run_id when None
+    run_id = run_id or f"run_{int(time.time())}"
+
+    config = _load_config()
+
+    # I7: use config-backed paths via _resolve_path
+    docling_resolved = _resolve_path(
+        docling_dir or config.get("extraction", {}).get("docling_dir", "data/parsed_docling")
+    )
+    flat_resolved = _resolve_path(
+        flat_dir or config.get("extraction", {}).get("flat_dir", "data/parsed")
+    )
+
     # Output path: data/extracted_v2/<run_id>/<family>/candidates.jsonl
-    run_dir = _PROJECT_ROOT / "data" / "extracted_v2" / run_id / clause_family
-    run_dir.mkdir(parents=True, exist_ok=True)
-    output_path = Path(output) if output else run_dir / "candidates.jsonl"
+    run_dir = _PROJECT_ROOT / "data" / "extracted_v2" / run_id
+    family_dir = run_dir / clause_family
+    family_dir.mkdir(parents=True, exist_ok=True)
+    output_path = Path(output) if output else family_dir / "candidates.jsonl"
+
+    log_path = _PROJECT_ROOT / "data" / "telemetry" / "extract_v2.jsonl"
+    # ... rest of locate implementation unchanged
 ```
 
-Similarly update the verify command's output path.
+- [ ] **Step 3: Update verify command with run_id default and config-backed paths**
 
-- [ ] **Step 3: Test that new families are accepted**
+In the `extract_v2_verify` command:
+
+```python
+@extract_v2_group.command("verify")
+@click.option("--clause-family", required=True, type=click.Choice(_ALL_FAMILIES))
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True))
+@click.option("--docling-dir", default=None, type=click.Path())
+@click.option("--flat-dir", default=None, type=click.Path())
+@click.option("--output", default=None, type=click.Path())
+@click.option("--run-id", default=None)
+def extract_v2_verify(
+    clause_family: str, input_path: str, docling_dir: str | None,
+    flat_dir: str | None, output: str | None, run_id: str | None,
+) -> None:
+    """VERIFY phase: check extraction quality."""
+    import time
+
+    from corpus.extraction.verify import check_verbatim, check_section_capture, is_section_capture_family
+
+    # C7: default run_id when None
+    run_id = run_id or f"run_{int(time.time())}"
+
+    config = _load_config()
+
+    # I7: use config-backed paths
+    docling_resolved = _resolve_path(
+        docling_dir or config.get("extraction", {}).get("docling_dir", "data/parsed_docling")
+    )
+    flat_resolved = _resolve_path(
+        flat_dir or config.get("extraction", {}).get("flat_dir", "data/parsed")
+    )
+
+    # Output path: data/extracted_v2/<run_id>/<family>/verified.jsonl
+    run_dir = _PROJECT_ROOT / "data" / "extracted_v2" / run_id
+    family_dir = run_dir / clause_family
+    family_dir.mkdir(parents=True, exist_ok=True)
+    output_path = Path(output) if output else family_dir / "verified.jsonl"
+
+    log_path = _PROJECT_ROOT / "data" / "telemetry" / "extract_v2.jsonl"
+    # ... rest of verify implementation, with the branching logic from Task 3:
+    #
+    # For each record:
+    #     if is_section_capture_family(clause_family):
+    #         verbatim = check_section_capture(clause_text, source_text)
+    #         status_label = "section_located" if verbatim.passes else "needs_review"
+    #     else:
+    #         verbatim = check_verbatim(clause_text, source_text)
+    #         status_label = "verified" if verbatim.passes else "failed"
+```
+
+- [ ] **Step 4: Test that new families are accepted**
 
 ```bash
 uv run corpus extract-v2 locate --clause-family governing_law --help
 uv run corpus extract-v2 locate --clause-family events_of_default --help
 uv run corpus extract-v2 locate --clause-family nonexistent_family --help  # should error
+uv run corpus extract-v2 verify --clause-family governing_law --help
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add src/corpus/cli.py
-git commit -m "feat: CLI accepts all registered clause families dynamically"
+git commit -m "feat: CLI accepts all registered clause families with run_id defaults + config paths"
 ```
 
 ---
 
-## Task 3: Add Completeness Checklist for New Families
+## Task 3: Completeness + Section Capture Similarity
 
 **Files:**
 - Modify: `src/corpus/extraction/verify.py`
 - Test: `tests/test_verify.py`
 
-- [ ] **Step 1: Write tests for new completeness checks**
+**Fixes applied:** C3 (section_capture_similarity for Mode 3 families).
+
+- [ ] **Step 1: Write tests for new completeness checks and section_capture_similarity**
 
 Add to `tests/test_verify.py`:
 
@@ -424,12 +603,65 @@ def test_completeness_events_of_default() -> None:
 def test_completeness_unknown_family_returns_empty() -> None:
     report = check_completeness("any text", clause_family="nonexistent")
     assert report == {}
+
+
+# --- Section capture similarity tests ---
+
+def test_section_capture_exact_slice_passes() -> None:
+    from corpus.extraction.verify import check_section_capture
+    source = "The following events shall constitute Events of Default: (a) non-payment, (b) cross-default, (c) insolvency."
+    extracted = "The following events shall constitute Events of Default: (a) non-payment, (b) cross-default, (c) insolvency."
+    result = check_section_capture(extracted, source)
+    assert result.passes is True
+    assert result.similarity == 1.0
+
+
+def test_section_capture_substring_passes() -> None:
+    from corpus.extraction.verify import check_section_capture
+    source = "Preamble text. The following events shall constitute Events of Default: (a) non-payment. End of section."
+    extracted = "The following events shall constitute Events of Default: (a) non-payment."
+    result = check_section_capture(extracted, source)
+    assert result.passes is True
+    assert result.similarity == 1.0
+
+
+def test_section_capture_empty_extracted_fails() -> None:
+    from corpus.extraction.verify import check_section_capture
+    result = check_section_capture("", "some source text")
+    assert result.passes is False
+    assert result.similarity == 0.0
+
+
+def test_section_capture_high_similarity_passes() -> None:
+    from corpus.extraction.verify import check_section_capture
+    source = "Events of Default include non-payment, cross-default, and insolvency of the issuer."
+    # Minor whitespace/formatting difference
+    extracted = "Events of Default include non-payment, cross-default,  and insolvency of the issuer."
+    result = check_section_capture(extracted, source)
+    assert result.passes is True
+    assert result.similarity >= 0.85
+
+
+def test_section_capture_low_similarity_fails() -> None:
+    from corpus.extraction.verify import check_section_capture
+    source = "Events of Default include non-payment, cross-default, and insolvency."
+    extracted = "Completely different text about redemption and maturity dates."
+    result = check_section_capture(extracted, source)
+    assert result.passes is False
+
+
+def test_is_section_capture_family() -> None:
+    from corpus.extraction.verify import is_section_capture_family
+    assert is_section_capture_family("events_of_default") is True
+    assert is_section_capture_family("conditions_precedent") is True
+    assert is_section_capture_family("governing_law") is False
+    assert is_section_capture_family("collective_action") is False
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `uv run pytest tests/test_verify.py -v -k "governing or sovereign or negative or events_of_default or unknown_family"`
-Expected: FAIL — completeness returns empty dict for new families
+Run: `uv run pytest tests/test_verify.py -v -k "governing or sovereign or negative or events_of_default or unknown_family or section_capture"`
+Expected: FAIL -- completeness returns empty dict for new families, section_capture functions don't exist
 
 - [ ] **Step 3: Add completeness patterns**
 
@@ -549,16 +781,77 @@ def check_completeness(
     return report
 ```
 
-- [ ] **Step 4: Run tests to verify all pass**
+- [ ] **Step 4: Add section_capture_similarity**
+
+Add to `src/corpus/extraction/verify.py`:
+
+```python
+from difflib import SequenceMatcher
+
+# Mode 3 families that use section capture instead of clause extraction
+_SECTION_CAPTURE_FAMILIES = {
+    "events_of_default", "conditions_precedent", "payment_mechanics",
+    "trustee_duties", "disbursement",
+}
+
+
+def check_section_capture(
+    extracted: str,
+    source: str,
+) -> VerbatimResult:
+    """Check section capture quality.
+
+    Uses the same normalization but reports as section_capture_similarity,
+    not verbatim. If the extraction is an exact source slice, it passes.
+    Otherwise uses SequenceMatcher ratio with a lower threshold (0.85)
+    since full sections may have minor formatting differences.
+    """
+    norm_ext = _normalize_whitespace(extracted)
+    norm_src = _normalize_whitespace(source)
+
+    if not norm_ext:
+        return VerbatimResult(
+            passes=False,
+            similarity=0.0,
+            normalized_extracted=norm_ext,
+            normalized_source=norm_src,
+        )
+
+    if norm_ext in norm_src:
+        return VerbatimResult(
+            passes=True,
+            similarity=1.0,
+            normalized_extracted=norm_ext,
+            normalized_source=norm_src,
+        )
+
+    # For long sections, use SequenceMatcher ratio (more lenient than find_longest_match)
+    matcher = SequenceMatcher(None, norm_ext, norm_src)
+    similarity = matcher.ratio()
+
+    return VerbatimResult(
+        passes=similarity >= 0.85,  # lower threshold for full sections
+        similarity=similarity,
+        normalized_extracted=norm_ext,
+        normalized_source=norm_src,
+    )
+
+
+def is_section_capture_family(clause_family: str) -> bool:
+    """Check if a family uses section capture mode."""
+    return clause_family in _SECTION_CAPTURE_FAMILIES
+```
+
+- [ ] **Step 5: Run tests to verify all pass**
 
 Run: `uv run pytest tests/test_verify.py -v`
 Expected: All tests PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/corpus/extraction/verify.py tests/test_verify.py
-git commit -m "feat: completeness checklist patterns for Round 1 + Round 2 families"
+git commit -m "feat: completeness checklist + section_capture_similarity for Mode 3 families"
 ```
 
 ---
@@ -568,6 +861,8 @@ git commit -m "feat: completeness checklist patterns for Round 1 + Round 2 famil
 **Files:**
 - Modify: `src/corpus/extraction/llm_extractor.py`
 - Test: `tests/test_llm_extractor.py`
+
+**Fixes applied:** I1 (thread instrument_label through ALL messages including final user message and few-shot messages).
 
 - [ ] **Step 1: Write test**
 
@@ -589,7 +884,24 @@ def test_build_prompt_adapts_to_loan() -> None:
         instrument_type="Loan",
     )
     full_text = " ".join(m["content"] for m in messages if isinstance(m["content"], str))
-    assert "loan agreement" in full_text.lower() or "loan" in full_text.lower()
+    assert "loan agreement" in full_text.lower()
+
+
+def test_build_prompt_final_user_message_uses_instrument_label() -> None:
+    """I1: The final user message must use instrument_label, not hardcoded 'bond prospectus'."""
+    candidate = _make_candidate()
+    messages = build_extraction_prompt(
+        candidate=candidate,
+        clause_family="governing_law",
+        country="Kenya",
+        few_shot_examples=[],
+        instrument_type="Loan",
+    )
+    # The last user message should say "loan agreement", not "bond prospectus"
+    user_messages = [m for m in messages if m["role"] == "user"]
+    last_user = user_messages[-1]["content"]
+    assert "loan agreement" in last_user.lower()
+    assert "bond prospectus" not in last_user.lower()
 ```
 
 - [ ] **Step 2: Add clause descriptions and instrument-aware prompt**
@@ -598,21 +910,21 @@ Add to `CLAUSE_DESCRIPTIONS` in `llm_extractor.py`:
 
 ```python
 CLAUSE_DESCRIPTIONS = {
-    "collective_action": "Collective Action Clause (CAC) — provisions allowing a qualified majority of bondholders to modify the terms of the bonds.",
-    "pari_passu": "Pari Passu Clause — provisions establishing that the bonds rank equally with other unsecured obligations.",
-    "governing_law": "Governing Law Clause — provisions specifying which jurisdiction's laws govern the contract.",
-    "sovereign_immunity": "Sovereign Immunity Waiver — provisions where the sovereign waives immunity from suit, jurisdiction, and/or execution.",
-    "negative_pledge": "Negative Pledge Clause — provisions restricting the borrower from granting security interests over assets, with permitted exceptions.",
-    "events_of_default": "Events of Default — provisions defining circumstances that constitute a default and their consequences (acceleration, remedies).",
-    "acceleration": "Acceleration Clause — provisions allowing creditors to declare obligations immediately due and payable upon default.",
-    "dispute_resolution": "Dispute Resolution Clause — provisions specifying how disputes are resolved (arbitration, court jurisdiction, governing forum).",
-    "additional_amounts": "Additional Amounts / Gross-Up — provisions requiring the issuer to pay additional amounts to compensate for tax withholding.",
-    "redemption": "Redemption Clause — provisions for optional, mandatory, or tax-related early redemption of the securities.",
-    "indebtedness_definition": "Indebtedness Definition — the contractual definition of what constitutes 'indebtedness' or 'external debt'.",
+    "collective_action": "Collective Action Clause (CAC) -- provisions allowing a qualified majority of bondholders to modify the terms of the bonds.",
+    "pari_passu": "Pari Passu Clause -- provisions establishing that the bonds rank equally with other unsecured obligations.",
+    "governing_law": "Governing Law Clause -- provisions specifying which jurisdiction's laws govern the contract.",
+    "sovereign_immunity": "Sovereign Immunity Waiver -- provisions where the sovereign waives immunity from suit, jurisdiction, and/or execution.",
+    "negative_pledge": "Negative Pledge Clause -- provisions restricting the borrower from granting security interests over assets, with permitted exceptions.",
+    "events_of_default": "Events of Default -- provisions defining circumstances that constitute a default and their consequences (acceleration, remedies).",
+    "acceleration": "Acceleration Clause -- provisions allowing creditors to declare obligations immediately due and payable upon default.",
+    "dispute_resolution": "Dispute Resolution Clause -- provisions specifying how disputes are resolved (arbitration, court jurisdiction, governing forum).",
+    "additional_amounts": "Additional Amounts / Gross-Up -- provisions requiring the issuer to pay additional amounts to compensate for tax withholding.",
+    "redemption": "Redemption Clause -- provisions for optional, mandatory, or tax-related early redemption of the securities.",
+    "indebtedness_definition": "Indebtedness Definition -- the contractual definition of what constitutes 'indebtedness' or 'external debt'.",
 }
 ```
 
-Update `build_extraction_prompt()` to accept `instrument_type` parameter:
+Update `build_extraction_prompt()` to accept `instrument_type` and use it in ALL messages:
 
 ```python
 def build_extraction_prompt(
@@ -625,15 +937,45 @@ def build_extraction_prompt(
     instrument_type: str = "Bond",
 ) -> list[dict]:
     """Build the message list for extraction."""
-    # Adapt system prompt for instrument type
+    # I1: Derive instrument_label and use it everywhere
     instrument_label = "bond prospectus" if instrument_type == "Bond" else "loan agreement"
-    system = SYSTEM_PROMPT.replace("bond prospectuses", f"{instrument_label}s")
-    system = system.replace("bond contracts", f"sovereign debt contracts")
 
-    # Note: "system" role is for reference/documentation. When calling
-    # the Anthropic API directly, system would be a top-level parameter.
+    # Adapt system prompt for instrument type
+    system = SYSTEM_PROMPT.replace("bond prospectuses", f"{instrument_label}s")
+    system = system.replace("bond contracts", "sovereign debt contracts")
+
+    clause_desc = CLAUSE_DESCRIPTIONS.get(clause_family, clause_family)
+
     messages: list[dict] = [{"role": "system", "content": system}]
-    # ... rest of function unchanged
+
+    # Few-shot examples — also use instrument_label
+    for ex in few_shot_examples:
+        ex_label = "bond prospectus" if ex.instrument_type == "Bond" else "loan agreement"
+        messages.append({
+            "role": "user",
+            "content": (
+                f"Extract the {clause_desc} from this section of a "
+                f"{ex.country} {ex_label}:\n\n{ex.input_text}"
+            ),
+        })
+        messages.append({
+            "role": "assistant",
+            "content": ex.expected_output,
+        })
+
+    # Final user message — uses instrument_label from function parameter
+    page_info = f", pages {candidate.start_page}-{candidate.end_page}" if candidate.start_page else ""
+    messages.append({
+        "role": "user",
+        "content": (
+            f"Extract the {clause_desc} from this section of a {country} "
+            f"{instrument_label} (section heading: \"{candidate.section_heading}\""
+            f"{page_info}):\n\n"
+            f"{candidate.section_text}"
+        ),
+    })
+
+    return messages
 ```
 
 - [ ] **Step 3: Run tests, commit**
@@ -652,6 +994,8 @@ git commit -m "feat: instrument-aware prompting + clause descriptions for all fa
 **Files:**
 - Create: `src/corpus/extraction/document_classifier.py`
 - Create: `tests/test_document_classifier.py`
+
+**Fixes applied:** I4 (EDGAR form parser handles "Filed Pursuant to Rule"), I9 (confidence model: form code = high, text match = medium, no match = low), I11 (write incrementally), search full expanded window.
 
 - [ ] **Step 1: Write tests**
 
@@ -697,10 +1041,23 @@ def test_classify_novel_type() -> None:
     assert "Consent Solicitation Statement" in result.get("novel_types_observed", [])
 
 
-def test_parse_edgar_form_code_424b5() -> None:
+def test_parse_edgar_form_code_424b5_raw_header() -> None:
     text = "424B5\n1\nPROSPECTUS SUPPLEMENT\nRepublic of Panama"
     code = parse_edgar_form_code(text)
     assert code == "424B5"
+
+
+def test_parse_edgar_form_code_filed_pursuant_to_rule() -> None:
+    """I4: Real EDGAR files say 'Filed Pursuant to Rule 424(b)(5)', not '424B5'."""
+    text = "Filed Pursuant to Rule 424(b)(5)\nRegistration No. 333-123456\n\nPROSPECTUS SUPPLEMENT"
+    code = parse_edgar_form_code(text)
+    assert code == "424B5"
+
+
+def test_parse_edgar_form_code_filed_pursuant_424b2() -> None:
+    text = "Filed Pursuant to Rule 424(b)(2)\nSome other text"
+    code = parse_edgar_form_code(text)
+    assert code == "424B2"
 
 
 def test_parse_edgar_form_code_missing() -> None:
@@ -714,12 +1071,33 @@ def test_classify_includes_evidence() -> None:
     result = classify_document(text, storage_key="nsm__12345")
     assert result.get("evidence_text", "") != ""
     assert result.get("reasoning", "") != ""
+
+
+def test_classify_edgar_form_code_high_confidence() -> None:
+    """I9: EDGAR form code match should be high confidence."""
+    text = "424B5\n1\nPROSPECTUS SUPPLEMENT"
+    result = classify_document(text, storage_key="edgar__1")
+    assert result["confidence"] == "high"
+
+
+def test_classify_text_match_medium_confidence() -> None:
+    """I9: Text-only pattern match should be medium confidence."""
+    text = "LOAN AGREEMENT between Republic of Kenya and Bank"
+    result = classify_document(text, storage_key="pdip__KEN28")
+    assert result["confidence"] == "medium"
+
+
+def test_classify_no_match_low_confidence() -> None:
+    """I9: No match at all should be low confidence."""
+    text = "Random text with no recognizable document type patterns at all."
+    result = classify_document(text, storage_key="unknown__1")
+    assert result["confidence"] == "low"
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_document_classifier.py -v`
-Expected: FAIL — ModuleNotFoundError
+Expected: FAIL -- ModuleNotFoundError
 
 - [ ] **Step 3: Write the implementation**
 
@@ -728,7 +1106,7 @@ Expected: FAIL — ModuleNotFoundError
 """Document classification: instrument_family, document_role, document_form.
 
 Classifies sovereign debt documents by reading the first ~10K characters.
-This is a separate workstream from clause extraction — different pipeline,
+This is a separate workstream from clause extraction -- different pipeline,
 different output format.
 
 IMPORTANT CAVEAT: This taxonomy is a best-effort starting point. Domain
@@ -739,7 +1117,7 @@ from __future__ import annotations
 
 import re
 
-# SEC form code → document metadata mapping
+# SEC form code -> document metadata mapping
 _EDGAR_FORM_MAP: dict[str, tuple[str, str, str]] = {
     # (instrument_family, document_role, document_form)
     "424B5": ("Bond", "Supplement", "Prospectus"),
@@ -773,13 +1151,37 @@ _FORM_PATTERNS: list[tuple[str, str, str, str]] = [
     (r"(?i)tender\s+offer", "Bond", "Other", "Regulatory Filing"),
 ]
 
-_EDGAR_FORM_RE = re.compile(r"^(424B[1-5]|FWP|F-4|S-\d+)\s*\n", re.MULTILINE)
+# I4: Handle both raw header ("424B5\n") and "Filed Pursuant to Rule 424(b)(5)"
+_EDGAR_FORM_RE = re.compile(
+    r"(?:^(424B[1-5]|FWP|F-4|S-\d+)\s*\n)"  # raw header
+    r"|"
+    r"(?:Filed\s+Pursuant\s+to\s+Rule\s+(\d+\([a-z]\)\(\d+\)))",  # Filed Pursuant to...
+    re.MULTILINE,
+)
+
+_EDGAR_RULE_MAP = {
+    "424(b)(5)": "424B5",
+    "424(b)(4)": "424B4",
+    "424(b)(2)": "424B2",
+    "424(b)(3)": "424B3",
+    "424(b)(1)": "424B1",
+}
 
 
 def parse_edgar_form_code(text: str) -> str | None:
-    """Extract SEC form code from EDGAR file header."""
-    m = _EDGAR_FORM_RE.search(text[:500])
-    return m.group(1) if m else None
+    """Extract SEC form code from EDGAR file header.
+
+    Handles both raw header format ('424B5\\n') and the
+    'Filed Pursuant to Rule 424(b)(5)' format found in real filings.
+    """
+    m = _EDGAR_FORM_RE.search(text[:1000])
+    if not m:
+        return None
+    if m.group(1):
+        return m.group(1)
+    if m.group(2):
+        return _EDGAR_RULE_MAP.get(m.group(2))
+    return None
 
 
 def classify_document(
@@ -792,6 +1194,11 @@ def classify_document(
 
     Returns a dict with instrument_family, document_role, document_form,
     confidence, reasoning, evidence_text, novel_types_observed.
+
+    Confidence model (I9):
+    - high: EDGAR form code match
+    - medium: text pattern match
+    - low: no match
     """
     sample = text[:max_chars]
 
@@ -813,13 +1220,14 @@ def classify_document(
         }
 
     # Text-based pattern matching
-    # If first 500 chars are disclaimer boilerplate, extend
+    # If first 500 chars are disclaimer boilerplate, extend the search window
     check_text = sample
     if re.search(r"(?i)^important\s+notice", sample[:500]):
         check_text = text[:15000]
 
+    # Search the full expanded window, not just first 5000 chars
     for pattern, inst, role, form in _FORM_PATTERNS:
-        m = re.search(pattern, check_text[:5000])
+        m = re.search(pattern, check_text)
         if m:
             evidence = check_text[max(0, m.start() - 20) : m.end() + 50].strip()
             return {
@@ -827,7 +1235,7 @@ def classify_document(
                 "instrument_family": inst,
                 "document_role": role,
                 "document_form": form,
-                "confidence": "high",
+                "confidence": "medium",  # I9: text match = medium
                 "reasoning": f"Matched '{m.group()}' in opening text",
                 "evidence_text": evidence[:200],
                 "evidence_page": None,
@@ -835,7 +1243,7 @@ def classify_document(
                 "schema_version": "1.0",
             }
 
-    # No pattern matched — look for novel type signals
+    # No pattern matched -- look for novel type signals
     novel_types = []
     # Check for capitalized multi-word phrases that look like document types
     novel_match = re.search(
@@ -850,7 +1258,7 @@ def classify_document(
         "instrument_family": "Other",
         "document_role": "Standalone",
         "document_form": "Other",
-        "confidence": "low",
+        "confidence": "low",  # I9: no match = low
         "reasoning": "No known document type pattern matched in opening text",
         "evidence_text": check_text[:200],
         "evidence_page": None,
@@ -868,7 +1276,7 @@ Expected: All tests PASS
 
 ```bash
 git add src/corpus/extraction/document_classifier.py tests/test_document_classifier.py
-git commit -m "feat: document classification pipeline — 3-axis taxonomy with novel type discovery"
+git commit -m "feat: document classification pipeline -- EDGAR form parser, 3-tier confidence, novel type discovery"
 ```
 
 ---
@@ -878,6 +1286,8 @@ git commit -m "feat: document classification pipeline — 3-axis taxonomy with n
 **Files:**
 - Create: `src/corpus/extraction/run_manifest.py`
 - Test: `tests/test_run_manifest.py`
+
+**Fixes applied:** C4 (wire into CLI), I10 (updated_at field in dataclass), M7 (safe_write for manifest and sentinel).
 
 - [ ] **Step 1: Write tests**
 
@@ -911,6 +1321,14 @@ def test_create_manifest(tmp_path: Path) -> None:
     assert manifest.families_pending == families
     assert manifest.families_completed == []
     assert (tmp_path / "RUN_MANIFEST.json").exists()
+
+
+def test_manifest_round_trips_with_updated_at(tmp_path: Path) -> None:
+    """I10: updated_at field must survive round-trip."""
+    create_manifest(tmp_path, "test", ["governing_law"])
+    m = load_manifest(tmp_path)
+    assert m.updated_at != ""
+    assert m.run_id == "test"
 
 
 def test_mark_family_in_progress(tmp_path: Path) -> None:
@@ -966,6 +1384,7 @@ class RunManifest:
     families_in_progress: list[str] = field(default_factory=list)
     families_pending: list[str] = field(default_factory=list)
     created_at: str = ""
+    updated_at: str = ""  # I10: include updated_at in dataclass
 
 
 def create_manifest(
@@ -974,10 +1393,12 @@ def create_manifest(
     families: list[str],
 ) -> RunManifest:
     """Create a new run manifest."""
+    now = datetime.now(UTC).isoformat()
     manifest = RunManifest(
         run_id=run_id,
         families_pending=list(families),
-        created_at=datetime.now(UTC).isoformat(),
+        created_at=now,
+        updated_at=now,
     )
     _save(run_dir, manifest)
     return manifest
@@ -987,7 +1408,10 @@ def load_manifest(run_dir: Path) -> RunManifest:
     """Load manifest from run directory."""
     path = run_dir / "RUN_MANIFEST.json"
     data = json.loads(path.read_text())
-    return RunManifest(**data)
+    # I10: filter to known fields to avoid TypeError on unknown keys
+    known_fields = {f.name for f in RunManifest.__dataclass_fields__.values()}
+    filtered = {k: v for k, v in data.items() if k in known_fields}
+    return RunManifest(**filtered)
 
 
 def mark_family_in_progress(run_dir: Path, family: str) -> None:
@@ -1009,7 +1433,7 @@ def mark_family_complete(run_dir: Path, family: str) -> None:
         m.families_completed.append(family)
     _save(run_dir, m)
 
-    # Write per-family COMPLETE.json
+    # Write per-family COMPLETE.json sentinel (M7: use safe_write pattern)
     family_dir = run_dir / family
     family_dir.mkdir(parents=True, exist_ok=True)
     completion = {
@@ -1017,7 +1441,10 @@ def mark_family_complete(run_dir: Path, family: str) -> None:
         "completed_at": datetime.now(UTC).isoformat(),
         "run_id": m.run_id,
     }
-    (family_dir / "COMPLETE.json").write_text(json.dumps(completion, indent=2) + "\n")
+    sentinel_path = family_dir / "COMPLETE.json"
+    part_path = sentinel_path.with_suffix(".json.part")
+    part_path.write_text(json.dumps(completion, indent=2) + "\n")
+    part_path.rename(sentinel_path)
 
 
 def is_family_complete(run_dir: Path, family: str) -> bool:
@@ -1026,25 +1453,70 @@ def is_family_complete(run_dir: Path, family: str) -> bool:
 
 
 def _save(run_dir: Path, manifest: RunManifest) -> None:
-    """Save manifest to disk."""
+    """Save manifest to disk using .part -> rename pattern (M7: safe_write)."""
     run_dir.mkdir(parents=True, exist_ok=True)
+    manifest.updated_at = datetime.now(UTC).isoformat()
     data = {
         "run_id": manifest.run_id,
         "families_completed": manifest.families_completed,
         "families_in_progress": manifest.families_in_progress,
         "families_pending": manifest.families_pending,
         "created_at": manifest.created_at,
-        "updated_at": datetime.now(UTC).isoformat(),
+        "updated_at": manifest.updated_at,
     }
-    (run_dir / "RUN_MANIFEST.json").write_text(json.dumps(data, indent=2) + "\n")
+    target = run_dir / "RUN_MANIFEST.json"
+    part = target.with_suffix(".json.part")
+    part.write_text(json.dumps(data, indent=2) + "\n")
+    part.rename(target)
 ```
 
-- [ ] **Step 3: Run tests, commit**
+- [ ] **Step 3: Wire manifest into CLI locate and verify commands (C4)**
+
+In `src/corpus/cli.py`, add manifest calls to locate:
+
+```python
+# At the START of extract_v2_locate, after run_dir is set:
+from corpus.extraction.run_manifest import (
+    create_manifest, load_manifest, mark_family_in_progress,
+    mark_family_complete, is_family_complete,
+)
+
+manifest_path = run_dir / "RUN_MANIFEST.json"
+if not manifest_path.exists():
+    create_manifest(run_dir, run_id, _ALL_FAMILIES)
+mark_family_in_progress(run_dir, clause_family)
+
+# ... locate logic ...
+
+# At the END of extract_v2_locate, after writing candidates:
+click.echo(f"Wrote {count} candidates to {output_path}")
+```
+
+In `extract_v2_verify`, add manifest completion:
+
+```python
+# At the END of extract_v2_verify, after writing verified.jsonl:
+mark_family_complete(run_dir, clause_family)
+click.echo(f"Marked {clause_family} complete in run manifest.")
+```
+
+Also wire into classify command:
+
+```python
+# At the END of extract_v2_classify:
+from corpus.extraction.run_manifest import create_manifest, mark_family_complete
+manifest_path = run_dir.parent / "RUN_MANIFEST.json"
+if not manifest_path.exists():
+    create_manifest(run_dir.parent, run_id, ["document_classification"])
+mark_family_complete(run_dir.parent, "document_classification")
+```
+
+- [ ] **Step 4: Run tests, commit**
 
 ```bash
 uv run pytest tests/test_run_manifest.py -v
-git add src/corpus/extraction/run_manifest.py tests/test_run_manifest.py
-git commit -m "feat: run manifest + per-family completion protocol"
+git add src/corpus/extraction/run_manifest.py tests/test_run_manifest.py src/corpus/cli.py
+git commit -m "feat: run manifest + per-family completion protocol with safe_write"
 ```
 
 ---
@@ -1055,6 +1527,8 @@ git commit -m "feat: run manifest + per-family completion protocol"
 - Create: `scripts/generate_splits.py`
 - Output: `data/pdip/splits/` directory with per-family manifests
 
+**Fixes applied:** I5 (count unique doc_ids per family), exit non-zero if required families missing, M6 (verify label_family names match snake_case).
+
 - [ ] **Step 1: Write the split generation script**
 
 ```python
@@ -1064,6 +1538,8 @@ git commit -m "feat: run manifest + per-family completion protocol"
 from __future__ import annotations
 
 import json
+import re
+import sys
 from pathlib import Path
 
 from corpus.extraction.pdip_split import create_split, save_split
@@ -1071,10 +1547,18 @@ from corpus.extraction.pdip_split import create_split, save_split
 ANNOTATIONS_PATH = Path("data/pdip/clause_annotations.jsonl")
 SPLITS_DIR = Path("data/pdip/splits")
 
+# Required families for Round 1 -- exit non-zero if any are missing
+REQUIRED_ROUND_1 = {
+    "governing_law", "sovereign_immunity", "negative_pledge", "events_of_default",
+}
+
+# Expected snake_case label_family names
+_SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
 
 def main() -> None:
-    # Discover all families in annotations
-    families: dict[str, int] = {}
+    # I5: Discover all families using unique doc_ids per family
+    families: dict[str, set[str]] = {}
     with ANNOTATIONS_PATH.open() as f:
         for line in f:
             try:
@@ -1082,22 +1566,31 @@ def main() -> None:
             except json.JSONDecodeError:
                 continue
             lf = r.get("label_family")
+            doc_id = r.get("doc_id", "unknown")
             if lf:
-                families[lf] = families.get(lf, 0) + 1
+                if lf not in families:
+                    families[lf] = set()
+                families[lf].add(doc_id)
 
     SPLITS_DIR.mkdir(parents=True, exist_ok=True)
 
-    for family, count in sorted(families.items()):
+    # M6: Verify label_family names match snake_case
+    non_snake = [f for f in families if not _SNAKE_CASE_RE.match(f)]
+    if non_snake:
+        print(f"WARNING: Non-snake_case label_family names: {non_snake}")
+        print("These may need mapping to match clause family names.")
+
+    generated = []
+    for family in sorted(families):
         split_path = SPLITS_DIR / f"{family}_split.json"
         if split_path.exists():
             print(f"  {family}: split already exists, skipping")
+            generated.append(family)
             continue
 
-        # For small families (<15 docs), use 2 calibration docs
-        # For medium (15-40), use 3
-        # For large (>40), use 5
-        doc_count = count  # rough — annotations != docs
-        cal_count = 2 if doc_count < 30 else 3 if doc_count < 80 else 5
+        # I5: Use unique doc count for calibration sizing
+        unique_docs = len(families[family])
+        cal_count = 2 if unique_docs < 15 else 3 if unique_docs < 40 else 5
 
         try:
             split = create_split(
@@ -1108,9 +1601,18 @@ def main() -> None:
             save_split(split, split_path, overwrite=False)
             cal = len(split["calibration"])
             eva = len(split["evaluation"])
-            print(f"  {family}: {cal} calibration, {eva} evaluation")
+            print(f"  {family}: {cal} calibration, {eva} evaluation ({unique_docs} unique docs)")
+            generated.append(family)
         except ValueError as e:
-            print(f"  {family}: SKIPPED — {e}")
+            print(f"  {family}: SKIPPED -- {e}")
+
+    # Exit non-zero if required Round 1 families are missing
+    missing_required = REQUIRED_ROUND_1 - set(generated)
+    if missing_required:
+        print(f"\nERROR: Required Round 1 families missing: {sorted(missing_required)}")
+        sys.exit(1)
+
+    print(f"\nGenerated splits for {len(generated)} families.")
 
 
 if __name__ == "__main__":
@@ -1138,47 +1640,98 @@ git commit -m "feat: PDIP calibration/evaluation splits for all clause families"
 - Create: `scripts/round_report.py`
 - Test: `tests/test_round_report.py`
 
+**Fixes applied:** C1 (--run-id is primary, derive run_dir), I6 (compute PDIP recall/precision, separate api_error from not_found), M3 (keep as script, test via subprocess).
+
 - [ ] **Step 1: Write tests**
 
 ```python
 # tests/test_round_report.py
-"""Tests for round report generation."""
+"""Tests for round report generation.
+
+M3: round_report.py is a script, not a library module. Tests use subprocess
+to match how it will actually be invoked.
+"""
 
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
-from scripts.round_report import generate_family_report
 
-
-def test_generate_family_report(tmp_path: Path) -> None:
-    # Create mock verified JSONL
-    verified_dir = tmp_path / "governing_law"
-    verified_dir.mkdir()
+def _create_mock_verified(tmp_path: Path, family: str) -> Path:
+    """Create a mock verified.jsonl for testing."""
+    family_dir = tmp_path / family
+    family_dir.mkdir()
     records = [
-        {"candidate_id": "c1", "storage_key": "doc1", "source_format": "docling_md",
-         "heading_match": True,
-         "extraction": {"found": True, "clause_text": "governed by English law", "confidence": "high"},
-         "verification": {"status": "verified", "verbatim_similarity": 1.0}},
-        {"candidate_id": "c2", "storage_key": "doc2", "source_format": "flat_jsonl",
-         "heading_match": False,
-         "extraction": {"found": False, "clause_text": "", "confidence": "high"},
-         "verification": {"status": "not_found"}},
+        {
+            "candidate_id": "c1",
+            "storage_key": "doc1",
+            "source_format": "docling_md",
+            "heading_match": True,
+            "extraction": {"found": True, "clause_text": "governed by English law", "confidence": "high"},
+            "verification": {"status": "verified", "verbatim_similarity": 1.0},
+        },
+        {
+            "candidate_id": "c2",
+            "storage_key": "doc2",
+            "source_format": "flat_jsonl",
+            "heading_match": False,
+            "extraction": {"found": False, "clause_text": "", "confidence": "high"},
+            "verification": {"status": "not_found"},
+        },
+        {
+            "candidate_id": "c3",
+            "storage_key": "doc3",
+            "source_format": "docling_md",
+            "heading_match": True,
+            "extraction": {"found": False, "clause_text": "", "confidence": "low"},
+            "verification": {"status": "api_error", "error": "rate_limited"},
+        },
     ]
-    with (verified_dir / "verified.jsonl").open("w") as f:
+    verified_path = family_dir / "verified.jsonl"
+    with verified_path.open("w") as f:
         for r in records:
             f.write(json.dumps(r) + "\n")
+    return verified_path
 
-    report = generate_family_report(
-        family="governing_law",
-        verified_path=verified_dir / "verified.jsonl",
+
+def test_round_report_runs_successfully(tmp_path: Path) -> None:
+    """Test that the script runs and produces output."""
+    _create_mock_verified(tmp_path, "governing_law")
+    result = subprocess.run(
+        [sys.executable, "scripts/round_report.py", "--run-id", "test_run", "--run-dir", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        cwd=str(Path(__file__).parent.parent),
     )
-    assert report["family"] == "governing_law"
-    assert report["total_candidates"] == 2
-    assert report["found_count"] == 1
-    assert report["not_found_count"] == 1
-    assert report["verbatim_pass_count"] == 1
+    assert result.returncode == 0
+    assert "governing_law" in result.stdout
+
+    # Check JSON report was written
+    report_path = tmp_path / "round_report.json"
+    assert report_path.exists()
+    reports = json.loads(report_path.read_text())
+    assert len(reports) == 1
+    assert reports[0]["family"] == "governing_law"
+    assert reports[0]["total_candidates"] == 3
+    assert reports[0]["found_count"] == 1
+    assert reports[0]["not_found_count"] == 1
+    # I6: api_error is separate from not_found
+    assert reports[0]["api_error_count"] == 1
+
+
+def test_round_report_derives_run_dir_from_run_id(tmp_path: Path) -> None:
+    """C1: --run-id is primary, --run-dir defaults from it."""
+    # This test just checks the --help output shows run-id as required
+    result = subprocess.run(
+        [sys.executable, "scripts/round_report.py", "--help"],
+        capture_output=True,
+        text=True,
+        cwd=str(Path(__file__).parent.parent),
+    )
+    assert "--run-id" in result.stdout
 ```
 
 - [ ] **Step 2: Write implementation**
@@ -1186,7 +1739,11 @@ def test_generate_family_report(tmp_path: Path) -> None:
 ```python
 #!/usr/bin/env python3
 # scripts/round_report.py
-"""Generate round reports for extraction quality metrics."""
+"""Generate round reports for extraction quality metrics.
+
+C1: --run-id is the primary argument; --run-dir is derived from it by default.
+I6: Separates api_error from not_found and computes PDIP recall/precision.
+"""
 
 from __future__ import annotations
 
@@ -1213,7 +1770,15 @@ def generate_family_report(
                 continue
 
     found = [r for r in records if r.get("extraction", {}).get("found")]
-    not_found = [r for r in records if not r.get("extraction", {}).get("found")]
+    not_found = [
+        r for r in records
+        if not r.get("extraction", {}).get("found")
+        and r.get("verification", {}).get("status") != "api_error"
+    ]
+    api_errors = [
+        r for r in records
+        if r.get("verification", {}).get("status") == "api_error"
+    ]
     verified = [r for r in found if r.get("verification", {}).get("status") == "verified"]
     failed = [r for r in found if r.get("verification", {}).get("status") == "failed"]
 
@@ -1226,12 +1791,13 @@ def generate_family_report(
         r.get("extraction", {}).get("confidence", "unknown") for r in found
     )
 
-    return {
+    report: dict = {
         "family": family,
         "generated_at": datetime.now(UTC).isoformat(),
         "total_candidates": len(records),
         "found_count": len(found),
         "not_found_count": len(not_found),
+        "api_error_count": len(api_errors),  # I6: separate from not_found
         "verbatim_pass_count": len(verified),
         "verbatim_fail_count": len(failed),
         "verbatim_pass_rate": round(len(verified) / len(found), 3) if found else 0,
@@ -1240,6 +1806,28 @@ def generate_family_report(
         "body_only_count": len(records) - heading_match_count,
         "confidence_distribution": dict(confidence_dist),
     }
+
+    # I6: Compute PDIP recall/precision if annotations available
+    if annotations_path and annotations_path.exists():
+        pdip_doc_ids = set()
+        with annotations_path.open() as f:
+            for line in f:
+                try:
+                    ann = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if ann.get("label_family") == family:
+                    pdip_doc_ids.add(ann.get("doc_id"))
+
+        if pdip_doc_ids:
+            extracted_keys = {r.get("storage_key", "") for r in found}
+            # Recall: what fraction of PDIP-annotated docs did we find?
+            pdip_found = sum(1 for d in pdip_doc_ids if any(d in k for k in extracted_keys))
+            report["pdip_recall"] = round(pdip_found / len(pdip_doc_ids), 3) if pdip_doc_ids else 0
+            report["pdip_annotated_count"] = len(pdip_doc_ids)
+            report["pdip_matched_count"] = pdip_found
+
+    return report
 
 
 def format_phone_status(reports: list[dict], run_id: str) -> str:
@@ -1250,20 +1838,32 @@ def format_phone_status(reports: list[dict], run_id: str) -> str:
         found = r["found_count"]
         vpass = r["verbatim_pass_count"]
         total = r["total_candidates"]
+        errors = r.get("api_error_count", 0)
         rate = f"{r['verbatim_pass_rate']:.0%}" if r["found_count"] else "N/A"
-        lines.append(f"  {fam}: {found}/{total} found, {rate} verbatim")
+        error_note = f" ({errors} errors)" if errors else ""
+        lines.append(f"  {fam}: {found}/{total} found, {rate} verbatim{error_note}")
     lines.append("\nReady for next family? Reply 'go' or give feedback.")
     return "\n".join(lines)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate round report")
-    parser.add_argument("--run-dir", type=Path, required=True)
+    # C1: --run-id is primary
+    parser.add_argument("--run-id", type=str, required=True)
+    parser.add_argument("--run-dir", type=Path, default=None,
+                        help="Override run directory (default: data/extracted_v2/<run-id>)")
     parser.add_argument("--family", type=str, default=None, help="Single family or all")
-    parser.add_argument("--run-id", type=str, default="unknown")
+    parser.add_argument("--annotations", type=Path, default=None,
+                        help="Path to PDIP annotations JSONL for recall computation")
     args = parser.parse_args()
 
-    run_dir = args.run_dir
+    # C1: derive run_dir from run_id if not explicitly provided
+    run_dir = args.run_dir or Path(f"data/extracted_v2/{args.run_id}")
+
+    if not run_dir.exists():
+        print(f"ERROR: Run directory does not exist: {run_dir}")
+        raise SystemExit(1)
+
     reports = []
 
     if args.family:
@@ -1279,10 +1879,18 @@ def main() -> None:
         if not verified_path.exists():
             print(f"  {family}: no verified.jsonl found, skipping")
             continue
-        report = generate_family_report(family=family, verified_path=verified_path)
+        report = generate_family_report(
+            family=family,
+            verified_path=verified_path,
+            annotations_path=args.annotations,
+        )
         reports.append(report)
-        print(f"  {family}: {report['found_count']}/{report['total_candidates']} found, "
-              f"{report['verbatim_pass_rate']:.0%} verbatim")
+        errors = report.get("api_error_count", 0)
+        error_note = f" ({errors} api_errors)" if errors else ""
+        print(
+            f"  {family}: {report['found_count']}/{report['total_candidates']} found, "
+            f"{report['verbatim_pass_rate']:.0%} verbatim{error_note}"
+        )
 
     # Write JSON report
     report_path = run_dir / "round_report.json"
@@ -1302,7 +1910,7 @@ if __name__ == "__main__":
 ```bash
 uv run pytest tests/test_round_report.py -v
 git add scripts/round_report.py tests/test_round_report.py
-git commit -m "feat: round report script — quality metrics + phone-friendly status"
+git commit -m "feat: round report script -- run-id primary, PDIP recall, api_error tracking"
 ```
 
 ---
@@ -1341,7 +1949,7 @@ This captures lessons from the PR #44 extraction session. Write `docs/meta-learn
 **Prevention:** Run the actual CLI command (not just unit tests) before committing.
 
 ### candidate_id collision
-**Bug:** 8-char UUID truncation → near-certain collisions at scale.
+**Bug:** 8-char UUID truncation -> near-certain collisions at scale.
 **Fix:** Full UUID.
 **Prevention:** Never truncate identifiers.
 
@@ -1378,7 +1986,7 @@ in plan headers to avoid repeated pushback.
 3. Use per-family COMPLETE.json sentinels, not round-level completion
 4. For long sections (EoD), use section_capture_similarity, not verbatim pass
 5. Generate round reports AFTER each family, not just after each round
-6. Keep calibration/evaluation split integrity — tune on calibration only
+6. Keep calibration/evaluation split integrity -- tune on calibration only
 ```
 
 - [ ] **Step 2: Commit**
@@ -1395,19 +2003,21 @@ git commit -m "docs: meta-learning report from Round 0 (CAC + pari passu extract
 **Files:**
 - Modify: `src/corpus/cli.py`
 
+**Fixes applied:** Wire manifest calls, fix EDGAR page off-by-one (`i >= 3`), write incrementally (I11).
+
 - [ ] **Step 1: Add classify command to extract-v2 group**
 
 Add to `src/corpus/cli.py` in the extract-v2 group:
 
 ```python
 @extract_v2_group.command("classify")
-@click.option("--docling-dir", default="data/parsed_docling", type=click.Path())
-@click.option("--flat-dir", default="data/parsed", type=click.Path())
+@click.option("--docling-dir", default=None, type=click.Path())
+@click.option("--flat-dir", default=None, type=click.Path())
 @click.option("--output", default=None, type=click.Path())
 @click.option("--run-id", default=None)
 @click.option("--skip-flat", is_flag=True)
 def extract_v2_classify(
-    docling_dir: str, flat_dir: str, output: str | None,
+    docling_dir: str | None, flat_dir: str | None, output: str | None,
     run_id: str | None, skip_flat: bool,
 ) -> None:
     """Classify documents by type (instrument, role, form)."""
@@ -1415,18 +2025,21 @@ def extract_v2_classify(
     import time
 
     from corpus.extraction.document_classifier import classify_document
+    from corpus.extraction.run_manifest import create_manifest, mark_family_complete
     from corpus.io.safe_write import safe_write
     from corpus.logging import CorpusLogger
 
+    # C7: default run_id
     run_id = run_id or f"classify_{int(time.time())}"
     config = _load_config()
 
-    docling_resolved = Path(docling_dir)
-    if not docling_resolved.is_absolute():
-        docling_resolved = _PROJECT_ROOT / docling_resolved
-    flat_resolved = Path(flat_dir)
-    if not flat_resolved.is_absolute():
-        flat_resolved = _PROJECT_ROOT / flat_resolved
+    # I7: config-backed paths
+    docling_resolved = _resolve_path(
+        docling_dir or config.get("extraction", {}).get("docling_dir", "data/parsed_docling")
+    )
+    flat_resolved = _resolve_path(
+        flat_dir or config.get("extraction", {}).get("flat_dir", "data/parsed")
+    )
 
     run_dir = _PROJECT_ROOT / "data" / "extracted_v2" / run_id / "document_classification"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -1435,64 +2048,83 @@ def extract_v2_classify(
     log_path = _PROJECT_ROOT / "data" / "telemetry" / "extract_v2.jsonl"
     logger = CorpusLogger(log_path, run_id=run_id)
 
+    # C4: Wire manifest
+    manifest_dir = run_dir.parent
+    manifest_path = manifest_dir / "RUN_MANIFEST.json"
+    if not manifest_path.exists():
+        create_manifest(manifest_dir, run_id, ["document_classification"])
+
+    # I11: Write incrementally instead of buffering all results
+    count = 0
+    with output_path.open("w") as out_f:
+
+        # Docling markdown
+        if docling_resolved.exists():
+            md_files = sorted(docling_resolved.glob("*.md"))
+            click.echo(f"Classifying {len(md_files)} Docling documents...")
+            for md_file in md_files:
+                start = time.monotonic()
+                storage_key = md_file.stem
+                text = md_file.read_text(encoding="utf-8")
+                result = classify_document(text, storage_key=storage_key)
+                elapsed = int((time.monotonic() - start) * 1000)
+                out_f.write(json.dumps(result) + "\n")
+                out_f.flush()
+                count += 1
+                logger.log(
+                    document_id=storage_key, step="classify",
+                    duration_ms=elapsed, status=result["confidence"],
+                )
+
+        # EDGAR flat JSONL
+        if not skip_flat and flat_resolved.exists():
+            jsonl_files = sorted(flat_resolved.glob("edgar__*.jsonl"))
+            click.echo(f"Classifying {len(jsonl_files)} EDGAR documents...")
+            for jsonl_file in jsonl_files:
+                start = time.monotonic()
+                storage_key = jsonl_file.stem
+                # Read first 3 pages (fix off-by-one: i >= 3 means pages 0,1,2)
+                pages_text = []
+                with jsonl_file.open() as f:
+                    for i, line in enumerate(f):
+                        if i >= 3:
+                            break
+                        try:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if "text" in rec:
+                            pages_text.append(rec["text"])
+                text = "\n\n".join(pages_text)
+                result = classify_document(text, storage_key=storage_key)
+                elapsed = int((time.monotonic() - start) * 1000)
+                out_f.write(json.dumps(result) + "\n")
+                out_f.flush()
+                count += 1
+                logger.log(
+                    document_id=storage_key, step="classify",
+                    duration_ms=elapsed, status=result["confidence"],
+                )
+
+    # C4: Mark classification complete in manifest
+    mark_family_complete(manifest_dir, "document_classification")
+
+    # Summary — read back for counts
     results = []
+    with output_path.open() as f:
+        for line in f:
+            try:
+                results.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
 
-    # Docling markdown
-    if docling_resolved.exists():
-        md_files = sorted(docling_resolved.glob("*.md"))
-        click.echo(f"Classifying {len(md_files)} Docling documents...")
-        for md_file in md_files:
-            start = time.monotonic()
-            storage_key = md_file.stem
-            text = md_file.read_text(encoding="utf-8")
-            result = classify_document(text, storage_key=storage_key)
-            elapsed = int((time.monotonic() - start) * 1000)
-            results.append(result)
-            logger.log(
-                document_id=storage_key, step="classify",
-                duration_ms=elapsed, status=result["confidence"],
-            )
-
-    # EDGAR flat JSONL
-    if not skip_flat and flat_resolved.exists():
-        jsonl_files = sorted(flat_resolved.glob("edgar__*.jsonl"))
-        click.echo(f"Classifying {len(jsonl_files)} EDGAR documents...")
-        for jsonl_file in jsonl_files:
-            start = time.monotonic()
-            storage_key = jsonl_file.stem
-            # Read first 3 pages
-            pages_text = []
-            with jsonl_file.open() as f:
-                for i, line in enumerate(f):
-                    if i > 3:
-                        break
-                    try:
-                        rec = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    if "text" in rec:
-                        pages_text.append(rec["text"])
-            text = "\n\n".join(pages_text)
-            result = classify_document(text, storage_key=storage_key)
-            elapsed = int((time.monotonic() - start) * 1000)
-            results.append(result)
-            logger.log(
-                document_id=storage_key, step="classify",
-                duration_ms=elapsed, status=result["confidence"],
-            )
-
-    # Write results
-    content = "".join(json.dumps(r) + "\n" for r in results)
-    safe_write(output_path, content.encode(), overwrite=True)
-
-    # Summary
     from collections import Counter
     forms = Counter(r["document_form"] for r in results)
     families = Counter(r["instrument_family"] for r in results)
     roles = Counter(r["document_role"] for r in results)
     novel = Counter(t for r in results for t in r.get("novel_types_observed", []))
 
-    click.echo(f"\nClassified {len(results)} documents.")
+    click.echo(f"\nClassified {count} documents.")
     click.echo(f"  Instrument families: {dict(families)}")
     click.echo(f"  Document roles: {dict(roles)}")
     click.echo(f"  Document forms: {dict(forms.most_common(10))}")
@@ -1513,14 +2145,61 @@ uv run corpus extract-v2 classify --docling-dir data/parsed_docling --skip-flat 
 
 ```bash
 git add src/corpus/cli.py
-git commit -m "feat: document classification CLI command with novel type discovery"
+git commit -m "feat: document classification CLI -- incremental writes, manifest wiring, EDGAR page fix"
 ```
 
 ---
 
-## Task 11: Lint, Type Check, Full Test Suite
+## Task 11: Lint, Type Check, Full Test Suite + Better Tests
 
-- [ ] **Step 1: Run all checks**
+**Fixes applied:** Add CliRunner-based tests, not just `--help` checks.
+
+- [ ] **Step 1: Add CliRunner-based tests**
+
+Add to `tests/test_cli.py`:
+
+```python
+"""CLI integration tests using Click CliRunner."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import patch
+
+from click.testing import CliRunner
+
+from corpus.cli import cli
+
+
+def test_locate_rejects_unknown_family() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["extract-v2", "locate", "--clause-family", "nonexistent"])
+    assert result.exit_code != 0
+    assert "Invalid value" in result.output or "invalid choice" in result.output.lower()
+
+
+def test_locate_accepts_governing_law() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["extract-v2", "locate", "--clause-family", "governing_law", "--help"])
+    assert result.exit_code == 0
+
+
+def test_verify_rejects_unknown_family() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["extract-v2", "verify", "--clause-family", "nonexistent"])
+    assert result.exit_code != 0
+
+
+def test_classify_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["extract-v2", "classify", "--help"])
+    assert result.exit_code == 0
+    assert "--run-id" in result.output
+    assert "--docling-dir" in result.output
+```
+
+- [ ] **Step 2: Run all checks**
 
 ```bash
 uv run ruff check src/corpus/extraction/ src/corpus/cli.py scripts/
@@ -1529,18 +2208,18 @@ uv run pyright src/corpus/extraction/
 uv run pytest -v
 ```
 
-- [ ] **Step 2: Fix any issues**
+- [ ] **Step 3: Fix any issues**
 
-- [ ] **Step 3: Final commit**
+- [ ] **Step 4: Final commit**
 
 ```bash
 git add -A
-git commit -m "chore: lint + type check clean for full extraction prerequisites"
+git commit -m "chore: lint + type check clean + CliRunner integration tests"
 ```
 
 ---
 
-## Task 12: Push and Create PR
+## Task 12: Push Branch (Draft PR)
 
 - [ ] **Step 1: Push**
 
@@ -1548,11 +2227,72 @@ git commit -m "chore: lint + type check clean for full extraction prerequisites"
 git push -u origin feature/full-extraction-round-1
 ```
 
-- [ ] **Step 2: Create PR**
+- [ ] **Step 2: Create draft PR**
 
 ```bash
-gh pr create --title "feat: full extraction prerequisites — cue families, classification, round reports" \
-  --body "Prerequisites for Mac Mini extraction session. See docs/superpowers/specs/2026-03-29-full-extraction-design.md"
+gh pr create --draft \
+  --title "feat: full extraction prerequisites -- cue families, classification, round reports" \
+  --body "Prerequisites for Mac Mini extraction session. See docs/superpowers/specs/2026-03-29-full-extraction-design.md
+
+## Summary
+- 9 new clause families with 2+ non-heading body families each (fixes C2 body-only LOCATE)
+- Document classification pipeline with EDGAR form parser (handles 'Filed Pursuant to Rule')
+- Section capture similarity for Mode 3 families (events_of_default, etc.)
+- Run manifest with safe_write + per-family COMPLETE.json sentinels
+- Round report script with PDIP recall computation and api_error tracking
+- CLI accepts all families, run_id defaults, config-backed paths
+- Meta-learning report from Round 0
+
+## Test plan
+- [ ] All unit tests pass
+- [ ] CliRunner tests verify family validation
+- [ ] Smoke test: \`corpus extract-v2 locate --clause-family governing_law\`
+- [ ] Smoke test: \`corpus extract-v2 classify --skip-flat\`
+"
+```
+
+---
+
+## Task 13: Migration Preflight Checklist
+
+Verify the Dropbox migration and data symlink are working before the Mac Mini extraction session.
+
+- [ ] **Step 1: Verify data directory access**
+
+```bash
+# Check that data/ exists and contains expected subdirectories
+ls -la data/
+ls -la data/parsed_docling/ | head -5
+ls -la data/parsed/ | head -5
+ls -la data/pdip/ | head -5
+```
+
+- [ ] **Step 2: Verify symlinks (if any) resolve correctly**
+
+```bash
+# Check for broken symlinks
+find data/ -maxdepth 2 -type l ! -exec test -e {} \; -print
+```
+
+- [ ] **Step 3: Verify DuckDB access**
+
+```bash
+uv run python3 -c "import duckdb; db = duckdb.connect('data/corpus.duckdb', read_only=True); print(db.sql('SELECT count(*) FROM documents').fetchone())"
+```
+
+- [ ] **Step 4: Verify parsed file counts match expectations**
+
+```bash
+echo "Docling MD files:" && ls data/parsed_docling/*.md 2>/dev/null | wc -l
+echo "EDGAR JSONL files:" && ls data/parsed/edgar__*.jsonl 2>/dev/null | wc -l
+echo "NSM JSONL files:" && ls data/parsed/nsm__*.jsonl 2>/dev/null | wc -l
+```
+
+- [ ] **Step 5: Quick end-to-end smoke test**
+
+```bash
+# Run locate on a single small family to verify the full pipeline works
+uv run corpus extract-v2 locate --clause-family governing_law --run-id preflight_test 2>&1 | tail -10
 ```
 
 ---
@@ -1566,3 +2306,6 @@ gh pr create --title "feat: full extraction prerequisites — cue families, clas
 | EDGAR EoD sections split across pages | Source caveat flag, accept lower recall |
 | Session limit hit mid-family | Per-batch immutable files + crash recovery prompt |
 | Dropbox sync lag on large files | COMPLETE.json sentinel, don't read without it |
+| Body-only LOCATE zero recall (C2) | All families now have 2+ non-heading body families |
+| EDGAR "Filed Pursuant to Rule" not parsed (I4) | Dual-mode regex handles both raw and rule format |
+| run_id=None crash (C7) | Default to `run_{timestamp}` in all CLI commands |
