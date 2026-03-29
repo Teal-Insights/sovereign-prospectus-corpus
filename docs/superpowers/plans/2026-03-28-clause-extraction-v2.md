@@ -1777,6 +1777,10 @@ EXTRACTION_TOOL = {
     "input_schema": {
         "type": "object",
         "properties": {
+            "thinking": {
+                "type": "string",
+                "description": "Step-by-step analysis: Where does the clause begin? Where does it end? What components are present (voting threshold, reserved matters, aggregation, meetings)? Are there any boundary ambiguities?",
+            },
             "found": {
                 "type": "boolean",
                 "description": "True if the clause was found in this section.",
@@ -1792,10 +1796,14 @@ EXTRACTION_TOOL = {
             },
             "reasoning": {
                 "type": "string",
-                "description": "One sentence explaining why this is or isn't the clause.",
+                "description": "One sentence summary for the lawyer reviewing this extraction.",
+            },
+            "boundary_note": {
+                "type": "string",
+                "description": "Optional: note any uncertainty about where the clause starts or ends, or if related provisions may have been missed.",
             },
         },
-        "required": ["found", "clause_text", "confidence", "reasoning"],
+        "required": ["thinking", "found", "clause_text", "confidence", "reasoning"],
     },
 }
 
@@ -1811,6 +1819,8 @@ class ExtractionResult:
     clause_text: str
     confidence: str
     reasoning: str
+    thinking: str = ""
+    boundary_note: str = ""
 
 
 @dataclass(frozen=True)
@@ -1884,6 +1894,8 @@ def parse_extraction_response(tool_input: dict) -> ExtractionResult:
         clause_text=tool_input.get("clause_text", ""),
         confidence=tool_input.get("confidence", "low"),
         reasoning=tool_input.get("reasoning", ""),
+        thinking=tool_input.get("thinking", ""),
+        boundary_note=tool_input.get("boundary_note", ""),
     )
 
 
