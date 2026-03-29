@@ -10,9 +10,48 @@
 
 **Architecture:** Three-stage pipeline (LOCATE → EXTRACT → VERIFY). Stage 1 parses Docling markdown into sections, filters by heading/body cues, rejects obvious false positives, and clusters adjacent hits. Stage 2 sends shortlisted sections to Claude Opus via the Anthropic API (Max plan) with multi-shot examples for verbatim extraction. Stage 3 validates extractions against source text and runs a completeness checklist. Results feed into an updated Shiny explorer designed for expert legal review.
 
-**Tech Stack:** Python 3.12+, Click CLI, DuckDB, Polars, Anthropic SDK (Claude Opus 4.6), Shiny for Python, pytest, ruff, pyright.
+**Tech Stack:** Python 3.12+, Click CLI, DuckDB, Polars, Shiny for Python, pytest, ruff, pyright. NO Anthropic SDK — Claude Code IS the LLM extractor.
 
-**Model:** Claude Opus 4.6 (`claude-opus-4-6`), NOT Sonnet. Rationale: these are billion-dollar bond contracts. Opus gets edge cases that matter for verbatim extraction and boundary detection. The cost (~$30-50 for 300 candidates) is trivial compared to the value of accurate extractions that don't waste lawyer time.
+**Extraction Model:** Claude Code running Opus 4.6 (1M context, Max plan). Claude Code reads each candidate, performs the extraction reasoning directly, and writes the result. No API key needed. No `anthropic` dependency.
+
+## Architecture Change: Claude Code IS the Extractor
+
+Do NOT use the Anthropic Python SDK or call the API directly. The user has
+Claude Max, which covers Claude Code but not programmatic API access.
+
+**How EXTRACT works:**
+
+1. **LOCATE** (pure Python): Parse sections, filter by cues, reject
+   negatives, cluster. Produces `candidates.jsonl`. This is a normal
+   CLI command.
+
+2. **EXTRACT** (Claude Code agentic work): Claude Code reads each
+   candidate from `candidates.jsonl`, applies extraction reasoning
+   directly (Claude Code IS the LLM), and writes structured results
+   to `extractions.jsonl`. For each candidate:
+   - Read the section_text from the JSONL record
+   - Determine if it contains the target clause
+   - If found, extract the VERBATIM clause text with boundaries
+   - Write a JSON record with: found, clause_text, thinking, confidence,
+     reasoning, boundary_note
+   - Append to output JSONL (resume-safe: skip already-processed IDs)
+
+3. **VERIFY** (pure Python): Check verbatim match, completeness checklist,
+   quality flags. This is a normal CLI command.
+
+**What this means for the plan:**
+- Task 5 (LLM Extractor): becomes a **Python script that reads/writes
+  JSONL** but the actual extraction logic is performed by Claude Code
+  reading each candidate and reasoning about it. The extraction prompt,
+  few-shot examples, and structured output guidance are still useful —
+  they guide how Claude Code should think about each candidate.
+- Task 7 (CLI): The `extract` command is replaced by a Claude Code
+  agentic loop. The `locate` and `verify` commands stay as CLI commands.
+- Errata E4 (rate limiting), E17 (stop_reason), E24 (max_tokens), E26
+  (extended thinking), E28 (API key pre-flight) are **no longer applicable**.
+- Errata E3 (resume), E16 (logging), E19 (error status), E25 (cost ticker)
+  still apply but are simplified — Claude Code writes JSONL directly.
+- No `pyproject.toml` change needed (no anthropic dependency).
 
 **Spec:** `docs/superpowers/specs/2026-03-28-clause-extraction-v2-design.md`
 **Design guide:** `docs/lawyer-centered-design.md`
@@ -78,13 +117,11 @@ with output_path.open("a") as f:
     f.write(_json.dumps(output_rec) + "\n")
 ```
 
-### E4: No rate limiting — will hit API limits (Task 5 + Task 7)
+### E4: ~~No rate limiting~~ — NOT APPLICABLE
 
-**Bug:** Extraction loop fires requests as fast as possible. Will hit
-rate limits.
+~~Bug: Extraction loop fires requests as fast as possible.~~
 
-**Fix:** Add `time.sleep(1.0)` between API calls. Add retry with
-exponential backoff on 429/500 errors:
+**Superseded:** Claude Code is the extractor, no API calls. Skip this.
 ```python
 import time
 from anthropic import RateLimitError, APIError
@@ -192,20 +229,16 @@ are hardcoded empty.
 3. Build `FewShotExample` objects from the calibration data
 4. Pass them to `extract_clause()`
 
-### E13: Few-shot format conflicts with tool_use (Task 5)
+### E13: ~~Few-shot format conflicts with tool_use~~ — SIMPLIFIED
 
-**Bug:** Few-shot examples use plain `role: assistant` messages, but
-extraction uses forced `tool_choice`. The API may reject or be confused.
+**Original bug:** Few-shot examples conflicted with API tool_use.
 
-**Fix:** Put few-shot examples inside the system prompt as XML-tagged
-examples:
-```
-<example>
-<input>Section from Argentina bond prospectus:
-[section text]</input>
-<output>{"found": true, "clause_text": "...", "confidence": "high", "reasoning": "..."}</output>
-</example>
-```
+**Simplified (no API):** Since Claude Code is the extractor, there is no
+API format constraint. The few-shot examples from the calibration set
+should be included in the plan itself or in a reference file that Claude
+Code reads before beginning extraction. Claude Code uses them as reference
+for how to reason about each candidate — what a real CAC looks like across
+different eras and styles.
 
 ### E14: Task 10 nohup race condition (Task 10)
 
@@ -245,15 +278,10 @@ Write to a separate `_llm_usage.jsonl` log (append-only). After the run,
 print a summary: total calls, total tokens, estimated API cost at current
 pricing, calls by stop_reason.
 
-### E17: Handle stop_reason and max_tokens truncation (Task 5)
+### E17: ~~Handle stop_reason~~ — NOT APPLICABLE
 
-**Bug:** The plan never checks `response.stop_reason`. If the extraction
-hits `max_tokens`, the tool output is silently truncated.
-
-**Fix:** Check `response.stop_reason`. If it's `"max_tokens"`, flag the
-extraction as `truncation_suspect`. Log it. Accept the truncated result
-(don't auto-retry — a truncated Opus extraction is probably better than
-nothing, and the completeness checklist will catch partials).
+**Superseded:** Claude Code is the extractor, no API response to check.
+The completeness checklist in VERIFY still catches truncated extractions.
 
 ### E18: Shiny server blocks autonomous agent (Task 8)
 
@@ -343,15 +371,10 @@ if [ "$found_count" -eq 0 ]; then
 fi
 ```
 
-### E24: max_tokens should be 16384 (Task 5)
+### E24: ~~max_tokens~~ — NOT APPLICABLE
 
-**Rationale:** A 3-page CAC clause ≈ 4,500 tokens verbatim. 8192 is
-probably fine for most cases, but long clauses with extensive meeting
-provisions could hit it. At Opus output pricing, you only pay for tokens
-actually generated — extra max_tokens capacity costs nothing. Set to 16384
-for 2x headroom.
-
-Also: set `MAX_TOKENS = 16384` in the code.
+**Superseded:** Claude Code is the extractor, no API max_tokens setting.
+Claude Code's own context window (1M) is more than sufficient.
 
 ### E25: Running cost ticker and end-of-run summary (Task 7)
 
@@ -370,15 +393,13 @@ End-of-run summary must include:
 - Timing (total, median/call, slowest)
 - Write to both stdout and `_run_summary.txt`
 
-### E26: Extended thinking incompatible with forced tool_choice
+### E26: ~~Extended thinking / tool_choice~~ — NOT APPLICABLE
 
-**Note for implementing agent:** Do NOT enable extended thinking / chain-of-thought
-in the Anthropic API call. Anthropic documents that `tool_choice={"type":"tool",...}`
-is incompatible with extended thinking. For an overnight extraction pipeline,
-deterministic tool output is more important than agentic reasoning.
-
-If you want the model to reason about boundaries, add a `thinking` string
-field to the tool schema itself (not the API's extended thinking feature).
+**Superseded:** Claude Code is the extractor. No API tool_choice constraint.
+Claude Code can reason freely about each candidate using its full
+capabilities. The `thinking` field in the output schema is still useful —
+Claude Code should write its boundary analysis there before writing
+clause_text.
 
 ### E27: Log full prompts for a sample only (Task 7)
 
@@ -391,57 +412,33 @@ Do NOT log all prompts — they contain full section text and would fill disk.
 
 ### E28: Pre-flight checklist before overnight run (Task 10)
 
-Before starting the full extraction, the agent MUST run:
+Before starting the full extraction, the agent MUST verify:
 
 ```bash
-# 1. Verify API key works with Opus
-uv run python3 -c "
-import anthropic
-c = anthropic.Anthropic()
-r = c.messages.create(model='claude-opus-4-6', max_tokens=10,
-    messages=[{'role':'user','content':'hi'}])
-print(f'API OK: {r.model}, stop={r.stop_reason}')
-print(f'Usage: {r.usage.input_tokens} in, {r.usage.output_tokens} out')
-"
-
-# 2. Verify candidate count is sane
+# 1. Verify candidate count is sane
 candidate_count=$(wc -l < data/extracted_v2/cac_candidates.jsonl)
 echo "Candidates: $candidate_count"
 if [ "$candidate_count" -gt 1000 ]; then
     echo "WARNING: >1000 candidates. Consider --skip-flat or tighter patterns."
 fi
 
-# 3. Prevent macOS sleep
+# 2. Prevent macOS sleep
 caffeinate -s &
 echo "caffeinate PID: $!"
 
-# 4. Disk space
+# 3. Disk space
 df -h .
-
-# 5. Estimate time and cost
-echo "Est. time: ~$(echo "$candidate_count * 50 / 3600" | bc -l | head -c5) hours"
-echo "Est. cost: ~\$$(echo "$candidate_count * 0.15" | bc -l | head -c5)"
-
-# 6. Canary run: 3 candidates through full pipeline
-uv run corpus extract-v2 extract \
-  --candidates data/extracted_v2/cac_candidates.jsonl \
-  --clause-family collective_action \
-  --output data/extracted_v2/_canary.jsonl \
-  --limit 3
-
-# Verify canary succeeded
-found=$(grep -c '"found": true' data/extracted_v2/_canary.jsonl || echo 0)
-errors=$(grep -c '"api_error"' data/extracted_v2/_canary.jsonl || echo 0)
-echo "Canary: $found found, $errors errors"
-if [ "$errors" -gt 0 ] || [ "$found" -eq 0 ]; then
-    echo "CANARY FAILED. Do not start overnight run."
-    exit 1
-fi
-echo "Canary passed. Safe to start overnight run."
-rm data/extracted_v2/_canary.jsonl
 ```
 
-If any check fails, STOP. Do not start the overnight run. Log the failure.
+Then do a **canary extraction**: process the first 3 candidates manually
+(Claude Code reads each one, extracts, writes to JSONL). Verify:
+- Output JSONL has 3 records
+- At least 1 has `found: true`
+- The extracted clause_text actually appears in the section_text (verbatim)
+
+If the canary fails, STOP. Debug before proceeding.
+
+No API key check needed — Claude Code IS the extractor.
 
 ---
 
