@@ -1,5 +1,5 @@
 # src/corpus/extraction/section_parser.py
-"""Parse Docling markdown into sections for clause extraction.
+"""Parse Docling markdown or EDGAR flat JSONL into sections for clause extraction.
 
 Sections are the unit of analysis for the LOCATE stage. Each section has a
 heading, body text (markdown preserved), heading level, and character count.
@@ -75,18 +75,28 @@ def parse_docling_markdown(
                 heading="(no heading)",
                 heading_level=0,
                 text=markdown_text.strip(),
-                page_range=(0, 0),
+                page_range=(-1, -1),
                 source_format="docling_md",
                 char_count=len(markdown_text.strip()),
                 section_index=0,
             )
         ]
 
-    # E20: Only emit the shallowest heading level. Subsections are already
-    # absorbed by E2 (section ends at next heading of same-or-higher level),
-    # so emitting deeper levels would duplicate text.
-    shallowest_level = min(h[1] for h in headings)
-    emit_levels = {shallowest_level}
+    # E20: Determine the structural heading level. If the shallowest level
+    # has only one heading (a document title like "# Prospectus"), skip it
+    # and use the next level as sections. Subsections deeper than the
+    # structural level are absorbed by E2 (same-or-higher boundary rule).
+    level_counts: dict[int, int] = {}
+    for _, lvl, _ in headings:
+        level_counts[lvl] = level_counts.get(lvl, 0) + 1
+
+    sorted_levels = sorted(level_counts.keys())
+    if len(sorted_levels) >= 2 and level_counts[sorted_levels[0]] == 1:
+        # Singleton shallowest (document title) — use next level
+        emit_levels = {sorted_levels[1]}
+    else:
+        # Shallowest level IS the structural level
+        emit_levels = {sorted_levels[0]}
 
     sections: list[Section] = []
     for i, (heading_text, level, start) in enumerate(headings):
@@ -168,13 +178,13 @@ def _split_large_section(text: str, max_chars: int) -> list[str]:
                     word_len += word_with_space
             if word_current:
                 chunks.append(" ".join(word_current))
-        elif current_len + len(para) > max_chars and current:
+        elif current_len + len(para) + 2 > max_chars and current:
             chunks.append("\n\n".join(current))
             current = [para]
             current_len = len(para)
         else:
             current.append(para)
-            current_len += len(para)
+            current_len += len(para) + (2 if current_len > 0 else 0)  # +2 for \n\n separator
 
     if current:
         chunks.append("\n\n".join(current))

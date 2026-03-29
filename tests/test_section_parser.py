@@ -101,6 +101,34 @@ def test_subsection_not_emitted_separately() -> None:
     assert "Cross-series modification" in cac.text
 
 
+def test_singleton_h1_title_skipped() -> None:
+    """A singleton H1 title should be skipped; H2 sections emitted."""
+    md = """\
+# Prospectus
+
+This is the prospectus.
+
+## Risk Factors
+
+Some risks.
+
+## Collective Action Clauses
+
+CAC text here.
+
+## Governing Law
+
+English law.
+"""
+    sections = parse_docling_markdown(md, storage_key="test__doc4")
+    headings = [s.heading for s in sections]
+    assert "Prospectus" not in headings
+    assert "Risk Factors" in headings
+    assert "Collective Action Clauses" in headings
+    assert "Governing Law" in headings
+    assert len(sections) == 3
+
+
 def test_empty_input() -> None:
     sections = parse_docling_markdown("", storage_key="test__empty")
     assert sections == []
