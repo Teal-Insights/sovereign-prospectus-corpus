@@ -161,6 +161,8 @@ CAC_CUES: dict[str, list[str]] = {
         r"\d+%\s+of\s+the\s+aggregate\s+principal",
         r"extraordinary\s+resolution",
         r"written\s+resolution",
+        r"two[\s-]+thirds",
+        r"66\s*[⅔2/3]",
     ],
     "aggregation": [
         r"aggregat(ion|ed)\s+(provisions?|voting)",
@@ -1115,19 +1117,76 @@ def load_split(path: Path) -> dict:
 Run: `uv run pytest tests/test_pdip_split.py -v`
 Expected: All 2 tests PASS
 
-- [ ] **Step 5: Create and commit the frozen split manifest**
+- [ ] **Step 5: Create the frozen split manifest (stratified by CAC variant)**
+
+The calibration set must cover the three major CAC variants so the LLM
+prompt and regex patterns don't have blind spots:
+
+1. Traditional / Simple (pre-2003): series-by-series, 75% threshold
+2. Two-Limb (Euro area 2013+, English law 2003-2014): series + aggregate
+3. Single-Limb / ICMA 2014+: one aggregate vote, "uniformly applicable"
+
+Use governing law + date from PDIP metadata as the discriminator:
+- English law pre-2014 → likely two-limb
+- English law post-2014 → likely single-limb (ICMA)
+- NY law post-2014 → modified ICMA
+- Pre-2003 any law → likely traditional/simple
+
+```bash
+# First, inspect the 37 CAC-annotated docs to pick stratified calibration set
+uv run python3 -c "
+import json
+from pathlib import Path
+
+docs = {}
+with Path('data/pdip/clause_annotations.jsonl').open() as f:
+    for line in f:
+        r = json.loads(line)
+        if r.get('label_family') == 'collective_action':
+            did = r['doc_id']
+            if did not in docs:
+                docs[did] = {
+                    'doc_id': did,
+                    'country': r.get('country', ''),
+                    'governing_law': r.get('governing_law', ''),
+                    'instrument_type': r.get('instrument_type', ''),
+                    'title': r.get('document_title', '')[:60],
+                }
+
+for d in sorted(docs.values(), key=lambda x: x['governing_law']):
+    print(f\"{d['doc_id']:12s} {d['governing_law']:25s} {d['country']:15s} {d['title']}\")
+"
+```
+
+Review the output and manually pick ~5 docs covering the variant spread.
+Then create the split:
 
 ```bash
 uv run python3 -c "
 from pathlib import Path
 from corpus.extraction.pdip_split import create_split, save_split
-split = create_split(Path('data/pdip/clause_annotations.jsonl'), clause_family='collective_action', calibration_count=5)
+
+# create_split uses random seed for reproducibility.
+# After reviewing the docs above, if the random pick doesn't cover all
+# variants, manually adjust the calibration list in the manifest.
+split = create_split(
+    Path('data/pdip/clause_annotations.jsonl'),
+    clause_family='collective_action',
+    calibration_count=5,
+)
 save_split(split, Path('data/pdip/pdip_split_manifest.json'))
 print(f'Calibration ({len(split[\"calibration\"])}): {split[\"calibration\"]}')
 print(f'Evaluation ({len(split[\"evaluation\"])}): {split[\"evaluation\"]}')
 "
+```
+
+Verify the calibration set covers multiple governing laws / eras. If not,
+edit `data/pdip/pdip_split_manifest.json` manually to swap docs between
+calibration and evaluation sets, ensuring variant coverage.
+
+```bash
 git add src/corpus/extraction/pdip_split.py tests/test_pdip_split.py data/pdip/pdip_split_manifest.json
-git commit -m "feat: frozen PDIP calibration/evaluation split for CAC"
+git commit -m "feat: frozen PDIP calibration/evaluation split for CAC (stratified by variant)"
 ```
 
 ---
