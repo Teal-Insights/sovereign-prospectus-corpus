@@ -237,8 +237,8 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
         page_start = str(row.get("page_start", "") or "")
         page_end = str(row.get("page_end", "") or "")
 
-        # Format page range — empty values mean unknown (placeholder 0,0 already
-        # filtered out by export_v2.py)
+        # Format page range — Docling pages are filtered out by export_v2.py
+        # (uses source_format to distinguish real EDGAR pages from placeholders)
         if page_start and page_end and page_start != "0" and page_end != "0":
             page_label = (
                 f"pp. {page_start}\u2013{page_end}"

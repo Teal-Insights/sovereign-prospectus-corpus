@@ -167,8 +167,9 @@ def build_extraction_prompt(
                 }
             )
 
+    # Show page info only for sources with real page data
     page_info = ""
-    if candidate.page_range not in ((-1, -1), (0, 0)):
+    if candidate.source_format == "flat_jsonl":
         page_info = f", pages {candidate.page_range[0] + 1}-{candidate.page_range[1] + 1}"
 
     messages.append(
