@@ -95,19 +95,28 @@ short (<80 chars), and followed by body text are candidate section headings.
 split it at sub-headings or paragraph boundaries. This prevents blowing the
 LLM context window and diluting the extraction prompt.
 
-### EDGAR HTML parser
+### EDGAR flat-parsed JSONL
 
-**Monday scope**: EDGAR documents use body-regex fallback (no heading match
-→ lower confidence). This is honest and avoids the risk of building a new
-HTML section parser under time pressure.
+~3,217 EDGAR filings are already parsed into flat JSONL (one record per
+page, no section structure) via `PlainTextParser` and `HTMLParser` in
+`src/corpus/parsers/`. The original files are `.htm` (~2,947) and `.txt`
+(~275) in `data/original/`.
 
-SEC EDGAR HTML has no consistent heading schema — many filings use `<b>`,
-`<u>`, or `<font size="+2">` instead of `<h1>`-`<h4>` tags. Building a
-robust parser could easily consume the entire sprint.
+**Monday scope**: Process EDGAR documents using page-level sections. Each
+non-empty page becomes a `Section` with heading `"(page N)"` and
+`source_format="flat_jsonl"`. These candidates have no heading match (only
+body-cue filtering), which is transparently reflected in their signals.
+The LLM receives the page text and extracts the clause.
 
-**Backlog**: Build EDGAR HTML section parser that handles inline-styled
-headings. The source-agnostic `Section` interface means the rest of the
-pipeline doesn't change.
+This approach has lower precision than section-aware parsing (more
+candidates per document) but full recall. The LLM handles the boundary
+detection. EDGAR candidates will show "Surfaced By: Body cues" in the
+explorer — honest and interpretable.
+
+**Backlog**: Build EDGAR HTML section parser that detects headings from
+inline-styled bold/large text (`<b>`, `<font size="+2">`). The
+source-agnostic `Section` interface means the rest of the pipeline
+doesn't change.
 
 ### Why source-agnostic
 
@@ -144,6 +153,8 @@ CAC_CUES = {
         r"\d+%\s+of\s+the\s+aggregate\s+principal",
         r"extraordinary\s+resolution",
         r"written\s+resolution",
+        r"two[\s-]+thirds",
+        r"66\s*[⅔2/3]",
     ],
     "aggregation": [
         r"aggregat(ion|ed)\s+(provisions?|voting)",
@@ -328,9 +339,12 @@ compliance (not free-form JSON generation):
 - **Reasoning**: helps the lawyer understand why the system flagged this.
 - **NOT_FOUND is a valid answer**: better to say "not found" than force an
   extraction from a cross-reference.
-- **Model: Claude Sonnet** (not Haiku). All reviewers agree: Haiku
-  paraphrases more and follows complex extraction instructions less
-  reliably. At ~200-300 candidates, Sonnet cost is ~$2-5 total. Use Sonnet.
+- **Model: Claude Opus 4.6** (`claude-opus-4-6`, not Sonnet or Haiku). These are billion-dollar
+  bond contracts where accuracy on edge cases matters more than cost. Opus
+  is better at verbatim extraction, boundary detection, and following
+  complex instructions. At ~200-300 candidates, Opus cost is ~$30-50 via
+  API — trivial compared to the value of accurate extractions that don't
+  waste $1000/hr lawyer time on false positives or truncated clauses.
 - **Boundary verification**: For medium-confidence results, optionally
   run a second LLM call: "Here is the text I extracted. Here is the full
   section. Did I capture the complete clause? Are the boundaries correct?"
@@ -408,6 +422,43 @@ Partition the 162 PDIP-annotated documents into:
 The split is by **document** (not by clause), so no information from an
 evaluation document leaks into the prompt. Document the split in a
 manifest file and commit it before running any LLM extraction.
+
+### Calibration set stratification: CAC types
+
+PDIP annotations only tag CAC *presence* — they don't sub-classify by
+variant. But CAC language varies substantially across types, and the
+calibration set must cover the spread so the LLM and regex patterns
+don't have blind spots.
+
+**Three major CAC variants:**
+
+1. **Traditional / Simple (pre-2003)**: Series-by-series voting only,
+   typically 75% threshold. Language: "holders of not less than 75% in
+   principal amount of the outstanding Notes of this Series." No
+   aggregate or cross-series mechanism.
+
+2. **Two-Limb (Euro area 2013+, English law 2003-2014)**: Two separate
+   votes — series-level (75%) AND cross-series aggregate (66 2/3%).
+   Language: "modification of this series" + "modification across all
+   affected series" or "aggregate collective action."
+
+3. **Single-Limb / ICMA 2014+ (most new issuances)**: One aggregate vote
+   across all series (75%), "uniformly applicable." Language: "single
+   aggregated voting" + "uniformly applicable" + "aggregate principal
+   amount of outstanding debt securities."
+
+**How to select calibration documents:**
+
+Use governing law + date as the primary discriminator:
+- English law pre-2014 → likely two-limb
+- English law post-2014 → likely single-limb (ICMA)
+- NY law post-2014 → modified ICMA
+- Euro area sovereign post-2013 → model CAC (standardized two-limb)
+- Pre-2003 any law → likely traditional/simple
+
+Aim for at least one doc from each major variant in the calibration set.
+If only 4 variants are represented, 4 calibration docs is fine — coverage
+of variant diversity matters more than the exact count.
 
 ### What to freeze before evaluation
 
@@ -553,8 +604,8 @@ human-centered metric that demonstrates the tool respects reviewer time.
 ## Data Flow
 
 ```
-data/parsed_docling/*.md  ─→ Section Parser ─→ sections.jsonl
-(EDGAR: body-regex fallback, no section parse for Monday)
+data/parsed_docling/*.md  ─→ Docling Section Parser ─→ sections.jsonl
+data/parsed/edgar__*.jsonl ─→ Flat JSONL Parser    ─→ (appended to sections.jsonl)
 
 sections.jsonl ─→ LOCATE (heading + cue families + neg reject + cluster)
               ─→ candidates.jsonl
@@ -596,7 +647,7 @@ be resumed at any stage. Every record carries `candidate_id`, `run_id`, and
 
 ### Cut for Monday
 
-- EDGAR HTML section re-parse (body-regex fallback)
+- EDGAR HTML section-aware re-parse (page-level fallback is used instead)
 - ICMA string similarity scoring
 - Inline clause highlighting within rendered section
 - Boundary verification second LLM call

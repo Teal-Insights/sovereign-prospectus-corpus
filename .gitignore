@@ -2,8 +2,12 @@
 .env
 
 # === DATA (rebuild from pipeline) ===
-data/
+data/**
 !data/config/
+!data/config/**
+!data/pdip/
+data/pdip/**
+!data/pdip/pdip_split_manifest.json
 
 # === ARCHIVE (stale Phase 0 files, logs) ===
 archive/
