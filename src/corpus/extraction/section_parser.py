@@ -68,16 +68,33 @@ def parse_docling_markdown(
     headings = _split_at_headings(markdown_text)
 
     if not headings:
+        full_text = markdown_text.strip()
+        if len(full_text) > max_section_chars:
+            chunks = _split_large_section(full_text, max_section_chars)
+            return [
+                Section(
+                    section_id=f"{storage_key}__s{i}",
+                    storage_key=storage_key,
+                    heading="(no heading)",
+                    heading_level=0,
+                    text=chunk,
+                    page_range=(-1, -1),
+                    source_format="docling_md",
+                    char_count=len(chunk),
+                    section_index=i,
+                )
+                for i, chunk in enumerate(chunks)
+            ]
         return [
             Section(
                 section_id=f"{storage_key}__s0",
                 storage_key=storage_key,
                 heading="(no heading)",
                 heading_level=0,
-                text=markdown_text.strip(),
+                text=full_text,
                 page_range=(-1, -1),
                 source_format="docling_md",
-                char_count=len(markdown_text.strip()),
+                char_count=len(full_text),
                 section_index=0,
             )
         ]
@@ -98,6 +115,19 @@ def parse_docling_markdown(
         # Shallowest level IS the structural level
         emit_levels = {sorted_levels[0]}
 
+    # Fix 1: If we skip a singleton title, capture any preamble text between
+    # the title heading line and the first structural heading, so it is not lost.
+    preamble = ""
+    if len(sorted_levels) >= 2 and level_counts[sorted_levels[0]] == 1:
+        title_heading = next(h for h in headings if h[1] == sorted_levels[0])
+        first_structural = next(h for h in headings if h[1] == sorted_levels[1])
+        title_line_end = markdown_text.find("\n", title_heading[2])
+        if title_line_end == -1:
+            title_line_end = len(markdown_text)
+        preamble_text = markdown_text[title_line_end : first_structural[2]].strip()
+        if preamble_text:
+            preamble = preamble_text + "\n\n"
+
     sections: list[Section] = []
     for i, (heading_text, level, start) in enumerate(headings):
         # E20: Skip headings deeper than the shallowest level
@@ -112,6 +142,10 @@ def parse_docling_markdown(
                 break
 
         body = markdown_text[start:end].strip()
+
+        # Prepend preamble to the first emitted section
+        if preamble and not sections:
+            body = preamble + body
         char_count = len(body)
 
         if char_count > max_section_chars:
@@ -124,7 +158,7 @@ def parse_docling_markdown(
                         heading=heading_text,
                         heading_level=level,
                         text=chunk,
-                        page_range=(0, 0),
+                        page_range=(-1, -1),
                         source_format="docling_md",
                         char_count=len(chunk),
                         section_index=len(sections),
@@ -138,7 +172,7 @@ def parse_docling_markdown(
                     heading=heading_text,
                     heading_level=level,
                     text=body,
-                    page_range=(0, 0),
+                    page_range=(-1, -1),
                     source_format="docling_md",
                     char_count=char_count,
                     section_index=len(sections),
@@ -188,6 +222,11 @@ def _split_large_section(text: str, max_chars: int) -> list[str]:
 
     if current:
         chunks.append("\n\n".join(current))
+
+    # Post-process: merge tiny leading chunks (e.g., heading-only) into the next chunk
+    if len(chunks) >= 2 and len(chunks[0]) < 200:
+        chunks[1] = chunks[0] + "\n\n" + chunks[1]
+        chunks = chunks[1:]
 
     return chunks
 

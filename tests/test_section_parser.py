@@ -129,6 +129,35 @@ English law.
     assert len(sections) == 3
 
 
+def test_singleton_h1_preserves_intro_text() -> None:
+    """Text under a singleton H1 before the first H2 should not be lost."""
+    md = """\
+# Prospectus
+
+Important intro text about the issuer.
+
+## Risk Factors
+
+Some risks.
+
+## Governing Law
+
+English law.
+"""
+    sections = parse_docling_markdown(md, storage_key="test__doc5")
+    all_text = " ".join(s.text for s in sections)
+    assert "Important intro text" in all_text
+
+
+def test_headingless_doc_split() -> None:
+    """A headingless document exceeding max_section_chars should be split."""
+    long_text = "word " * 4000  # ~20K chars
+    sections = parse_docling_markdown(long_text, storage_key="test__doc6", max_section_chars=15000)
+    assert len(sections) >= 2
+    for s in sections:
+        assert s.char_count <= 16000
+
+
 def test_empty_input() -> None:
     sections = parse_docling_markdown("", storage_key="test__empty")
     assert sections == []
