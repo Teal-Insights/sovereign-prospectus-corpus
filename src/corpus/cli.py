@@ -14,6 +14,7 @@ import click
 
 import corpus
 from corpus.db.ingest import ingest_manifests
+from corpus.extraction.country import guess_country as _guess_country
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -1148,66 +1149,6 @@ def status(source: str | None) -> None:
 
 # ── Extract-v2 group ────────────────────────────────────────────────
 
-_COUNTRY_FROM_PREFIX: dict[str, str] = {
-    "AGO": "Angola",
-    "ARG": "Argentina",
-    "AUT": "Austria",
-    "BHR": "Bahrain",
-    "BIH": "Bosnia and Herzegovina",
-    "BRA": "Brazil",
-    "BRB": "Barbados",
-    "CAN": "Canada",
-    "CHN": "China",
-    "CMR": "Cameroon",
-    "CYP": "Cyprus",
-    "ECU": "Ecuador",
-    "EGY": "Egypt",
-    "ETH": "Ethiopia",
-    "GHA": "Ghana",
-    "GIN": "Guinea",
-    "GUY": "Guyana",
-    "HUN": "Hungary",
-    "IDN": "Indonesia",
-    "ISL": "Iceland",
-    "ISR": "Israel",
-    "ITA": "Italy",
-    "JAM": "Jamaica",
-    "JOR": "Jordan",
-    "JPN": "Japan",
-    "KAZ": "Kazakhstan",
-    "KEN": "Kenya",
-    "KGZ": "Kyrgyzstan",
-    "KWT": "Kuwait",
-    "LKA": "Sri Lanka",
-    "LVA": "Latvia",
-    "MAR": "Morocco",
-    "MDA": "Moldova",
-    "MNE": "Montenegro",
-    "NGA": "Nigeria",
-    "NLD": "Netherlands",
-    "PER": "Peru",
-    "PHL": "Philippines",
-    "RWA": "Rwanda",
-    "SAU": "Saudi Arabia",
-    "SEN": "Senegal",
-    "SLE": "Sierra Leone",
-    "SRB": "Serbia",
-    "SWE": "Sweden",
-    "UGA": "Uganda",
-    "UZB": "Uzbekistan",
-    "VEN": "Venezuela",
-}
-
-
-def _guess_country(storage_key: str) -> str:
-    """Guess country name from a PDIP storage key (e.g. 'pdip__KEN68' → 'Kenya')."""
-    if storage_key.startswith("pdip__"):
-        suffix = storage_key[6:]
-        for code, country in _COUNTRY_FROM_PREFIX.items():
-            if suffix.startswith(code):
-                return country
-    return ""
-
 
 @cli.group("extract-v2")
 def extract_v2_group() -> None:
@@ -1276,17 +1217,20 @@ def extract_v2_locate(
         for md_file in md_files:
             storage_key = md_file.stem
             markdown_text = md_file.read_text(encoding="utf-8")
+            start = time.monotonic()
             sections = parse_docling_markdown(markdown_text, storage_key=storage_key)
             candidates = filter_sections(sections, clause_family=clause_family, run_id=run_id)
+            elapsed = int((time.monotonic() - start) * 1000)
             if candidates:
                 docs_with_candidates += 1
                 all_candidates.extend(candidates)
-                logger.log(
-                    document_id=storage_key,
-                    step="locate",
-                    status="candidates_found",
-                    candidate_count=len(candidates),
-                )
+            logger.log(
+                document_id=storage_key,
+                step="locate",
+                duration_ms=elapsed,
+                status="candidates_found" if candidates else "no_candidates",
+                candidate_count=len(candidates),
+            )
 
         click.echo(f"  Docling: {len(all_candidates)} candidates from {docs_with_candidates} docs")
     else:
@@ -1318,18 +1262,21 @@ def extract_v2_locate(
                         if "page" not in rec:
                             continue
                         pages.append(rec)
+                start = time.monotonic()
                 sections = parse_flat_jsonl(pages, storage_key=storage_key)
                 candidates = filter_sections(sections, clause_family=clause_family, run_id=run_id)
+                elapsed = int((time.monotonic() - start) * 1000)
                 if candidates:
                     edgar_docs += 1
                     edgar_candidates += len(candidates)
                     all_candidates.extend(candidates)
-                    logger.log(
-                        document_id=storage_key,
-                        step="locate",
-                        status="candidates_found",
-                        candidate_count=len(candidates),
-                    )
+                logger.log(
+                    document_id=storage_key,
+                    step="locate",
+                    duration_ms=elapsed,
+                    status="candidates_found" if candidates else "no_candidates",
+                    candidate_count=len(candidates),
+                )
 
             docs_with_candidates += edgar_docs
             click.echo(f"  EDGAR: {edgar_candidates} candidates from {edgar_docs} docs")
@@ -1346,7 +1293,7 @@ def extract_v2_locate(
             "candidate_id": c.candidate_id,
             "storage_key": c.storage_key,
             "country": _guess_country(c.storage_key),
-            "document_title": "",
+            "document_title": c.storage_key,
             "section_id": c.section_id,
             "section_index": c.section_index,
             "section_heading": c.section_heading,
@@ -1447,6 +1394,7 @@ def extract_v2_verify(
             logger.log(
                 document_id=candidate_id,
                 step="verify",
+                duration_ms=0,
                 status="error_skipped",
             )
             continue
@@ -1457,6 +1405,7 @@ def extract_v2_verify(
             logger.log(
                 document_id=candidate_id,
                 step="verify",
+                duration_ms=0,
                 status="not_found",
             )
             continue
@@ -1464,9 +1413,11 @@ def extract_v2_verify(
         clause_text = ext["clause_text"]
         source_text = rec["section_text"]
 
+        start = time.monotonic()
         verbatim = check_verbatim(clause_text, source_text)
         completeness = check_completeness(clause_text, clause_family=clause_family)
         quality_flags = compute_quality_flags(extracted=clause_text, source=source_text)
+        elapsed = int((time.monotonic() - start) * 1000)
 
         if not verbatim.passes:
             quality_flags.append("verification_failed")
@@ -1492,6 +1443,7 @@ def extract_v2_verify(
         logger.log(
             document_id=candidate_id,
             step="verify",
+            duration_ms=elapsed,
             status=verbatim_status,
         )
 

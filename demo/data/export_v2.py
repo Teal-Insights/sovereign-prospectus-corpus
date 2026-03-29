@@ -6,65 +6,19 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _SCRIPT_DIR.parent.parent
+# Ensure corpus package is importable when run as a script
+if str(_REPO_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT / "src"))
+
 VERIFIED_DIR = _REPO_ROOT / "data" / "extracted_v2"
 OUTPUT_PATH = _SCRIPT_DIR / "clause_candidates_v2.csv"
 
-# Country code extracted from PDIP storage keys (e.g. pdip__ARG1 -> ARG)
-# and common NSM patterns. Not exhaustive — a best-effort heuristic.
-_COUNTRY_FROM_PREFIX: dict[str, str] = {
-    "AGO": "Angola",
-    "ARG": "Argentina",
-    "BHR": "Bahrain",
-    "BIH": "Bosnia-Herzegovina",
-    "BRB": "Barbados",
-    "CHN": "China",
-    "CMR": "Cameroon",
-    "COL": "Colombia",
-    "ECU": "Ecuador",
-    "EGY": "Egypt",
-    "GHA": "Ghana",
-    "HUN": "Hungary",
-    "IDN": "Indonesia",
-    "ISR": "Israel",
-    "ITA": "Italy",
-    "JAM": "Jamaica",
-    "JOR": "Jordan",
-    "KAZ": "Kazakhstan",
-    "KEN": "Kenya",
-    "KGZ": "Kyrgyzstan",
-    "KWT": "Kuwait",
-    "LAT": "Latvia",
-    "MAR": "Morocco",
-    "MNE": "Montenegro",
-    "NLD": "Netherlands",
-    "NGA": "Nigeria",
-    "PAN": "Panama",
-    "PER": "Peru",
-    "PHL": "Philippines",
-    "RWA": "Rwanda",
-    "SAU": "Saudi Arabia",
-    "SEN": "Senegal",
-    "TUR": "Turkey",
-    "UZB": "Uzbekistan",
-    "VEN": "Venezuela",
-    "ZAF": "South Africa",
-    "ZMB": "Zambia",
-}
-
-
-def _guess_country(storage_key: str) -> str:
-    """Best-effort country from storage key prefix (e.g. pdip__ARG1 -> Argentina)."""
-    # PDIP keys: pdip__ARG1, pdip__KEN30
-    if storage_key.startswith("pdip__"):
-        suffix = storage_key[6:]  # after pdip__
-        for code, country in _COUNTRY_FROM_PREFIX.items():
-            if suffix.startswith(code):
-                return country
-    return ""
+from corpus.extraction.country import guess_country as _guess_country  # noqa: E402
 
 
 def export_v2_candidates(
@@ -111,7 +65,7 @@ def export_v2_candidates(
                         "candidate_id": rec.get("candidate_id", ""),
                         "storage_key": rec.get("storage_key", ""),
                         "country": country,
-                        "document_title": rec.get("document_title", rec.get("storage_key", "")),
+                        "document_title": rec.get("document_title") or rec.get("storage_key", ""),
                         "section_heading": rec.get("section_heading", ""),
                         "page_start": page_start,
                         "page_end": page_end,
