@@ -38,8 +38,14 @@ def generate_family_report(
         and r.get("verification", {}).get("status") != "api_error"
     ]
     api_errors = [r for r in records if r.get("verification", {}).get("status") == "api_error"]
-    verified = [r for r in found if r.get("verification", {}).get("status") == "verified"]
-    failed = [r for r in found if r.get("verification", {}).get("status") == "failed"]
+    verified = [
+        r
+        for r in found
+        if r.get("verification", {}).get("status") in ("verified", "section_located")
+    ]
+    failed = [
+        r for r in found if r.get("verification", {}).get("status") in ("failed", "needs_review")
+    ]
 
     # Source mix
     source_mix = Counter(r.get("source_format", "unknown") for r in records)

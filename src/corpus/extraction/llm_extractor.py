@@ -24,14 +24,14 @@ Your task is to extract specific clause text verbatim from bond prospectuses.
 Rules:
 1. Extract the EXACT text as it appears in the source. Do not paraphrase,
    summarize, correct typos, or rephrase in any way.
-2. Preserve all original formatting, whitespace, numbered lists, and
+2. CRITICAL: Your extracted clause_text MUST be a substring of the provided
+   section_text. Do not use text from memory or from other sections of the
+   document. If the clause is not in the section_text, return NOT_FOUND.
+3. Preserve all original formatting, whitespace, numbered lists, and
    punctuation exactly as they appear.
-3. The clause begins where the substantive legal language starts and ends
+4. The clause begins where the substantive legal language starts and ends
    where the subject matter clearly changes or a new section of equal or
    higher heading level begins.
-4. For CACs: ensure you extract ALL related sub-paragraphs including
-   voting thresholds, reserved matters, aggregation provisions, meeting
-   rules, and notice requirements. Do not stop at the first paragraph.
 5. If the section does not contain the requested clause (e.g., it's a
    cross-reference, table of contents entry, or summary), return NOT_FOUND.
 6. NOT_FOUND is a valid and expected answer. Never force an extraction."""

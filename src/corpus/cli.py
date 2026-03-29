@@ -1306,6 +1306,14 @@ def extract_v2_locate(
     # Cluster adjacent candidates
     clustered = cluster_candidates(all_candidates)
 
+    # Filter heading-only stubs (< 100 chars section_text) — these are ToC entries
+    # or empty sections that produce guaranteed NOT_FOUND results, wasting LLM budget.
+    pre_filter = len(clustered)
+    clustered = [c for c in clustered if len(c.section_text.strip()) >= 100]
+    stub_count = pre_filter - len(clustered)
+    if stub_count:
+        click.echo(f"  Filtered {stub_count} heading-only stubs (<100 chars)")
+
     # Write JSONL (atomic: .part → rename)
     all_records = []
     for c in clustered:
