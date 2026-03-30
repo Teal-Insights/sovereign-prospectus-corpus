@@ -6,18 +6,25 @@ from __future__ import annotations
 import csv
 import datetime
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 
+csv.field_size_limit(sys.maxsize)
+
 DATA_DIR = Path(__file__).parent / ".." / "data"
-CANDIDATES_PATH = DATA_DIR / "clause_candidates_v2.csv"
+CANDIDATES_PATH = DATA_DIR / "all_extractions.csv"
 FEEDBACK_PATH = DATA_DIR / "feedback_log_v2.csv"
 
 CLAUSE_FAMILY_LABELS: dict[str, str] = {
     "collective_action": "Collective Action Clause (CAC)",
     "pari_passu": "Pari Passu",
+    "governing_law": "Governing Law",
+    "sovereign_immunity": "Sovereign Immunity",
+    "negative_pledge": "Negative Pledge",
+    "events_of_default": "Events of Default",
 }
 
 CONFIDENCE_LABELS: dict[str, str] = {
@@ -33,10 +40,10 @@ VERBATIM_LABELS: dict[str, str] = {
 }
 
 FEEDBACK_OPTIONS: dict[str, str] = {
-    "correct": "Correct",
+    "correct": "Correct Clause",
     "wrong_boundaries": "Wrong Boundaries",
     "not_a_clause": "Not a Clause",
-    "partial": "Partial",
+    "partial": "Partial Match",
     "needs_second_look": "Needs Second Look",
 }
 
@@ -82,16 +89,36 @@ CLAUSE_FAMILY_CHOICES: dict[str, str] = {}
 for _f in sorted(_families_in_data):
     CLAUSE_FAMILY_CHOICES[_f] = CLAUSE_FAMILY_LABELS.get(_f, _f)
 
+# Build initial country choices
+_initial_family = next(iter(CLAUSE_FAMILY_CHOICES.keys())) if CLAUSE_FAMILY_CHOICES else ""
+_initial_countries = (
+    sorted(
+        ALL_CANDIDATES[ALL_CANDIDATES["clause_family"] == _initial_family]["country"]
+        .unique()
+        .tolist()
+    )
+    if _initial_family
+    else []
+)
+_INITIAL_COUNTRY_CHOICES: dict[str, str] = {"": "All Countries"}
+for _c in _initial_countries:
+    if _c:
+        _INITIAL_COUNTRY_CHOICES[_c] = _c
+
 
 app_ui = ui.page_sidebar(
     ui.sidebar(
-        ui.h5("Clause Eval Explorer v2"),
-        ui.p(
-            ui.em(
-                "Proof of concept for the #PublicDebtIsPublic roundtable. "
-                "Findings are preliminary."
+        ui.h5("Clause Eval Explorer"),
+        ui.tags.div(
+            ui.p(
+                "Sovereign bond clause extraction for expert review.",
+                style="font-size: 0.9em; font-weight: 500; margin-bottom: 4px;",
             ),
-            style="font-size: 0.85em; color: #666;",
+            ui.p(
+                "Part of the #PublicDebtIsPublic initiative.",
+                style="font-size: 0.85em; color: #666; margin-bottom: 0;",
+            ),
+            style="margin-bottom: 12px;",
         ),
         ui.hr(),
         ui.input_select(
@@ -99,6 +126,12 @@ app_ui = ui.page_sidebar(
             "Clause Family",
             choices=CLAUSE_FAMILY_CHOICES,
             selected=next(iter(CLAUSE_FAMILY_CHOICES.keys())) if CLAUSE_FAMILY_CHOICES else None,
+        ),
+        ui.input_select(
+            "country_filter",
+            "Country",
+            choices=_INITIAL_COUNTRY_CHOICES,
+            selected="",
         ),
         ui.input_select(
             "confidence_filter",
@@ -118,13 +151,27 @@ app_ui = ui.page_sidebar(
         ui.p(
             ui.strong("How to use:"),
             ui.tags.ol(
-                ui.tags.li("Select a clause type and filters above."),
-                ui.tags.li("Click a row to inspect the extracted clause."),
-                ui.tags.li("Rate the extraction using the feedback buttons."),
+                ui.tags.li("Select a clause type and filters."),
+                ui.tags.li("Review candidates in order."),
+                ui.tags.li("Validate or correct the extraction."),
             ),
             style="font-size: 0.85em;",
         ),
         width=300,
+    ),
+    ui.card(
+        ui.tags.div(
+            ui.tags.p(
+                ui.tags.strong("How this works: "),
+                "This tool surfaces clause candidates found by automated "
+                "pattern matching. Your expert judgment validates each one. "
+                "Every review improves future identification across the "
+                "full corpus.",
+                style="font-size: 0.9em; margin: 0;",
+            ),
+            style="background: #e8f4f8; padding: 12px 16px; border-radius: 4px; "
+            "border-left: 4px solid #2c7bb6;",
+        ),
     ),
     ui.card(
         ui.card_header("Extracted Clauses"),
@@ -142,7 +189,7 @@ app_ui = ui.page_sidebar(
         ui.card_header("Validation Feedback"),
         ui.output_ui("feedback_panel"),
     ),
-    title="Clause Eval Explorer v2",
+    title="Clause Eval Explorer",
     theme=ui.Theme("bootstrap"),
 )
 
@@ -151,14 +198,28 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
     selected_row: reactive.Value[int | None] = reactive.Value(None)
     feedback_msg: reactive.Value[str] = reactive.Value("")
 
+    @reactive.Effect
+    def _update_country_choices() -> None:
+        family = input.clause_family()
+        family_df = ALL_CANDIDATES[ALL_CANDIDATES["clause_family"] == family]
+        countries = sorted(family_df["country"].unique().tolist())
+        choices: dict[str, str] = {"": "All Countries"}
+        for c in countries:
+            if c:
+                choices[c] = c
+        ui.update_select("country_filter", choices=choices, selected="")
+
     @reactive.Calc
     def filtered_df() -> pd.DataFrame:
         family = input.clause_family()
         conf = input.confidence_filter()
         verbatim = input.verbatim_filter()
+        country = input.country_filter()
 
         df = ALL_CANDIDATES[ALL_CANDIDATES["clause_family"] == family].copy()
 
+        if country:
+            df = df[df["country"] == country]
         if conf:
             df = df[df["llm_confidence"] == conf]
         if verbatim:
@@ -172,12 +233,17 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
         df = filtered_df()
         result = pd.DataFrame(
             {
-                "Storage Key": df["storage_key"].str[-30:],
-                "Section": df["section_heading"].str[:60],
-                "Clause Family": df["clause_family"].map(lambda x: CLAUSE_FAMILY_LABELS.get(x, x)),
+                "Country": df["country"],
+                "Document": df["document_title"].str[-40:],
+                "Section": df["section_heading"].str[:50],
+                "Page": df["page_start"].where(
+                    (df["page_start"] != "") & (df["page_start"] != "0"), ""
+                ),
+                "Surfaced By": df["heading_match"].map(
+                    lambda x: "Heading" if str(x).lower() in ("yes", "true", "1") else "Body cues"
+                ),
                 "Confidence": df["llm_confidence"].str.capitalize(),
-                "Verbatim": df["verbatim_status"].str.capitalize(),
-                "Clause Preview": df["clause_text"].str[:150],
+                "Preview": df["clause_text"].str[:80],
             }
         )
         return result
@@ -258,7 +324,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
         badge_items = []
         for component, present in completeness.items():
             color = "#28a745" if present else "#dc3545"
-            icon = "✓" if present else "✗"
+            icon = "\u2713" if present else "\u2717"
             badge_items.append(
                 f'<span style="display:inline-block;margin:2px 4px;padding:2px 8px;'
                 f'border-radius:4px;background:{color};color:white;font-size:0.8em;">'
@@ -452,7 +518,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
 
         return ui.TagList(
             ui.tags.p(
-                f"Rating extraction for candidate: {candidate_id}",
+                "Validate clause boundaries. Your expert judgment improves the dataset.",
                 style="font-size:0.85em;color:#555;margin-bottom:8px;",
             ),
             ui.layout_columns(
