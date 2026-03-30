@@ -1,0 +1,136 @@
+# A First Peek at the Data
+
+::: {.callout-note}
+These are preliminary, unvalidated potential clause matches. They have not been reviewed by lawyers. Some are wrong, some are missing. We show them here because even the rough picture is interesting.
+:::
+
+## Where the documents come from
+
+The pipeline collected documents from three public sources.
+
+```{python}
+#| echo: false
+#| fig-cap: "Documents collected by source."
+
+import pandas as pd
+import plotly.express as px
+
+sources = pd.DataFrame({
+    "Source": ["SEC EDGAR", "FCA National Storage Mechanism", "#PublicDebtIsPublic"],
+    "Documents": [3301, 645, 823],
+})
+sources = sources.sort_values("Documents", ascending=True)
+
+fig = px.bar(
+    sources,
+    x="Documents",
+    y="Source",
+    orientation="h",
+    text="Documents",
+    color_discrete_sequence=["#2c6fbb"],
+)
+fig.update_layout(
+    xaxis_title="",
+    yaxis_title="",
+    showlegend=False,
+    height=250,
+    margin=dict(l=10, r=80, t=10, b=10),
+    xaxis=dict(range=[0, 4000]),
+)
+fig.update_traces(textposition="outside")
+fig.show()
+```
+
+4,769 documents total across the three sources.
+
+## Which countries?
+
+```{python}
+#| echo: false
+#| fig-cap: "Top 20 countries by number of unique documents with at least one clause extraction."
+
+import csv, sys
+csv.field_size_limit(sys.maxsize)
+import pandas as pd
+import plotly.express as px
+import collections
+
+doc_countries = collections.Counter()
+seen = set()
+with open("data/all_extractions.csv") as f:
+    reader = csv.DictReader(f)
+    for row in reader:
+        key = row.get("storage_key", "")
+        c = row.get("country", "")
+        if key not in seen and c:
+            seen.add(key)
+            doc_countries[c] += 1
+
+by_country = pd.DataFrame(
+    doc_countries.most_common(20),
+    columns=["Country", "Documents"],
+).sort_values("Documents", ascending=True)
+
+fig = px.bar(
+    by_country,
+    x="Documents",
+    y="Country",
+    orientation="h",
+    text="Documents",
+    color_discrete_sequence=["#2c6fbb"],
+)
+fig.update_layout(
+    xaxis_title="",
+    yaxis_title="",
+    showlegend=False,
+    height=500,
+    margin=dict(l=10, r=40, t=10, b=10),
+)
+fig.update_traces(textposition="outside")
+fig.show()
+```
+
+59 countries in total.
+
+## How many clause matches?
+
+```{python}
+#| echo: false
+#| fig-cap: "Potential clause matches by family. These are candidates, not validated findings."
+
+import csv, sys
+csv.field_size_limit(sys.maxsize)
+import pandas as pd
+import plotly.express as px
+
+df = pd.read_csv("data/all_extractions.csv", dtype=str).fillna("")
+
+counts = (
+    df.groupby("clause_family")
+    .size()
+    .reset_index(name="count")
+    .sort_values("count", ascending=True)
+)
+
+counts["label"] = counts["clause_family"].str.replace("_", " ").str.title()
+
+fig = px.bar(
+    counts,
+    x="count",
+    y="label",
+    orientation="h",
+    text="count",
+    color_discrete_sequence=["#2c6fbb"],
+)
+fig.update_layout(
+    xaxis_title="Potential matches",
+    yaxis_title="",
+    showlegend=False,
+    height=350,
+    margin=dict(l=10, r=40, t=10, b=10),
+)
+fig.update_traces(textposition="outside")
+fig.show()
+```
+
+9,145 potential clause matches across 6 families. All of these need expert review before they can be trusted.

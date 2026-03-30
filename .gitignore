@@ -37,3 +37,6 @@ build/
 .ruff_cache/
 .mypy_cache/
 .pytest_cache/
+# Private planning/framing docs + persona review artifacts
+docs/private/
+demo/reviews/

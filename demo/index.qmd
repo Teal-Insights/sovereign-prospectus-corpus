@@ -1,27 +1,120 @@
-# Preface {.unnumbered}
+# Searching the Fine Print (at Scale) {.unnumbered}
 
-This document accompanies a proof of concept presented at the
-[#PublicDebtIsPublic](https://publicdebtispublic.mdi.georgetown.edu/)
-Scoping Roundtable on March 30, 2026 at Georgetown University Law Center.
+**A proposal shared at the [#PublicDebtIsPublic](https://publicdebtispublic.mdi.georgetown.edu/) Infrastructure Scoping Roundtable, March 30, 2026, Georgetown University Law Center.**
 
-It demonstrates how expert clause annotations — like those created by
-the #PublicDebtIsPublic initiative — can power a scalable system for
-identifying and monitoring key terms in sovereign bond prospectuses.
+```{python}
+#| echo: false
+#| fig-cap: "Countries with clause extractions in the corpus. Darker shading indicates more extracted clauses."
 
-**What's here:**
+import pandas as pd
+import plotly.express as px
 
-- **Chapter 1** explains what we built in one week and why the
-  #PublicDebtIsPublic annotated corpus is catalytic
-- **Chapter 2** presents preliminary findings with interactive
-  exploration
-- **Chapter 3** proposes a lawyer-in-the-loop flywheel and outlines
-  what collaboration could look like
+country_to_iso3 = {
+    "Albania": "ALB", "Angola": "AGO", "Argentina": "ARG", "Armenia": "ARM",
+    "Austria": "AUT", "Bahrain": "BHR", "Belarus": "BLR", "Belize": "BLZ",
+    "Bosnia and Herzegovina": "BIH", "Brazil": "BRA", "Cameroon": "CMR",
+    "Canada": "CAN", "Chile": "CHL", "Colombia": "COL", "Cyprus": "CYP",
+    "Ecuador": "ECU", "Egypt": "EGY", "Fiji": "FJI", "Finland": "FIN",
+    "Gabon": "GAB", "Ghana": "GHA", "Hungary": "HUN", "Iceland": "ISL",
+    "Indonesia": "IDN", "Israel": "ISR", "Italy": "ITA", "Jamaica": "JAM",
+    "Jordan": "JOR", "Kazakhstan": "KAZ", "Kenya": "KEN", "Kuwait": "KWT",
+    "Mexico": "MEX", "Moldova": "MDA", "Montenegro": "MNE", "Morocco": "MAR",
+    "Netherlands": "NLD", "Nigeria": "NGA", "Panama": "PAN", "Peru": "PER",
+    "Philippines": "PHL", "Qatar": "QAT", "Rwanda": "RWA",
+    "Saudi Arabia": "SAU", "Senegal": "SEN", "Serbia": "SRB",
+    "Sierra Leone": "SLE", "South Africa": "ZAF", "South Korea": "KOR",
+    "Sri Lanka": "LKA", "Sweden": "SWE", "Turkey": "TUR", "Uganda": "UGA",
+    "Ukraine": "UKR", "United Arab Emirates": "ARE", "Uruguay": "URY",
+    "Uzbekistan": "UZB", "Venezuela": "VEN", "Zambia": "ZMB",
+}
 
-The code behind this work is open source and available on
-[GitHub](https://github.com/Teal-Insights/sovereign-prospectus-corpus).
+df = pd.read_csv("data/corpus_summary.csv")
+by_country = df.groupby("country")["count"].sum().reset_index()
+by_country.columns = ["country", "total_clauses"]
+by_country["iso3"] = by_country["country"].map(country_to_iso3)
+by_country = by_country.dropna(subset=["iso3"])
+
+fig = px.choropleth(
+    by_country,
+    locations="iso3",
+    color="total_clauses",
+    hover_name="country",
+    hover_data={"total_clauses": True, "iso3": False},
+    color_continuous_scale="Teal",
+    labels={"total_clauses": "Clause extractions"},
+    projection="natural earth",
+)
+fig.update_layout(
+    margin=dict(l=0, r=0, t=30, b=0),
+    coloraxis_colorbar=dict(title="Extractions"),
+    geo=dict(showframe=False, showcoastlines=True, coastlinecolor="lightgray"),
+    height=420,
+)
+fig.show()
+```
+
+## The binding constraint
+
+Sovereign debt legal expertise is scarce and expensive. The contract terms that govern how nations borrow, restructure, and default are buried in dense prospectuses that only a handful of specialists can interpret. If you believe this knowledge should be accessible to everyone, that is a problem.
+
+## PDIP's down payment
+
+[#PublicDebtIsPublic](https://publicdebtispublic.mdi.georgetown.edu/) has put down a serious down payment. Over 900 contracts on a public platform, with more than 160 annotated by research assistants who tagged over 100 contract terms with expert judgment. Those annotations are gold. They can serve as ground truth for automated extraction. And they can scale things up.
+
+## A prototype as a proposal
+
+I am a former Wall Street sovereign debt research analyst who became a huge data nerd and now builds grant-funded open source sovereign debt analysis tools for finance ministries and other stakeholders. Instead of writing up a proposal, I figured a prototype would make this more tangible. Here is a first try at how PDIP's expert annotations can scale:
+
+1. **Build pipelines that automatically download from major sources.** SEC EDGAR, the FCA National Storage Mechanism, PDIP itself. This prototype pulled **4,800+ sovereign bond prospectuses** from all three.
+
+2. **Use PDIP's annotated contracts to find likely clause matches at scale.** The expert-tagged clauses become the reference point for finding similar language across thousands of documents. This prototype found **9,145 potential clause matches** across 6 clause families, covering **59 countries**. These are candidates, not validated findings. To validate them, we need step 3.
+
+3. **Lawyer-in-the-Loop clause review.** Each clause a lawyer reviews makes the system better. Expert review improves automated extraction, which surfaces more clauses for expert review. Start the flywheel.
+
+## The asks
+
+Two things would make this real.
+
+**First: a shared methodology for credibility.** What does it mean for an extraction to be "correct"? How do we measure confidence? What error rate is acceptable? These are questions for this community, not for one person with a prototype.
+
+**Second: an organized clause review program.** PDIP is uniquely positioned to recruit and coordinate legal experts: law professors and their students, sovereign debt lawyers who want to do pro bono work. Each clause a lawyer reviews has a multiplicative effect. It does not just verify one extraction. It makes every future extraction more accurate. The eval workflow chapter lays out a proposal for how to do this efficiently.
+
+This is open source. Free for anyone to use. I am building it regardless because I believe in it. But I think our approaches are complementary, and I would love to help.
+
+## What the data shows so far
+
+This prototype uses PDIP's expert-annotated contracts as ground truth to find likely clause matches across 3,300 prospectuses from the SEC's EDGAR and 650 from the FCA's National Storage Mechanism, two large public repositories that are hard to navigate by hand. The remaining 820 PDIP documents are included too. These are potential matches, not validated findings. But it is a lot faster than going through PDFs one by one.
 
 ::: {.callout-note}
-This is a proof of concept. Findings are preliminary and the methodology
-needs expert review. We present it as evidence that the approach works
-and merits further development — not as finished research.
+## A note on AI
+This pipeline uses AI alongside deterministic tools like regular expressions and document structure analysis. AI helps identify likely candidates from thousands of documents. Those candidates must be verified by legal experts. The goal is to augment expert judgment, not replace it. This effort only works if people find it credible, which is why a clear validation methodology is one of the asks above.
 :::
+
+## Why this matters
+
+What can you do with a searchable corpus of sovereign bond contract terms?
+
+**Monitor global trends at scale.** This pipeline can be extended to process incoming prospectuses as they are filed. Policymakers could spot worrying trends in contract terms quickly, rather than discovering them after a crisis.
+
+**Enable data-informed borrowing.** Sovereign debt issuers can make data-informed choices about the terms of their borrowing by seeing what comparable issuers have done.
+
+**A resource for legal scholarship.** Researchers studying how sovereign debt boilerplate evolves across markets and over time currently work from small hand-collected samples. A validated corpus covering thousands of documents changes what questions are possible to ask.
+
+## What this is not
+
+This is a prototype, with all the frailties of prototypes. While I believe this is a promising approach, the technical methodology will benefit from the intelligence and critical thinking of this community. Any findings outside of the PDIP expert-annotated corpus should be thought of as potential clause matches that have not yet been validated and could be wrong.
+
+## What you will find here
+
+- **What the Data Shows** presents preliminary findings with interactive charts
+- **The Eval Workflow** describes how lawyers can validate extractions and improve the dataset
+- **A Call for Collaboration** outlines what a durable version of this system would require
+- Two appendices cover technical details and the broader SovTech initiative
+
+## Credits
+
+Built by [Teal Insights](https://tealinsights.com) as part of the SovTech initiative, with support from [NatureFinance](https://www.naturefinance.net/). Open source under the MIT license, available on [GitHub](https://github.com/Teal-Insights/sovereign-prospectus-corpus).
+
+![](images/teal-insights-logo.png){height=45} &nbsp;&nbsp; ![](images/naturefinance-logo.png){height=45}
+
+Questions, ideas, or want to collaborate? [Get in touch](mailto:lte@tealinsights.com).

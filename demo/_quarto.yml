@@ -3,15 +3,18 @@ project:
   output-dir: _book
 
 book:
-  title: "Sovereign Clause Corpus"
-  subtitle: "A Proof of Concept"
+  title: "Searching the Fine Print (at Scale)"
+  subtitle: "A Proposal for Scaling #PublicDebtIsPublic"
   author: "L. Teal Emery, Teal Insights"
-  date: "March 2026"
+  date: "March 30, 2026"
   chapters:
     - index.qmd
-    - chapter1.qmd
-    - chapter2.qmd
-    - chapter3.qmd
+    - findings.qmd
+    - eval-workflow.qmd
+    - call-to-action.qmd
+  appendices:
+    - appendix-technical.qmd
+    - appendix-sovtech.qmd
   page-navigation: true
 
 bibliography: references.bib
