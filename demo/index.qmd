@@ -1,10 +1,12 @@
 # Searching the Fine Print (at Scale) {.unnumbered}
 
-**A proposal shared at the [#PublicDebtIsPublic](https://publicdebtispublic.mdi.georgetown.edu/) Infrastructure Scoping Roundtable, March 30, 2026, Georgetown University Law Center.**
+**A proposal for rapidly scaling the reach of [#PublicDebtIsPublic](https://publicdebtispublic.mdi.georgetown.edu/). Presented at the Infrastructure Scoping Roundtable, March 30, 2026, Georgetown University Law Center.**
+
+Using PDIP's expert-annotated contracts as a foundation, this prototype collected **4,800+ sovereign bond prospectuses** from three public sources and identified **9,145 potential clause matches** across **59 countries**. Here is where those matches are:
 
 ```{python}
 #| echo: false
-#| fig-cap: "Countries with clause extractions in the corpus. Darker shading indicates more extracted clauses."
+#| fig-cap: "Countries with potential clause matches in the corpus. Darker shading indicates more matches found."
 
 import pandas as pd
 import plotly.express as px
@@ -97,7 +99,17 @@ flowchart TD
     style K fill:#e8f5e9,stroke:#2e7d32,color:#1a1a1a,stroke-width:3px
 ```
 
-This prototype built steps 1-4. It pulled **4,800+ sovereign bond prospectuses** from three sources, and found **9,145 potential clause matches** across 6 clause families covering **59 countries**. These are candidates, not validated findings. Step 5 is what this roundtable can help make happen.
+This prototype built steps 1 through 5. It pulled **4,800+ sovereign bond prospectuses** from three sources and found **9,145 potential clause matches** across 6 clause families covering **59 countries**. These are candidates, not validated findings. Steps 6 and 7 are what this roundtable can help make happen.
+
+## Why this matters
+
+What can you do with a searchable corpus of sovereign bond contract terms?
+
+**Monitor global trends at scale.** This pipeline can be extended to process incoming prospectuses as they are filed. Policymakers could spot worrying trends in contract terms quickly, rather than discovering them after a crisis.
+
+**Enable data-informed borrowing.** Sovereign debt issuers can make data-informed choices about the terms of their borrowing by seeing what comparable issuers have done.
+
+**A resource for legal scholarship.** Researchers studying how sovereign debt boilerplate evolves across markets and over time currently work from small hand-collected samples. A validated corpus covering thousands of documents changes what questions are possible to ask.
 
 ## The asks
 
@@ -122,24 +134,14 @@ AI has the potential to do a lot of the drudge work of reading thousands of pros
 2 - **Evaluate models against lawyer-reviewed benchmarks.** This allows us to have quantitative measures of their accuracy, and to improve them over time.
 :::
 
-## Why this matters
-
-What can you do with a searchable corpus of sovereign bond contract terms?
-
-**Monitor global trends at scale.** This pipeline can be extended to process incoming prospectuses as they are filed. Policymakers could spot worrying trends in contract terms quickly, rather than discovering them after a crisis.
-
-**Enable data-informed borrowing.** Sovereign debt issuers can make data-informed choices about the terms of their borrowing by seeing what comparable issuers have done.
-
-**A resource for legal scholarship.** Researchers studying how sovereign debt boilerplate evolves across markets and over time currently work from small hand-collected samples. A validated corpus covering thousands of documents changes what questions are possible to ask.
-
 ## What this is not
 
 This is a prototype, with all the frailties of prototypes. While I believe this is a promising approach, the technical methodology will benefit from the intelligence and critical thinking of this community. Any findings outside of the PDIP expert-annotated corpus should be thought of as potential clause matches that have not yet been validated and could be wrong.
 
 ## What you will find here
 
-- **What the Data Shows** presents preliminary findings with interactive charts
-- **The Eval Workflow** describes how lawyers can validate extractions and improve the dataset
+- **A First Peek at the Data** presents preliminary findings with interactive charts
+- **The Lawyer-in-the-Loop Flywheel** describes how lawyers can validate extractions and improve the dataset
 - **A Call for Collaboration** outlines what a durable version of this system would require
 - Two appendices cover technical details and the broader SovTech initiative
 
