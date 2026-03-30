@@ -1,3 +1,28 @@
 # Technical Architecture {.appendix}
 
-*Content in progress.*
+```{mermaid}
+%%| fig-cap: "Pipeline stages from raw filings to verified clause extractions."
+flowchart LR
+    A["Download"] --> B["Parse"]
+    B --> C["Locate"]
+    C --> D["Extract"]
+    D --> E["Verify"]
+```
+
+| Stage | What it does |
+|-------|-------------|
+| **Download** | Pull sovereign bond filings from SEC EDGAR, FCA NSM, and PDIP via source-specific API adapters |
+| **Parse** | Extract text from PDFs (PyMuPDF) and HTML, preserving page boundaries |
+| **Locate** | Section-aware regex cue matching finds candidate clause regions |
+| **Extract** | LLM receives candidate region and extracts the clause verbatim |
+| **Verify** | Fuzzy string match (95% threshold) checks extraction against source text |
+
+```{mermaid}
+%%| fig-cap: "Data sources and document counts."
+pie title Documents by Source
+    "SEC EDGAR" : 3301
+    "FCA NSM" : 645
+    "PDIP" : 823
+```
+
+**Stack.** Python 3.12, DuckDB, Click CLI, PyMuPDF. MIT licensed. All code: [GitHub](https://github.com/Teal-Insights/sovereign-prospectus-corpus)

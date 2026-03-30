@@ -1,3 +1,23 @@
 # Validation Approach {.appendix}
 
-*Content in progress.*
+```{mermaid}
+%%| fig-cap: "Validation methodology: what we can measure and what requires expert review."
+flowchart TD
+    A["PDIP expert annotations"] --> B["Holdout split"]
+    B --> C["Calibration set (5 docs)\nUsed to tune patterns"]
+    B --> D["Evaluation set (remaining)\nHeld back for measurement"]
+    D --> E["Recall: did we find\nwhat experts tagged?"]
+    E --> F["Verbatim check: does extracted\ntext match source (95%)?"]
+    F --> G["What we still need:\nPrecision (false positive rate)"]
+    G --> H["Lawyer review"]
+```
+
+| What we measure | What we do not measure |
+|----------------|----------------------|
+| Recall against PDIP annotations | Precision (false positive rate) |
+| Verbatim similarity to source text | Inter-rater reliability |
+| Extraction completeness | Temporal consistency across eras |
+
+**Honest limitations.** The holdout set is small. PDIP annotations come from a single expert source. The evaluation set skews toward countries and issuance styles that PDIP covers.
+
+**This is why lawyer evaluation matters.** Our validation can measure recall but not precision. Only expert review can tell us how many of the 9,145 extracted matches are actually correct.
