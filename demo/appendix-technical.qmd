@@ -1,26 +1,94 @@
 # Technical Details {.appendix}
 
-The goal is to narrow the funnel so lawyers only review clauses that are likely real. Every stage cuts down the number of candidates.
+This appendix provides more detail on each step of the pipeline described in the main proposal.
 
 ```{mermaid}
-%%| fig-cap: "Each stage narrows the funnel. Lawyers only see the most likely matches."
+%%| fig-cap: "Detailed pipeline with technical components at each step"
 flowchart TD
-    A["4,769 documents from EDGAR, NSM, PDIP"] --> B["Parse with Docling"]
-    B --> C["Locate candidates with deterministic pattern matching"]
-    C --> D["~15,000 candidate sections"]
-    D --> E["Extract and filter with Claude Opus + Sonnet"]
-    E --> F["9,145 likely clause matches"]
-    F --> G["Lawyer review (the missing piece)"]
+    A["SEC EDGAR"] --> S1
+    B["FCA NSM"] --> S1
+    C["PDIP"] --> S1
+
+    S1["Step 1 - Ingest: Source-specific API adapters discover and download filings"] --> S2
+
+    S2["Step 2 - Parse: Docling for PDFs, native parsing for EDGAR HTML/JSONL"] --> S3
+
+    S3["Step 3 - Ground truth: PDIP expert annotations define what each clause type looks like"] --> S4
+
+    S4["Step 4 - Locate: Regex cue patterns + document structure heuristics find candidate sections"] --> S5
+
+    S5["Step 5 - Extract + filter: Opus and Sonnet with multi-shot prompts extract clauses verbatim"] --> S6
+
+    S6["Step 6 - Verify: Fuzzy string matching confirms extraction appears in source text"] --> S7
+
+    S7["Step 7 - Lawyer review: THE MISSING PIECE"]
+
+    style S1 fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a
+    style S2 fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a
+    style S3 fill:#e6f4ea,stroke:#34a853,color:#1a1a1a
+    style S4 fill:#e6f4ea,stroke:#34a853,color:#1a1a1a
+    style S5 fill:#fef7e0,stroke:#f9ab00,color:#1a1a1a
+    style S6 fill:#fef7e0,stroke:#f9ab00,color:#1a1a1a
+    style S7 fill:#fce8e6,stroke:#ea4335,color:#1a1a1a
 ```
 
-**Parse.** Documents are parsed with [Docling](https://github.com/DS4SD/docling), which extracts text with document structure (headings, sections, tables) preserved.
+## Step 1 - Ingest
 
-**Locate.** Deterministic regex pattern matching finds candidate sections. Patterns are organized by clause family (heading cues, body-text cues). A section needs cue hits from multiple pattern families to qualify. This is fast, interpretable, and catches the obvious candidates.
+Each source has a dedicated adapter. EDGAR and NSM adapters query APIs scoped to sovereign issuers (using LEIs and issuer name patterns), then download PDFs. PDIP documents are already available. Currently batch-mode; can be made continuous to pick up new filings as they appear.
 
-**Extract.** Claude Opus and Sonnet receive each candidate section with multi-shot prompts showing examples from PDIP's expert-annotated contracts. The models extract the clause verbatim and flag low-confidence matches. This step cuts out the false positives that pattern matching alone cannot catch: table of contents entries, summaries, cross-references.
+| Source | Documents | Format |
+|--------|-----------|--------|
+| SEC EDGAR | ~3,300 | HTML filings with embedded prospectuses |
+| FCA NSM | ~650 | PDF filings via UK regulatory API |
+| PDIP | ~820 | PDF documents with expert annotations |
 
-**Verify.** Every extraction is checked against the source text using fuzzy string matching (95% similarity threshold). This catches paraphrasing, hallucination, and OCR drift.
+## Step 2 - Parse
 
-**What we can measure.** Recall against PDIP expert annotations (did we find what experts tagged?). Verbatim similarity to source text. What we cannot measure without lawyer review: precision (false positive rate) and inter-rater reliability.
+Different sources need different parsers:
 
-**The missing piece is human validation.** The pipeline narrows thousands of documents down to a manageable set of likely matches. But "likely" is not "correct." Only a lawyer can confirm that.
+- **PDFs** (NSM, PDIP): Parsed with [Docling](https://github.com/DS4SD/docling), which extracts text with document structure (headings, sections, tables) preserved as markdown.
+- **EDGAR HTML/JSONL**: Parsed natively. EDGAR filings are already structured text with page boundaries.
+
+The output is a sequence of **sections**, each with a heading, body text, heading level, and source format. These sections are the unit of analysis for everything downstream.
+
+## Step 3 - Ground truth
+
+PDIP's expert-annotated contracts define what each clause type looks like. We organize search patterns into **cue families**: heading cues (e.g., "Collective Action"), voting threshold cues, aggregation cues, etc. A candidate section needs hits from multiple cue families to qualify. ICMA model clause language supplements the PDIP-derived patterns.
+
+## Step 4 - Locate candidates
+
+Deterministic regex pattern matching against each section. A section qualifies as a candidate if it has:
+
+- A heading match (the section title contains clause-relevant language), OR
+- Body cue hits from 2+ distinct cue families (e.g., both "voting threshold" patterns and "aggregation" patterns)
+
+Adjacent qualifying sections are clustered together. This step is fast, interpretable, and produces a wide net of candidates.
+
+## Step 5 - Extract and filter with LLMs
+
+Claude Opus 4.6 and Sonnet 4.6 receive each candidate section with multi-shot prompts showing real examples from PDIP-annotated contracts. The models:
+
+- Extract the clause verbatim (copy exact text, no paraphrasing)
+- Assign a confidence level (high, medium, low)
+- Explain their reasoning
+- Flag "not found" when a section does not actually contain the clause
+
+This step eliminates false positives that pattern matching alone cannot catch: table of contents entries, summaries, cross-references to clauses in other documents.
+
+## Step 6 - Verify
+
+Every extraction is checked against the original document text using fuzzy string matching with a 95% similarity threshold. A windowed approach handles OCR noise and minor formatting differences. Extractions that fail verification are flagged.
+
+This catches hallucination, paraphrasing, and OCR drift. It is a safety net, not a substitute for human review.
+
+## Step 7 - Lawyer review
+
+This is the missing piece. The pipeline narrows 4,800+ documents down to 9,145 likely clause matches. But "likely" is not "correct." Only legal experts can confirm clause boundaries and correctness.
+
+**What we can measure without lawyers:** Recall against PDIP expert annotations (did we find what experts tagged?). Verbatim similarity to source text.
+
+**What we cannot measure without lawyers:** Precision (false positive rate). Whether clause boundaries are correct. Whether the system missed clauses that experts would have found.
+
+## Stack
+
+Python 3.12, DuckDB, Docling, Click CLI. MIT licensed. All code: [GitHub](https://github.com/Teal-Insights/sovereign-prospectus-corpus)
