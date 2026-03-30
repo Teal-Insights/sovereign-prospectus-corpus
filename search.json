@@ -4,7 +4,7 @@
     "href": "index.html",
     "title": "Searching the Fine Print (at Scale)",
     "section": "",
-    "text": "Searching the Fine Print (at Scale)\nA proposal shared at the #PublicDebtIsPublic Infrastructure Scoping Roundtable, March 30, 2026, Georgetown University Law Center.\nCountries with clause extractions in the corpus. Darker shading indicates more extracted clauses.",
+    "text": "Searching the Fine Print (at Scale)\nA proposal for rapidly scaling the reach of #PublicDebtIsPublic. Presented at the Infrastructure Scoping Roundtable, March 30, 2026, Georgetown University Law Center.\nUsing PDIP’s expert-annotated contracts as a foundation, this prototype collected 4,800+ sovereign bond prospectuses from three public sources and identified 9,145 potential clause matches across 59 countries. Here is where those matches are:\nCountries with potential clause matches in the corpus. Darker shading indicates more matches found.",
     "crumbs": [
       "Searching the Fine Print (at Scale)"
     ]
@@ -34,7 +34,17 @@
     "href": "index.html#a-prototype-as-a-proposal",
     "title": "Searching the Fine Print (at Scale)",
     "section": "A prototype as a proposal",
-    "text": "A prototype as a proposal\nI am a former Wall Street sovereign debt research analyst who became a huge data nerd and now builds grant-funded open source sovereign debt analysis tools for finance ministries and other stakeholders. Instead of writing up a proposal, I figured a prototype would make this more tangible. Here is a first try at how PDIP’s expert annotations can scale:\n\n\n\n\n\nflowchart TD\n    A[\"SEC EDGAR\"] --&gt; S1\n    B[\"FCA NSM\"] --&gt; S1\n    C[\"PDIP\"] --&gt; S1\n    D[\"More sources\"] -.-&gt; S1\n\n    S1[\"Step 1 - Ingest documents from key sources (static now, can be made continuous)\"] --&gt; S2\n\n    S2[\"Step 2 - Parse documents and preserve structure\"] --&gt; S3\n\n    S3[\"Step 3 - Use PDIP annotations + ICMA model clauses as ground truth\"] --&gt; S4\n    S4[\"Step 4 - Find candidate clauses via text patterns and document heuristics\"] --&gt; S5\n\n    S5[\"Step 5 - Use best LLMs plus detailed prompts to eliminate obvious false positives\"] --&gt; S6\n\n    S6[\"Step 6 - Lawyer-in-the-loop: Legal experts evaluate likely matches and edge cases\"] --&gt; S7\n    S7[\"Step 7 - The flywheel: Each review makes the system better\"] --&gt; K\n\n    K[\"THE GOAL - A small number of legal experts can annotate a massive number of documents, with new filings processed accurately as they come in\"]\n\n    style S1 fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a\n    style S2 fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a\n    style S3 fill:#e6f4ea,stroke:#34a853,color:#1a1a1a\n    style S4 fill:#e6f4ea,stroke:#34a853,color:#1a1a1a\n    style S5 fill:#fef7e0,stroke:#f9ab00,color:#1a1a1a\n    style S6 fill:#fce8e6,stroke:#ea4335,color:#1a1a1a\n    style S7 fill:#fce8e6,stroke:#ea4335,color:#1a1a1a\n    style K fill:#e8f5e9,stroke:#2e7d32,color:#1a1a1a,stroke-width:3px\n\n\n The pipeline from sources to validated clauses \n\n\n\nThis prototype built steps 1-4. It pulled 4,800+ sovereign bond prospectuses from three sources, and found 9,145 potential clause matches across 6 clause families covering 59 countries. These are candidates, not validated findings. Step 5 is what this roundtable can help make happen.",
+    "text": "A prototype as a proposal\nI am a former Wall Street sovereign debt research analyst who became a huge data nerd and now builds grant-funded open source sovereign debt analysis tools for finance ministries and other stakeholders. Instead of writing up a proposal, I figured a prototype would make this more tangible. Here is a first try at how PDIP’s expert annotations can scale:\n\n\n\n\n\nflowchart TD\n    A[\"SEC EDGAR\"] --&gt; S1\n    B[\"FCA NSM\"] --&gt; S1\n    C[\"PDIP\"] --&gt; S1\n    D[\"More sources\"] -.-&gt; S1\n\n    S1[\"Step 1 - Ingest documents from key sources (static now, can be made continuous)\"] --&gt; S2\n\n    S2[\"Step 2 - Parse documents and preserve structure\"] --&gt; S3\n\n    S3[\"Step 3 - Use PDIP annotations + ICMA model clauses as ground truth\"] --&gt; S4\n    S4[\"Step 4 - Find candidate clauses via text patterns and document heuristics\"] --&gt; S5\n\n    S5[\"Step 5 - Use best LLMs plus detailed prompts to eliminate obvious false positives\"] --&gt; S6\n\n    S6[\"Step 6 - Lawyer-in-the-loop: Legal experts evaluate likely matches and edge cases\"] --&gt; S7\n    S7[\"Step 7 - The flywheel: Each review makes the system better\"] --&gt; K\n\n    K[\"THE GOAL - A small number of legal experts can annotate a massive number of documents, with new filings processed accurately as they come in\"]\n\n    style S1 fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a\n    style S2 fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a\n    style S3 fill:#e6f4ea,stroke:#34a853,color:#1a1a1a\n    style S4 fill:#e6f4ea,stroke:#34a853,color:#1a1a1a\n    style S5 fill:#fef7e0,stroke:#f9ab00,color:#1a1a1a\n    style S6 fill:#fce8e6,stroke:#ea4335,color:#1a1a1a\n    style S7 fill:#fce8e6,stroke:#ea4335,color:#1a1a1a\n    style K fill:#e8f5e9,stroke:#2e7d32,color:#1a1a1a,stroke-width:3px\n\n\n The pipeline from sources to validated clauses \n\n\n\nThis prototype built steps 1 through 5. It pulled 4,800+ sovereign bond prospectuses from three sources and found 9,145 potential clause matches across 6 clause families covering 59 countries. These are candidates, not validated findings. Steps 6 and 7 are what this roundtable can help make happen.",
+    "crumbs": [
+      "Searching the Fine Print (at Scale)"
+    ]
+  },
+  {
+    "objectID": "index.html#why-this-matters",
+    "href": "index.html#why-this-matters",
+    "title": "Searching the Fine Print (at Scale)",
+    "section": "Why this matters",
+    "text": "Why this matters\nWhat can you do with a searchable corpus of sovereign bond contract terms?\nMonitor global trends at scale. This pipeline can be extended to process incoming prospectuses as they are filed. Policymakers could spot worrying trends in contract terms quickly, rather than discovering them after a crisis.\nEnable data-informed borrowing. Sovereign debt issuers can make data-informed choices about the terms of their borrowing by seeing what comparable issuers have done.\nA resource for legal scholarship. Researchers studying how sovereign debt boilerplate evolves across markets and over time currently work from small hand-collected samples. A validated corpus covering thousands of documents changes what questions are possible to ask.",
     "crumbs": [
       "Searching the Fine Print (at Scale)"
     ]
@@ -60,16 +70,6 @@
     ]
   },
   {
-    "objectID": "index.html#why-this-matters",
-    "href": "index.html#why-this-matters",
-    "title": "Searching the Fine Print (at Scale)",
-    "section": "Why this matters",
-    "text": "Why this matters\nWhat can you do with a searchable corpus of sovereign bond contract terms?\nMonitor global trends at scale. This pipeline can be extended to process incoming prospectuses as they are filed. Policymakers could spot worrying trends in contract terms quickly, rather than discovering them after a crisis.\nEnable data-informed borrowing. Sovereign debt issuers can make data-informed choices about the terms of their borrowing by seeing what comparable issuers have done.\nA resource for legal scholarship. Researchers studying how sovereign debt boilerplate evolves across markets and over time currently work from small hand-collected samples. A validated corpus covering thousands of documents changes what questions are possible to ask.",
-    "crumbs": [
-      "Searching the Fine Print (at Scale)"
-    ]
-  },
-  {
     "objectID": "index.html#what-this-is-not",
     "href": "index.html#what-this-is-not",
     "title": "Searching the Fine Print (at Scale)",
@@ -84,7 +84,7 @@
     "href": "index.html#what-you-will-find-here",
     "title": "Searching the Fine Print (at Scale)",
     "section": "What you will find here",
-    "text": "What you will find here\n\nWhat the Data Shows presents preliminary findings with interactive charts\nThe Eval Workflow describes how lawyers can validate extractions and improve the dataset\nA Call for Collaboration outlines what a durable version of this system would require\nTwo appendices cover technical details and the broader SovTech initiative",
+    "text": "What you will find here\n\nA First Peek at the Data presents preliminary findings with interactive charts\nThe Lawyer-in-the-Loop Flywheel describes how lawyers can validate extractions and improve the dataset\nA Call for Collaboration outlines what a durable version of this system would require\nTwo appendices cover technical details and the broader SovTech initiative",
     "crumbs": [
       "Searching the Fine Print (at Scale)"
     ]
