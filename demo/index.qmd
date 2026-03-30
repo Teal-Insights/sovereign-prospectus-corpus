@@ -113,6 +113,8 @@ This is a prototype, with all the frailties of prototypes. While I believe this 
 
 ## Credits
 
-Built by [Teal Insights](https://tealinsights.com) as part of the SovTech initiative, with support from NatureFinance. Open source under the MIT license, available on [GitHub](https://github.com/Teal-Insights/sovereign-prospectus-corpus).
+Built by [Teal Insights](https://tealinsights.com) as part of the SovTech initiative, with support from [NatureFinance](https://www.naturefinance.net/). Open source under the MIT license, available on [GitHub](https://github.com/Teal-Insights/sovereign-prospectus-corpus).
+
+![](images/teal-insights-logo.png){height=45} &nbsp;&nbsp; ![](images/naturefinance-logo.png){height=45}
 
 Questions, ideas, or want to collaborate? [Get in touch](mailto:lte@tealinsights.com).
