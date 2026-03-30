@@ -72,8 +72,16 @@ def _check_negatives(text: str) -> list[str]:
     return found
 
 
-def _negatives_dominate(negatives: list[str], families: list[str]) -> bool:
-    return len(negatives) >= len(families)
+def _negatives_dominate(negatives: list[str], families: list[str], text_len: int = 0) -> bool:
+    # For large sections (>50K chars, typical of full EDGAR filings), skip
+    # negative filtering entirely — false-positive negatives are near-certain
+    # on financial data tables, dotted leaders in formatted numbers, and
+    # inline citations like "as set forth in the Indenture".
+    if text_len > 50_000:
+        return False
+    # Strict inequality: negatives must outnumber positive families to reject.
+    # Previously >= which meant 2 negatives cancelled 2 positives.
+    return len(negatives) > len(families)
 
 
 def filter_sections(
@@ -122,7 +130,9 @@ def filter_sections(
                     run_id=run_id,
                 )
             )
-        elif len(families_hit) >= 2 and not _negatives_dominate(negative_signals, families_hit):
+        elif len(families_hit) >= 2 and not _negatives_dominate(
+            negative_signals, families_hit, text_len=len(section.text)
+        ):
             candidates.append(
                 Candidate(
                     candidate_id=str(uuid.uuid4()),

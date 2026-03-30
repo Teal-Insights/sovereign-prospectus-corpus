@@ -24,21 +24,21 @@ Your task is to extract specific clause text verbatim from bond prospectuses.
 Rules:
 1. Extract the EXACT text as it appears in the source. Do not paraphrase,
    summarize, correct typos, or rephrase in any way.
-2. Preserve all original formatting, whitespace, numbered lists, and
+2. CRITICAL: Your extracted clause_text MUST be a substring of the provided
+   section_text. Do not use text from memory or from other sections of the
+   document. If the clause is not in the section_text, return NOT_FOUND.
+3. Preserve all original formatting, whitespace, numbered lists, and
    punctuation exactly as they appear.
-3. The clause begins where the substantive legal language starts and ends
+4. The clause begins where the substantive legal language starts and ends
    where the subject matter clearly changes or a new section of equal or
    higher heading level begins.
-4. For CACs: ensure you extract ALL related sub-paragraphs including
-   voting thresholds, reserved matters, aggregation provisions, meeting
-   rules, and notice requirements. Do not stop at the first paragraph.
 5. If the section does not contain the requested clause (e.g., it's a
    cross-reference, table of contents entry, or summary), return NOT_FOUND.
 6. NOT_FOUND is a valid and expected answer. Never force an extraction."""
 
 EXTRACTION_TOOL_SCHEMA = {
     "name": "extract_clause",
-    "description": "Extract a clause from a bond prospectus section, or report NOT_FOUND.",
+    "description": "Extract a clause from a sovereign debt document section, or report NOT_FOUND.",
     "input_schema": {
         "type": "object",
         "properties": {
@@ -81,6 +81,21 @@ CLAUSE_DESCRIPTIONS = {
         "Pari Passu Clause — provisions establishing that the bonds rank equally in right "
         "of payment with other unsecured and unsubordinated obligations of the issuer."
     ),
+    "governing_law": "Governing Law Clause -- provisions specifying which jurisdiction's laws govern the contract.",
+    "sovereign_immunity": "Sovereign Immunity Waiver -- provisions where the sovereign waives immunity from suit, jurisdiction, and/or execution.",
+    "negative_pledge": "Negative Pledge Clause -- provisions restricting the borrower from granting security interests over assets, with permitted exceptions.",
+    "events_of_default": "Events of Default -- provisions defining circumstances that constitute a default and their consequences (acceleration, remedies).",
+    "acceleration": "Acceleration Clause -- provisions allowing creditors to declare obligations immediately due and payable upon default.",
+    "dispute_resolution": "Dispute Resolution Clause -- provisions specifying how disputes are resolved (arbitration, court jurisdiction, governing forum).",
+    "additional_amounts": "Additional Amounts / Gross-Up -- provisions requiring the issuer to pay additional amounts to compensate for tax withholding.",
+    "redemption": "Redemption Clause -- provisions for optional, mandatory, or tax-related early redemption of the securities.",
+    "indebtedness_definition": "Indebtedness Definition -- the contractual definition of what constitutes 'indebtedness' or 'external debt'.",
+    "amendment_waiver": "Amendment and Waiver -- provisions governing how the terms of the instrument may be amended or waived, including consent thresholds.",
+    "conditions_precedent": "Conditions Precedent -- conditions that must be satisfied before the lender is obligated to disburse or the instrument becomes effective.",
+    "payment_mechanics": "Payment Mechanics -- provisions specifying how, when, and where payments of principal and interest are made.",
+    "trustee_duties": "Trustee Duties -- provisions defining the role, duties, and liability limitations of the trustee or fiscal agent.",
+    "disbursement": "Disbursement -- provisions governing how loan proceeds are drawn down, disbursed, or made available to the borrower.",
+    "commitment": "Commitment -- provisions establishing the lender's commitment to provide funds, including amount, period, and termination.",
 }
 
 
@@ -109,11 +124,18 @@ def build_extraction_prompt(
     country: str,
     few_shot_examples: list[FewShotExample],
     icma_reference: str = "",
+    instrument_type: str = "Bond",
 ) -> list[dict]:
     """Build the message list for extraction (used as reference for Claude Code)."""
+    # I1: Derive instrument_label and use it everywhere
+    instrument_label = "bond prospectus" if instrument_type == "Bond" else "loan agreement"
+
     # Note: "system" role is used for reference/documentation. When calling
     # the Anthropic API directly, system would be a top-level parameter.
-    messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    system = SYSTEM_PROMPT.replace("bond prospectuses", f"{instrument_label}s").replace(
+        "bond contracts", "sovereign debt contracts"
+    )
+    messages: list[dict] = [{"role": "system", "content": system}]
 
     clause_desc = CLAUSE_DESCRIPTIONS.get(clause_family, clause_family)
 
@@ -143,7 +165,7 @@ def build_extraction_prompt(
                 "role": "user",
                 "content": (
                     f"Extract the {clause_desc} from this section of a {ex.country} "
-                    f"bond prospectus:\n\n{ex.section_text}"
+                    f"{instrument_label}:\n\n{ex.section_text}"
                 ),
             }
         )
@@ -177,7 +199,7 @@ def build_extraction_prompt(
             "role": "user",
             "content": (
                 f"Extract the {clause_desc} from this section of a {country} "
-                f'bond prospectus (section heading: "{candidate.section_heading}"'
+                f'{instrument_label} (section heading: "{candidate.section_heading}"'
                 f"{page_info}):\n\n"
                 f"{candidate.section_text}"
             ),

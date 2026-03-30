@@ -92,6 +92,39 @@ def test_candidate_has_cue_hits() -> None:
     assert isinstance(candidates[0].cue_hits[0], CueHit)
 
 
+def test_negatives_equal_positives_not_rejected() -> None:
+    """When negative count equals positive count, section should pass (strict >)."""
+    # This text has 2 positive families (voting_threshold + meeting_quorum)
+    # and 1 cross-reference negative. With >=, 1 negative >= 2 families was False
+    # anyway, but with 2 negatives and 2 families the old >= was True (rejected).
+    # Test: 2 negatives, 2 families — old code rejected, new code passes.
+    text = (
+        'See "Description of Bonds" for details. '
+        "The following is a brief summary of the provisions. "
+        "The holders of not less than 75% of the aggregate principal "
+        "may pass a resolution at a meeting of noteholders."
+    )
+    sections = [_make_section(heading="Terms and Conditions", text=text)]
+    candidates = filter_sections(sections, clause_family="collective_action")
+    assert len(candidates) == 1
+
+
+def test_large_section_skips_negative_filtering() -> None:
+    """Sections >50K chars skip negative filtering (false positives on large EDGAR filings)."""
+    # Create a large section with cross_reference + toc patterns that would normally reject
+    base_text = (
+        'See "Annex A" for the full provisions. '
+        "Collective Action .......................... 47\n"
+        "The holders of not less than 75% of the aggregate principal "
+        "may pass an extraordinary resolution at a meeting of noteholders."
+    )
+    # Pad to >50K chars
+    large_text = base_text + ("\nAdditional prospectus content. " * 2000)
+    sections = [_make_section(heading="Terms and Conditions", text=large_text)]
+    candidates = filter_sections(sections, clause_family="collective_action")
+    assert len(candidates) == 1
+
+
 def test_pari_passu_heading_match() -> None:
     sections = [_make_section(heading="Status of the Notes")]
     candidates = filter_sections(sections, clause_family="pari_passu")
