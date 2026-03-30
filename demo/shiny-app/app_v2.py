@@ -277,7 +277,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
         if row_idx is None:
             return ui.TagList(
                 ui.p(
-                    "Click a row in the table above to view the extracted clause.",
+                    "Select a candidate from the table to review the extracted clause.",
                     style="color: #888; font-style: italic;",
                 )
             )
@@ -291,6 +291,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
 
         candidate_id = str(row.get("candidate_id", "") or "")
         storage_key = str(row.get("storage_key", "") or "")
+        country = str(row.get("country", "") or "Unknown")
         section_heading = str(row.get("section_heading", "") or "")
         clause_text = str(row.get("clause_text", "") or "")
         confidence = str(row.get("llm_confidence", "") or "")
@@ -351,12 +352,12 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
             # Header row: key metadata
             ui.tags.div(
                 ui.tags.h6(
-                    f"{family_label} — {_esc(section_heading[:80])}",
+                    f"{family_label}: {_esc(section_heading[:80])}",
                     style="margin-bottom: 6px;",
                 ),
                 ui.HTML(
                     f'<p style="font-size:0.85em;color:#555;margin-bottom:8px;">'
-                    f"{_esc(storage_key)} &middot; {page_label} &middot; "
+                    f"{_esc(country)} &middot; {page_label} &middot; "
                     f'<span style="background:{conf_color};color:white;padding:1px 6px;'
                     f'border-radius:3px;font-size:0.9em;">{_esc(confidence)} confidence</span>'
                     f" &middot; "
@@ -398,7 +399,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
             # LLM reasoning (collapsed details)
             ui.tags.details(
                 ui.tags.summary(
-                    "LLM Reasoning",
+                    "Why this was surfaced",
                     style="cursor:pointer;font-size:0.85em;color:#555;margin-top:8px;",
                 ),
                 ui.tags.p(
@@ -406,10 +407,16 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
                     style="font-size:0.85em;color:#555;padding:6px 0;",
                 ),
             ),
-            ui.tags.small(
-                f"Candidate ID: {_esc(candidate_id)} · Verbatim similarity: {verbatim_sim}",
-                class_="text-muted",
-                style="display:block;margin-top:8px;",
+            ui.tags.details(
+                ui.tags.summary(
+                    "Technical details",
+                    style="cursor:pointer;font-size:0.8em;color:#999;margin-top:8px;",
+                ),
+                ui.tags.small(
+                    f"ID: {_esc(candidate_id)} · Source: {_esc(storage_key)} · Verbatim: {verbatim_sim}",
+                    class_="text-muted",
+                    style="display:block;padding:4px 0;",
+                ),
             ),
         )
 
@@ -487,7 +494,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
         if row_idx is None:
             return ui.TagList(
                 ui.p(
-                    "Select a row to enable feedback.",
+                    "Select a candidate to submit your assessment.",
                     style="color: #888; font-style: italic;",
                 )
             )
@@ -528,7 +535,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
             ui.input_text(
                 "feedback_notes",
                 "Notes (optional)",
-                placeholder="e.g. clause ends one paragraph too early...",
+                placeholder="e.g. this is a summary, not the operative clause...",
                 width="100%",
             ),
             ui.output_ui("feedback_status_ui"),
