@@ -115,17 +115,6 @@ for _c in _initial_countries:
 app_ui = ui.page_sidebar(
     ui.sidebar(
         ui.h5("Clause Eval Explorer"),
-        ui.tags.div(
-            ui.p(
-                "Design proof of concept for sovereign bond clause review.",
-                style="font-size: 0.9em; font-weight: 500; margin-bottom: 4px;",
-            ),
-            ui.p(
-                "Built on #PublicDebtIsPublic expert annotations. Not a production tool.",
-                style="font-size: 0.85em; color: #666; margin-bottom: 0;",
-            ),
-            style="margin-bottom: 12px;",
-        ),
         ui.hr(),
         ui.input_select(
             "clause_family",
@@ -165,6 +154,24 @@ app_ui = ui.page_sidebar(
         ),
         width=300,
     ),
+    ui.tags.div(
+        ui.tags.p(
+            ui.tags.strong("Design proof of concept. "),
+            "This is not a production tool. It demonstrates how automated pattern matching "
+            "can surface sovereign bond clause candidates for expert review. "
+            "This is a proof of concept for the approach described in ",
+            ui.tags.a(
+                "Searching the Fine Print (at Scale)",
+                href="https://teal-insights.github.io/sovereign-prospectus-corpus/",
+                target="_blank",
+            ),
+            ". Extractions have not been validated by lawyers. ",
+            ui.tags.a("We welcome feedback.", href="mailto:lte@tealinsights.com"),
+            style="font-size: 0.9em; margin: 0;",
+        ),
+        style="background: #e8f4f8; padding: 12px 16px; border-radius: 4px; "
+        "border-left: 4px solid #2c7bb6; margin-bottom: 12px;",
+    ),
     ui.card(
         ui.card_header("Candidates"),
         ui.output_data_frame("candidates_table"),
@@ -182,22 +189,6 @@ app_ui = ui.page_sidebar(
         ),
         ui.card(
             ui.output_ui("context_panel"),
-        ),
-    ),
-    ui.tags.details(
-        ui.tags.summary(
-            "About this tool",
-            style="cursor:pointer;font-size:0.85em;color:#666;padding:8px 0;",
-        ),
-        ui.tags.div(
-            ui.tags.p(
-                "This is a design proof of concept, not a production tool. "
-                "It surfaces clause candidates found by automated pattern matching. "
-                "Your expert judgment validates each one. "
-                "Every review improves future identification across the full corpus.",
-                style="font-size: 0.85em; color: #555;",
-            ),
-            style="padding: 8px 0;",
         ),
     ),
     title="Clause Eval Explorer",
