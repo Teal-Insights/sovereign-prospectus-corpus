@@ -1,3 +1,77 @@
-# The Eval Workflow
+# The Lawyer-in-the-Loop Flywheel
 
-*Content in progress.*
+## Manual annotation does not scale
+
+PDIP has annotated 160+ sovereign bond prospectuses. That work is invaluable. It is also slow. Reading prospectuses cover to cover, identifying clause boundaries, recording the results. At the current pace, comprehensive coverage of the full universe of sovereign issuances would take years.
+
+The bottleneck is not effort or willingness. It is the ratio of expert time to documents processed. One lawyer, one prospectus, one clause at a time.
+
+We can change that ratio.
+
+## The flywheel
+
+The idea is simple: use expert annotations to teach the system what to look for, then let the system do the searching while experts do the judging. This is human-in-the-loop learning, a pattern widely applied in medicine, autonomous vehicles, content moderation, and other domains where automation needs expert oversight. The same approach works here.
+
+```{mermaid}
+%%| fig-cap: "Each cycle of expert review makes the next round of extraction better."
+flowchart LR
+    A["Expert annotations"] --> B["Pattern extraction"]
+    B --> C["Candidate retrieval across full corpus"]
+    C --> D["Expert review (yes/no + why)"]
+    D --> E["Improved patterns"]
+    E --> B
+```
+
+Each review makes the next round better. The system gets smarter with every lawyer who spends 15 minutes reviewing clauses. This is a flywheel, not a one-time batch job.
+
+## What a reviewer sees
+
+The system surfaces a candidate clause with proposed boundaries already marked. No hunting through pages of boilerplate. The extracted clause is front and center, rendered with its original document formatting. Section context is one click away if you need it, but most of the time you do not.
+
+Five decision options:
+
+| Decision | Meaning |
+|---|---|
+| **Correct Clause** | Boundaries are right. This is the clause. |
+| **Wrong Boundaries** | Right clause, wrong start or end point. |
+| **Not a Clause** | This section does not contain the clause. |
+| **Partial Match** | Only part of the clause was extracted. |
+| **Needs Second Look** | Uncertain. Skip for now. |
+
+This is expert judgment, not labeling. The interaction should feel like reviewing a colleague's draft work product.
+
+## Time-to-decision
+
+A well-designed review tool means:
+
+- **10 seconds** for obvious correct cases
+- **30 to 60 seconds** for uncertain ones requiring section context
+- **15 minutes** = 20 to 30 validated clauses
+- Each validation teaches the system something
+
+The tool is designed to minimize friction. Split-pane layout. Auto-advance after each decision. Keyboard shortcuts. Progress tracking. The goal is flow state, not form-filling.
+
+## One correction, thousands of improvements
+
+When a lawyer marks "Not a Clause" and notes "this is the table of contents entry, not the actual provision," the system learns to skip table of contents sections. That correction applies across every prospectus in the corpus.
+
+When someone selects "Wrong Boundaries" and adjusts where a clause starts or ends, the system learns what a complete extraction looks like. Better boundaries in one document mean better boundaries in documents no one has reviewed yet.
+
+This is the multiplicative effect. One correction compounds across thousands of documents.
+
+## Who should review?
+
+PDIP is well positioned to organize this. The reviewers already exist:
+
+- **Law professors** who teach sovereign debt and want their students working with real contracts
+- **Law students** who want hands-on experience with the documents they study in class
+- **Sovereign debt lawyers** at firms looking for pro bono work that compounds over time
+- **Policy researchers** who need to verify specific provisions across jurisdictions
+
+Each reviewer brings different expertise. A professor might catch a subtle distinction between English-law and New York-law CAC formulations. A student might flag that a "governing law" extraction actually captured a jurisdiction clause. These disagreements between reviewers are research signal, not noise.
+
+## Try it yourself
+
+The Clause Eval Explorer is a working prototype of this workflow. You can review real extractions from real prospectuses right now.
+
+[Launch the Clause Eval Explorer](clause-eval-explorer.html){.btn .btn-primary}
