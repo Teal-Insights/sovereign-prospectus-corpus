@@ -36,7 +36,7 @@ Python 3.12, DuckDB, Docling (PDF parsing), Click CLI, Plotly, Shiny. MIT licens
 
 ## Part of SovTech
 
-This project is part of the [SovTech](https://tealinsights.com) initiative, building open source infrastructure for sovereign debt analysis. Other SovTech tools include [QCraft](https://teal-insights.github.io/QCraft-App/), a Quarto-based debt sustainability analysis framework. Supported by [NatureFinance](https://www.naturefinance.net/).
+This project is part of the [SovTech](https://tealinsights.com) initiative, building open source infrastructure for sovereign debt analysis. Other SovTech tools include [QCraft](https://teal-insights.github.io/QCraft-App/), a user-friendly interface for the IMF's QCRAFT debt sustainability tool that also serves as a proof of concept for modular open source architecture. Supported by [NatureFinance](https://www.naturefinance.net/).
 
 <p>
   <a href="https://tealinsights.com"><img src="teal-insights-logo.png" alt="Teal Insights" height="50"></a>

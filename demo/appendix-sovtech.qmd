@@ -14,6 +14,6 @@ Central banks and financial supervisors have been using advanced data science an
 
 **Climate connection.** Sovereign debt terms affect restructuring capacity, which affects climate investment. Better contract transparency supports better debt sustainability analysis.
 
-**This corpus is one piece.** It shows that large-scale extraction of contract terms from sovereign bond prospectuses is feasible. Other SovTech tools include [QCraft](https://teal-insights.github.io/QCraft-App/), a Quarto-based debt sustainability analysis framework. More components are in development.
+**This corpus is one piece.** It shows that large-scale extraction of contract terms from sovereign bond prospectuses is feasible. Other SovTech tools include [QCraft](https://teal-insights.github.io/QCraft-App/), a user-friendly interface for the IMF's QCRAFT debt sustainability tool that also serves as a proof of concept for modular open source architecture. More components are in development.
 
 All code: [GitHub](https://github.com/Teal-Insights/sovereign-prospectus-corpus)
