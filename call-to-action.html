@@ -6,10 +6,8 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="author" content="L. Teal Emery, Teal Insights">
-<meta name="dcterms.date" content="2026-03-30">
 
-<title>Searching the Fine Print (at Scale)</title>
+<title>A Call for Collaboration – Searching the Fine Print (at Scale)</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -25,14 +23,15 @@ ul.task-list li input[type="checkbox"] {
 </style>
 
 
-<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
 <script src="site_libs/quarto-nav/headroom.min.js"></script>
 <script src="site_libs/clipboard/clipboard.min.js"></script>
 <script src="site_libs/quarto-search/autocomplete.umd.js"></script>
 <script src="site_libs/quarto-search/fuse.min.js"></script>
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
-<link href="./findings.html" rel="next">
+<link href="./appendix-technical.html" rel="next">
+<link href="./eval-workflow.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
@@ -71,15 +70,6 @@ ul.task-list li input[type="checkbox"] {
     "search-label": "Search"
   }
 }</script>
-<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
-
-<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
-<script>
-window.PlotlyConfig = {MathJaxConfig: 'local'};
-if (window.MathJax && window.MathJax.Hub && window.MathJax.Hub.Config) {window.MathJax.Hub.Config({SVG: {font: "STIX-Web"}});}
-</script>
-<script type="module">import "https://cdn.plot.ly/plotly-3.4.0.min"</script>
-
 
 
 </head>
@@ -93,7 +83,7 @@ if (window.MathJax && window.MathJax.Hub && window.MathJax.Hub.Config) {window.M
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./index.html">Searching the Fine Print (at Scale)</a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./call-to-action.html"><span class="chapter-title">A Call for Collaboration</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -122,7 +112,7 @@ if (window.MathJax && window.MathJax.Hub && window.MathJax.Hub.Config) {window.M
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./index.html" class="sidebar-item-text sidebar-link active">
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Searching the Fine Print (at Scale)</span></a>
   </div>
 </li>
@@ -138,7 +128,7 @@ if (window.MathJax && window.MathJax.Hub && window.MathJax.Hub.Config) {window.M
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./call-to-action.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">A Call for Collaboration</span></a>
+  <a href="./call-to-action.html" class="sidebar-item-text sidebar-link active"><span class="chapter-title">A Call for Collaboration</span></a>
   </div>
 </li>
         <li class="sidebar-item sidebar-item-section">
@@ -172,18 +162,11 @@ if (window.MathJax && window.MathJax.Hub && window.MathJax.Hub.Config) {window.M
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#searching-the-fine-print-at-scale" id="toc-searching-the-fine-print-at-scale" class="nav-link active" data-scroll-target="#searching-the-fine-print-at-scale">Searching the Fine Print (at Scale)</a>
-  <ul class="collapse">
-  <li><a href="#the-binding-constraint" id="toc-the-binding-constraint" class="nav-link" data-scroll-target="#the-binding-constraint">The binding constraint</a></li>
-  <li><a href="#pdips-down-payment" id="toc-pdips-down-payment" class="nav-link" data-scroll-target="#pdips-down-payment">PDIP’s down payment</a></li>
-  <li><a href="#a-prototype-as-a-proposal" id="toc-a-prototype-as-a-proposal" class="nav-link" data-scroll-target="#a-prototype-as-a-proposal">A prototype as a proposal</a></li>
-  <li><a href="#the-asks" id="toc-the-asks" class="nav-link" data-scroll-target="#the-asks">The asks</a></li>
-  <li><a href="#what-the-data-shows-so-far" id="toc-what-the-data-shows-so-far" class="nav-link" data-scroll-target="#what-the-data-shows-so-far">What the data shows so far</a></li>
-  <li><a href="#why-this-matters" id="toc-why-this-matters" class="nav-link" data-scroll-target="#why-this-matters">Why this matters</a></li>
-  <li><a href="#what-this-is-not" id="toc-what-this-is-not" class="nav-link" data-scroll-target="#what-this-is-not">What this is not</a></li>
-  <li><a href="#what-you-will-find-here" id="toc-what-you-will-find-here" class="nav-link" data-scroll-target="#what-you-will-find-here">What you will find here</a></li>
-  <li><a href="#credits" id="toc-credits" class="nav-link" data-scroll-target="#credits">Credits</a></li>
-  </ul></li>
+  <li><a href="#what-a-durable-version-requires" id="toc-what-a-durable-version-requires" class="nav-link active" data-scroll-target="#what-a-durable-version-requires">What a durable version requires</a></li>
+  <li><a href="#the-credibility-question" id="toc-the-credibility-question" class="nav-link" data-scroll-target="#the-credibility-question">The credibility question</a></li>
+  <li><a href="#what-i-bring" id="toc-what-i-bring" class="nav-link" data-scroll-target="#what-i-bring">What I bring</a></li>
+  <li><a href="#what-i-am-asking-for" id="toc-what-i-am-asking-for" class="nav-link" data-scroll-target="#what-i-am-asking-for">What I am asking for</a></li>
+  <li><a href="#a-closing-note" id="toc-a-closing-note" class="nav-link" data-scroll-target="#a-closing-note">A closing note</a></li>
   </ul>
 </nav>
     </div>
@@ -192,27 +175,14 @@ if (window.MathJax && window.MathJax.Hub && window.MathJax.Hub.Config) {window.M
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Searching the Fine Print (at Scale)</h1>
-<p class="subtitle lead">A Proposal for Scaling #PublicDebtIsPublic</p>
+<h1 class="title"><span class="chapter-title">A Call for Collaboration</span></h1>
 </div>
 
 
 
 <div class="quarto-title-meta">
 
-    <div>
-    <div class="quarto-title-meta-heading">Author</div>
-    <div class="quarto-title-meta-contents">
-             <p>L. Teal Emery, Teal Insights </p>
-          </div>
-  </div>
     
-    <div>
-    <div class="quarto-title-meta-heading">Published</div>
-    <div class="quarto-title-meta-contents">
-      <p class="date">March 30, 2026</p>
-    </div>
-  </div>
   
     
   </div>
@@ -222,109 +192,37 @@ if (window.MathJax && window.MathJax.Hub && window.MathJax.Hub.Config) {window.M
 </header>
 
 
-<section id="searching-the-fine-print-at-scale" class="level1 unnumbered">
-<h1 class="unnumbered">Searching the Fine Print (at Scale)</h1>
-<p><strong>A proposal shared at the <a href="https://publicdebtispublic.mdi.georgetown.edu/">#PublicDebtIsPublic</a> Infrastructure Scoping Roundtable, March 30, 2026, Georgetown University Law Center.</strong></p>
-<div id="32bf397c" class="cell" data-execution_count="1">
-<div class="cell-output cell-output-display">
-<div>            <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_SVG"></script><script>if (window.MathJax && window.MathJax.Hub && window.MathJax.Hub.Config) {window.MathJax.Hub.Config({SVG: {font: "STIX-Web"}});}</script>                <script>window.PlotlyConfig = {MathJaxConfig: 'local'};</script>
-        <script charset="utf-8" src="https://cdn.plot.ly/plotly-3.4.0.min.js" integrity="sha256-KEmPoupLpFyGMyGAiOsiNDbKDKAvxXAn/W+oQa0ZAfk=" crossorigin="anonymous"></script>                <div id="a4fd3dc6-1eee-4912-918e-d49c571ef7a7" class="plotly-graph-div" style="height:420px; width:100%;"></div>            <script>                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("a4fd3dc6-1eee-4912-918e-d49c571ef7a7")) {                    Plotly.newPlot(                        "a4fd3dc6-1eee-4912-918e-d49c571ef7a7",                        [{"coloraxis":"coloraxis","customdata":[[10,"ALB"],[88,"AGO"],[254,"ARG"],[6,"ARM"],[49,"BHR"],[12,"BLR"],[29,"BIH"],[705,"BRA"],[52,"CMR"],[93,"CAN"],[274,"CHL"],[441,"COL"],[21,"CYP"],[75,"ECU"],[46,"EGY"],[6,"GAB"],[162,"GHA"],[119,"HUN"],[5,"ISL"],[270,"IDN"],[395,"ISR"],[91,"ITA"],[220,"JAM"],[35,"JOR"],[35,"KAZ"],[159,"KEN"],[22,"KWT"],[203,"MEX"],[11,"MDA"],[62,"MNE"],[18,"MAR"],[22,"NLD"],[95,"NGA"],[605,"PAN"],[654,"PER"],[341,"PHL"],[40,"QAT"],[36,"RWA"],[35,"SAU"],[50,"SEN"],[66,"SRB"],[17,"SLE"],[187,"ZAF"],[124,"KOR"],[1101,"TUR"],[2,"UGA"],[8,"UKR"],[41,"ARE"],[275,"URY"],[57,"UZB"],[103,"VEN"],[11,"ZMB"]],"geo":"geo","hovertemplate":"\u003cb\u003e%{hovertext}\u003c\u002fb\u003e\u003cbr\u003e\u003cbr\u003eClause extractions=%{z}\u003cextra\u003e\u003c\u002fextra\u003e","hovertext":["Albania","Angola","Argentina","Armenia","Bahrain","Belarus","Bosnia and Herzegovina","Brazil","Cameroon","Canada","Chile","Colombia","Cyprus","Ecuador","Egypt","Gabon","Ghana","Hungary","Iceland","Indonesia","Israel","Italy","Jamaica","Jordan","Kazakhstan","Kenya","Kuwait","Mexico","Moldova","Montenegro","Morocco","Netherlands","Nigeria","Panama","Peru","Philippines","Qatar","Rwanda","Saudi Arabia","Senegal","Serbia","Sierra Leone","South Africa","South Korea","Turkey","Uganda","Ukraine","United Arab Emirates","Uruguay","Uzbekistan","Venezuela","Zambia"],"locations":["ALB","AGO","ARG","ARM","BHR","BLR","BIH","BRA","CMR","CAN","CHL","COL","CYP","ECU","EGY","GAB","GHA","HUN","ISL","IDN","ISR","ITA","JAM","JOR","KAZ","KEN","KWT","MEX","MDA","MNE","MAR","NLD","NGA","PAN","PER","PHL","QAT","RWA","SAU","SEN","SRB","SLE","ZAF","KOR","TUR","UGA","UKR","ARE","URY","UZB","VEN","ZMB"],"name":"","z":{"dtype":"i2","bdata":"CgBYAP4ABgAxAAwAHQDBAjQAXQASAbkBFQBLAC4ABgCiAHcABQAOAYsBWwDcACMAIwCfABYAywALAD4AEgAWAF8AXQKOAlUBKAAkACMAMgBCABEAuwB8AE0EAgAIACkAEwE5AGcACwA="},"type":"choropleth"}],                        {"template":{"data":{"histogram2dcontour":[{"type":"histogram2dcontour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"choropleth":[{"type":"choropleth","colorbar":{"outlinewidth":0,"ticks":""}}],"histogram2d":[{"type":"histogram2d","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"heatmap":[{"type":"heatmap","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"contourcarpet":[{"type":"contourcarpet","colorbar":{"outlinewidth":0,"ticks":""}}],"contour":[{"type":"contour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"surface":[{"type":"surface","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"mesh3d":[{"type":"mesh3d","colorbar":{"outlinewidth":0,"ticks":""}}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"parcoords":[{"type":"parcoords","line":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolargl":[{"type":"scatterpolargl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"scattergeo":[{"type":"scattergeo","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolar":[{"type":"scatterpolar","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"scattergl":[{"type":"scattergl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatter3d":[{"type":"scatter3d","line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermap":[{"type":"scattermap","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermapbox":[{"type":"scattermapbox","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterternary":[{"type":"scatterternary","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattercarpet":[{"type":"scattercarpet","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"type":"carpet"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}],"barpolar":[{"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"pie":[{"automargin":true,"type":"pie"}]},"layout":{"autotypenumbers":"strict","colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"hovermode":"closest","hoverlabel":{"align":"left"},"paper_bgcolor":"white","plot_bgcolor":"#E5ECF6","polar":{"bgcolor":"#E5ECF6","angularaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"radialaxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"ternary":{"bgcolor":"#E5ECF6","aaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"baxis":{"gridcolor":"white","linecolor":"white","ticks":""},"caxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]]},"xaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"yaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"scene":{"xaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"yaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"zaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"geo":{"bgcolor":"white","landcolor":"#E5ECF6","subunitcolor":"white","showland":true,"showlakes":true,"lakecolor":"white"},"title":{"x":0.05},"mapbox":{"style":"light"},"margin":{"b":0,"l":0,"r":0,"t":30}}},"geo":{"domain":{"x":[0.0,1.0],"y":[0.0,1.0]},"projection":{"type":"natural earth"},"center":{},"showframe":false,"showcoastlines":true,"coastlinecolor":"lightgray"},"coloraxis":{"colorbar":{"title":{"text":"Extractions"}},"colorscale":[[0.0,"rgb(209, 238, 234)"],[0.16666666666666666,"rgb(168, 219, 217)"],[0.3333333333333333,"rgb(133, 196, 201)"],[0.5,"rgb(104, 171, 184)"],[0.6666666666666666,"rgb(79, 144, 166)"],[0.8333333333333334,"rgb(59, 115, 143)"],[1.0,"rgb(42, 86, 116)"]]},"legend":{"tracegroupgap":0},"margin":{"l":0,"r":0,"t":30,"b":0},"height":420},                        {"responsive": true}                    ).then(function(){
-                            
-var gd = document.getElementById('a4fd3dc6-1eee-4912-918e-d49c571ef7a7');
-var x = new MutationObserver(function (mutations, observer) {{
-        var display = window.getComputedStyle(gd).display;
-        if (!display || display === 'none') {{
-            console.log([gd, 'removed!']);
-            Plotly.purge(gd);
-            observer.disconnect();
-        }}
-}});
-
-// Listen for the removal of the full notebook cells
-var notebookContainer = gd.closest('#notebook-container');
-if (notebookContainer) {{
-    x.observe(notebookContainer, {childList: true});
-}}
-
-// Listen for the clearing of the current output cell
-var outputEl = gd.closest('.output');
-if (outputEl) {{
-    x.observe(outputEl, {childList: true});
-}}
-
-                        })                };            </script>        </div>
-<p>Countries with clause extractions in the corpus. Darker shading indicates more extracted clauses.</p>
-</div>
-</div>
-<section id="the-binding-constraint" class="level2">
-<h2 class="anchored" data-anchor-id="the-binding-constraint">The binding constraint</h2>
-<p>Sovereign debt legal expertise is scarce and expensive. The contract terms that govern how nations borrow, restructure, and default are buried in dense prospectuses that only a handful of specialists can interpret. If you believe this knowledge should be accessible to everyone, that is a problem.</p>
+<section id="what-a-durable-version-requires" class="level2">
+<h2 class="anchored" data-anchor-id="what-a-durable-version-requires">What a durable version requires</h2>
+<p>This prototype is held together with duct tape and enthusiasm. It works today because one person is paying attention to it. That is not a plan.</p>
+<p>A production system needs sustained hosting, ongoing data ingestion as new prospectuses are filed, a proper database with version control for annotations, and multi-user review workflows so lawyers can contribute without stepping on each other’s work. That is infrastructure work, not a weekend project. MDI and Georgetown have the institutional capacity to build and maintain it. I do not.</p>
 </section>
-<section id="pdips-down-payment" class="level2">
-<h2 class="anchored" data-anchor-id="pdips-down-payment">PDIP’s down payment</h2>
-<p><a href="https://publicdebtispublic.mdi.georgetown.edu/">#PublicDebtIsPublic</a> has put down a serious down payment. Over 900 contracts on a public platform, with more than 160 annotated by research assistants who tagged over 100 contract terms with expert judgment. Those annotations are gold. They can serve as ground truth for automated extraction. And they can scale things up.</p>
+<section id="the-credibility-question" class="level2">
+<h2 class="anchored" data-anchor-id="the-credibility-question">The credibility question</h2>
+<p>This is the hard part, and no amount of engineering solves it alone.</p>
+<p>Automated clause extraction for policy-relevant research needs an agreed methodology. What does “correct” mean when a clause is ambiguous? How do we handle edge cases where reasonable lawyers disagree? How do we report confidence so that users know what to trust and what to question?</p>
+<p>These are not technical questions. They are questions for legal scholars, technologists, and practitioners working together. Exactly the people in this room.</p>
 </section>
-<section id="a-prototype-as-a-proposal" class="level2">
-<h2 class="anchored" data-anchor-id="a-prototype-as-a-proposal">A prototype as a proposal</h2>
-<p>I am a former Wall Street sovereign debt research analyst who became a huge data nerd and now builds grant-funded open source sovereign debt analysis tools for finance ministries and other stakeholders. Instead of writing up a proposal, I figured a prototype would make this more tangible. Here is a first try at how PDIP’s expert annotations can scale:</p>
+<section id="what-i-bring" class="level2">
+<h2 class="anchored" data-anchor-id="what-i-bring">What I bring</h2>
+<p>Open source code, MIT licensed, no strings attached. Domain expertise from seven years on the buy side analyzing sovereign debt. A working prototype. Time and energy. Grant funding from NatureFinance for the <a href="https://tealinsights.com/sovtech">SovTech</a> initiative. And a willingness to do the grunt work that makes infrastructure projects actually happen.</p>
+</section>
+<section id="what-i-am-asking-for" class="level2">
+<h2 class="anchored" data-anchor-id="what-i-am-asking-for">What I am asking for</h2>
+<p>Not money. Not endorsement. Three specific things:</p>
 <ol type="1">
-<li><p><strong>Build pipelines that automatically download from major sources.</strong> SEC EDGAR, the FCA National Storage Mechanism, PDIP itself. This prototype pulled <strong>4,800+ sovereign bond prospectuses</strong> from all three.</p></li>
-<li><p><strong>Use PDIP’s annotated contracts to find likely clause matches at scale.</strong> The expert-tagged clauses become the reference point for finding similar language across thousands of documents. This prototype found <strong>9,145 potential clause matches</strong> across 6 clause families, covering <strong>59 countries</strong>. These are candidates, not validated findings. To validate them, we need step 3.</p></li>
-<li><p><strong>Lawyer-in-the-Loop clause review.</strong> Each clause a lawyer reviews makes the system better. Expert review improves automated extraction, which surfaces more clauses for expert review. Start the flywheel.</p></li>
+<li><p><strong>Feedback on this prototype.</strong> What is wrong? What is missing? What is misleading? The hardest bugs to find are the ones where the system looks right but is not.</p></li>
+<li><p><strong>Participation in defining the validation methodology.</strong> This community can answer questions about credibility that I cannot answer alone.</p></li>
+<li><p><strong>Help recruiting legal experts for clause review.</strong> PDIP’s network of law professors, students, and practitioners is the most valuable asset in this space. Each expert review makes the whole system better.</p></li>
 </ol>
 </section>
-<section id="the-asks" class="level2">
-<h2 class="anchored" data-anchor-id="the-asks">The asks</h2>
-<p>Two things would make this real.</p>
-<p><strong>First: a shared methodology for credibility.</strong> What does it mean for an extraction to be “correct”? How do we measure confidence? What error rate is acceptable? These are questions for this community, not for one person with a prototype.</p>
-<p><strong>Second: an organized clause review program.</strong> PDIP is uniquely positioned to recruit and coordinate legal experts: law professors and their students, sovereign debt lawyers who want to do pro bono work. Each clause a lawyer reviews has a multiplicative effect. It does not just verify one extraction. It makes every future extraction more accurate. The eval workflow chapter lays out a proposal for how to do this efficiently.</p>
-<p>This is open source. Free for anyone to use. I am building it regardless because I believe in it. But I think our approaches are complementary, and I would love to help.</p>
-</section>
-<section id="what-the-data-shows-so-far" class="level2">
-<h2 class="anchored" data-anchor-id="what-the-data-shows-so-far">What the data shows so far</h2>
-<p>This prototype uses PDIP’s expert-annotated contracts as ground truth to find likely clause matches across 3,300 prospectuses from the SEC’s EDGAR and 650 from the FCA’s National Storage Mechanism, two large public repositories that are hard to navigate by hand. The remaining 820 PDIP documents are included too. These are potential matches, not validated findings. But it is a lot faster than going through PDFs one by one.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>A note on AI
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>This pipeline uses AI alongside deterministic tools like regular expressions and document structure analysis. AI helps identify likely candidates from thousands of documents. Those candidates must be verified by legal experts. The goal is to augment expert judgment, not replace it. This effort only works if people find it credible, which is why a clear validation methodology is one of the asks above.</p>
-</div>
-</div>
-</section>
-<section id="why-this-matters" class="level2">
-<h2 class="anchored" data-anchor-id="why-this-matters">Why this matters</h2>
-<p>What can you do with a searchable corpus of sovereign bond contract terms?</p>
-<p><strong>Monitor global trends at scale.</strong> This pipeline can be extended to process incoming prospectuses as they are filed. Policymakers could spot worrying trends in contract terms quickly, rather than discovering them after a crisis.</p>
-<p><strong>Enable data-informed borrowing.</strong> Sovereign debt issuers can make data-informed choices about the terms of their borrowing by seeing what comparable issuers have done.</p>
-<p><strong>A resource for legal scholarship.</strong> Researchers studying how sovereign debt boilerplate evolves across markets and over time currently work from small hand-collected samples. A validated corpus covering thousands of documents changes what questions are possible to ask.</p>
-</section>
-<section id="what-this-is-not" class="level2">
-<h2 class="anchored" data-anchor-id="what-this-is-not">What this is not</h2>
-<p>This is a prototype, with all the frailties of prototypes. While I believe this is a promising approach, the technical methodology will benefit from the intelligence and critical thinking of this community. Any findings outside of the PDIP expert-annotated corpus should be thought of as potential clause matches that have not yet been validated and could be wrong.</p>
-</section>
-<section id="what-you-will-find-here" class="level2">
-<h2 class="anchored" data-anchor-id="what-you-will-find-here">What you will find here</h2>
-<ul>
-<li><strong>What the Data Shows</strong> presents preliminary findings with interactive charts</li>
-<li><strong>The Eval Workflow</strong> describes how lawyers can validate extractions and improve the dataset</li>
-<li><strong>A Call for Collaboration</strong> outlines what a durable version of this system would require</li>
-<li>Two appendices cover technical details and the broader SovTech initiative</li>
-</ul>
-</section>
-<section id="credits" class="level2">
-<h2 class="anchored" data-anchor-id="credits">Credits</h2>
-<p>Built by <a href="https://tealinsights.com">Teal Insights</a> as part of the SovTech initiative, with support from <a href="https://www.naturefinance.net/">NatureFinance</a>. Open source under the MIT license, available on <a href="https://github.com/Teal-Insights/sovereign-prospectus-corpus">GitHub</a>.</p>
-<p><img src="images/teal-insights-logo.png" height="45"> &nbsp;&nbsp; <img src="images/naturefinance-logo.png" height="45"></p>
-<p>Questions, ideas, or want to collaborate? <a href="mailto:lte@tealinsights.com">Get in touch</a>.</p>
+<section id="a-closing-note" class="level2">
+<h2 class="anchored" data-anchor-id="a-closing-note">A closing note</h2>
+<p>I believe #PublicDebtIsPublic is one of the most important initiatives in sovereign debt transparency. PDIP’s annotations are the foundation that makes everything in this prototype possible. I want to help it succeed.</p>
+<p>I am building this regardless. But it is better with you.</p>
+<p>Teal Emery | <a href="mailto:lte@tealinsights.com">Get in touch</a></p>
 
 
-</section>
 </section>
 
 </main> <!-- /main -->
@@ -735,10 +633,13 @@ if (outputEl) {{
   </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
+      <a href="./eval-workflow.html" class="pagination-link" aria-label="The Lawyer-in-the-Loop Flywheel">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-title">The Lawyer-in-the-Loop Flywheel</span></span>
+      </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="./findings.html" class="pagination-link" aria-label="A First Peek at the Data">
-        <span class="nav-page-text"><span class="chapter-title">A First Peek at the Data</span></span> <i class="bi bi-arrow-right-short"></i>
+      <a href="./appendix-technical.html" class="pagination-link" aria-label="Technical Details">
+        <span class="nav-page-text"><span class="chapter-title">Technical Details</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>What We Built and Why – Sovereign Clause Corpus</title>
+<title>The Lawyer-in-the-Loop Flywheel – Searching the Fine Print (at Scale)</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -30,8 +30,8 @@ ul.task-list li input[type="checkbox"] {
 <script src="site_libs/quarto-search/fuse.min.js"></script>
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
-<link href="./chapter2.html" rel="next">
-<link href="./index.html" rel="prev">
+<link href="./call-to-action.html" rel="next">
+<link href="./findings.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
@@ -86,7 +86,7 @@ ul.task-list li input[type="checkbox"] {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./chapter1.html"><span class="chapter-title">What We Built and Why</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./eval-workflow.html"><span class="chapter-title">The Lawyer-in-the-Loop Flywheel</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -103,7 +103,7 @@ ul.task-list li input[type="checkbox"] {
       <a href="./index.html" class="sidebar-logo-link">
       </a>
     <div class="sidebar-title mb-0 py-0">
-      <a href="./">Sovereign Clause Corpus</a> 
+      <a href="./">Searching the Fine Print (at Scale)</a> 
     </div>
       </div>
         <div class="mt-2 flex-shrink-0 align-items-center">
@@ -116,24 +116,45 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./index.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">Preface</span></a>
+ <span class="menu-text">Searching the Fine Print (at Scale)</span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./chapter1.html" class="sidebar-item-text sidebar-link active"><span class="chapter-title">What We Built and Why</span></a>
+  <a href="./findings.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">A First Peek at the Data</span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./chapter2.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Preliminary Findings</span></a>
+  <a href="./eval-workflow.html" class="sidebar-item-text sidebar-link active"><span class="chapter-title">The Lawyer-in-the-Loop Flywheel</span></a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./chapter3.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">A Lawyer-in-the-Loop Flywheel</span></a>
+  <a href="./call-to-action.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">A Call for Collaboration</span></a>
   </div>
 </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-technical.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">Technical Details</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./appendix-sovtech.html" class="sidebar-item-text sidebar-link"><span class="chapter-title">SovTech and the Bigger Picture</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
     </ul>
     </div>
 </nav>
@@ -144,9 +165,13 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#one-week-three-sources-4800-documents" id="toc-one-week-three-sources-4800-documents" class="nav-link active" data-scroll-target="#one-week-three-sources-4800-documents">One Week, Three Sources, 4,800+ Documents</a></li>
-  <li><a href="#why-publicdebtispublic-annotations-are-catalytic" id="toc-why-publicdebtispublic-annotations-are-catalytic" class="nav-link" data-scroll-target="#why-publicdebtispublic-annotations-are-catalytic">Why #PublicDebtIsPublic Annotations Are Catalytic</a></li>
-  <li><a href="#the-flywheel" id="toc-the-flywheel" class="nav-link" data-scroll-target="#the-flywheel">The Flywheel</a></li>
+  <li><a href="#manual-annotation-does-not-scale" id="toc-manual-annotation-does-not-scale" class="nav-link active" data-scroll-target="#manual-annotation-does-not-scale">Manual annotation does not scale</a></li>
+  <li><a href="#the-flywheel" id="toc-the-flywheel" class="nav-link" data-scroll-target="#the-flywheel">The flywheel</a></li>
+  <li><a href="#what-a-reviewer-sees" id="toc-what-a-reviewer-sees" class="nav-link" data-scroll-target="#what-a-reviewer-sees">What a reviewer sees</a></li>
+  <li><a href="#time-to-decision" id="toc-time-to-decision" class="nav-link" data-scroll-target="#time-to-decision">Time-to-decision</a></li>
+  <li><a href="#one-correction-thousands-of-improvements" id="toc-one-correction-thousands-of-improvements" class="nav-link" data-scroll-target="#one-correction-thousands-of-improvements">One correction, thousands of improvements</a></li>
+  <li><a href="#who-should-review" id="toc-who-should-review" class="nav-link" data-scroll-target="#who-should-review">Who should review?</a></li>
+  <li><a href="#try-it-yourself" id="toc-try-it-yourself" class="nav-link" data-scroll-target="#try-it-yourself">Try it yourself</a></li>
   </ul>
 </nav>
     </div>
@@ -155,7 +180,7 @@ ul.task-list li input[type="checkbox"] {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title"><span class="chapter-title">What We Built and Why</span></h1>
+<h1 class="title"><span class="chapter-title">The Lawyer-in-the-Loop Flywheel</span></h1>
 </div>
 
 
@@ -172,68 +197,102 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<p>Sovereign bond prospectuses are public documents — filed with the SEC in New York, the FCA in London. But in practice, doing cross-country, cross-regional research on contract terms is cumbersome and time-consuming. A researcher studying how collective action clauses vary across African, Latin American, and European issuers would need to navigate multiple filing systems, download documents one by one, and read through hundreds of pages of boilerplate to find the 10% that varies.</p>
-<section id="one-week-three-sources-4800-documents" class="level2">
-<h2 class="anchored" data-anchor-id="one-week-three-sources-4800-documents">One Week, Three Sources, 4,800+ Documents</h2>
-<p>In one week, we built an open-source pipeline that collected over 4,800 sovereign bond prospectuses from three public sources:</p>
-<table class="caption-top table">
-<thead>
-<tr class="header">
-<th>Source</th>
-<th>Documents</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>SEC EDGAR</td>
-<td>~3,300</td>
-<td>US securities filings by sovereign issuers</td>
-</tr>
-<tr class="even">
-<td>FCA National Storage Mechanism</td>
-<td>~900</td>
-<td>UK regulatory filings</td>
-</tr>
-<tr class="odd">
-<td>#PublicDebtIsPublic</td>
-<td>~823</td>
-<td>Expert-annotated sovereign debt corpus</td>
-</tr>
-<tr class="even">
-<td><strong>Total</strong></td>
-<td><strong>~4,800+</strong></td>
-<td></td>
-</tr>
-</tbody>
-</table>
-<p>All documents are parsed into searchable text and stored in a single database. The pipeline handles PDFs, HTML filings, and plain text — with encoding detection for documents filed across different systems and eras.</p>
-</section>
-<section id="why-publicdebtispublic-annotations-are-catalytic" class="level2">
-<h2 class="anchored" data-anchor-id="why-publicdebtispublic-annotations-are-catalytic">Why #PublicDebtIsPublic Annotations Are Catalytic</h2>
-<p>The #PublicDebtIsPublic corpus is special. It contains 122 documents where legal experts have hand-annotated specific clause types — collective action clauses, pari passu, governing law, events of default, and many more. Across these documents, experts identified over 6,200 individual clause annotations spanning 25 clause families.</p>
-<p>These expert annotations are the seed that makes everything else possible. We used them to build retrieval patterns that find similar clauses across the much larger SEC and FCA corpora. The more clauses experts review and validate, the more accurate automated identification becomes.</p>
+<section id="manual-annotation-does-not-scale" class="level2">
+<h2 class="anchored" data-anchor-id="manual-annotation-does-not-scale">Manual annotation does not scale</h2>
+<p>PDIP has annotated 160+ sovereign bond prospectuses. That work is invaluable. It is also slow. Reading prospectuses cover to cover, identifying clause boundaries, recording the results. At the current pace, comprehensive coverage of the full universe of sovereign issuances would take years.</p>
+<p>The bottleneck is not effort or willingness. It is the ratio of expert time to documents processed. One lawyer, one prospectus, one clause at a time.</p>
+<p>We can change that ratio.</p>
 </section>
 <section id="the-flywheel" class="level2">
-<h2 class="anchored" data-anchor-id="the-flywheel">The Flywheel</h2>
-<div class="cell" data-fig-width="6" data-layout-align="default">
+<h2 class="anchored" data-anchor-id="the-flywheel">The flywheel</h2>
+<p>The idea is simple: use expert annotations to teach the system what to look for, then let the system do the searching while experts do the judging. This is human-in-the-loop learning, a pattern widely applied in medicine, autonomous vehicles, content moderation, and other domains where automation needs expert oversight. The same approach works here.</p>
+<div class="cell" data-layout-align="default">
 <div class="cell-output-display">
 <div>
 <p></p><figure class="figure"><p></p>
 <div>
 <pre class="mermaid mermaid-js">flowchart LR
-    A["Expert&lt;br/&gt;Annotation"] --&gt; B["Pattern&lt;br/&gt;Extraction"]
-    B --&gt; C["Candidate Retrieval&lt;br/&gt;Across Full Corpus"]
-    C --&gt; D["Expert Review&lt;br/&gt;(yes / no + why)"]
-    D --&gt; E["Improved&lt;br/&gt;Patterns"]
+    A["Expert annotations"] --&gt; B["Pattern extraction"]
+    B --&gt; C["Candidate retrieval across full corpus"]
+    C --&gt; D["Expert review (yes/no + why)"]
+    D --&gt; E["Improved patterns"]
     E --&gt; B
 </pre>
 </div>
-<p></p><figcaption> Each expert review improves the next round of automated identification</figcaption> </figure><p></p>
+<p></p><figcaption> Each cycle of expert review makes the next round of extraction better.</figcaption> </figure><p></p>
 </div>
 </div>
 </div>
-<p>This is a proof of concept built in one week. The findings are preliminary and the methodology needs expert review. But the infrastructure is open source, and it demonstrates how expert legal knowledge can be made catalytic — scaling the impact of every annotation across thousands of documents.</p>
+<p>Each review makes the next round better. The system gets smarter with every lawyer who spends 15 minutes reviewing clauses. This is a flywheel, not a one-time batch job.</p>
+</section>
+<section id="what-a-reviewer-sees" class="level2">
+<h2 class="anchored" data-anchor-id="what-a-reviewer-sees">What a reviewer sees</h2>
+<p>The system surfaces a candidate clause with proposed boundaries already marked. No hunting through pages of boilerplate. The extracted clause is front and center, rendered with its original document formatting. Section context is one click away if you need it, but most of the time you do not.</p>
+<p>Five decision options:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Decision</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Correct Clause</strong></td>
+<td>Boundaries are right. This is the clause.</td>
+</tr>
+<tr class="even">
+<td><strong>Wrong Boundaries</strong></td>
+<td>Right clause, wrong start or end point.</td>
+</tr>
+<tr class="odd">
+<td><strong>Not a Clause</strong></td>
+<td>This section does not contain the clause.</td>
+</tr>
+<tr class="even">
+<td><strong>Partial Match</strong></td>
+<td>Only part of the clause was extracted.</td>
+</tr>
+<tr class="odd">
+<td><strong>Needs Second Look</strong></td>
+<td>Uncertain. Skip for now.</td>
+</tr>
+</tbody>
+</table>
+<p>This is expert judgment, not labeling. The interaction should feel like reviewing a colleague’s draft work product.</p>
+</section>
+<section id="time-to-decision" class="level2">
+<h2 class="anchored" data-anchor-id="time-to-decision">Time-to-decision</h2>
+<p>A well-designed review tool means:</p>
+<ul>
+<li><strong>10 seconds</strong> for obvious correct cases</li>
+<li><strong>30 to 60 seconds</strong> for uncertain ones requiring section context</li>
+<li><strong>15 minutes</strong> = 20 to 30 validated clauses</li>
+<li>Each validation teaches the system something</li>
+</ul>
+<p>The tool is designed to minimize friction. Split-pane layout. Auto-advance after each decision. Keyboard shortcuts. Progress tracking. The goal is flow state, not form-filling.</p>
+</section>
+<section id="one-correction-thousands-of-improvements" class="level2">
+<h2 class="anchored" data-anchor-id="one-correction-thousands-of-improvements">One correction, thousands of improvements</h2>
+<p>When a lawyer marks “Not a Clause” and notes “this is the table of contents entry, not the actual provision,” the system learns to skip table of contents sections. That correction applies across every prospectus in the corpus.</p>
+<p>When someone selects “Wrong Boundaries” and adjusts where a clause starts or ends, the system learns what a complete extraction looks like. Better boundaries in one document mean better boundaries in documents no one has reviewed yet.</p>
+<p>This is the multiplicative effect. One correction compounds across thousands of documents.</p>
+</section>
+<section id="who-should-review" class="level2">
+<h2 class="anchored" data-anchor-id="who-should-review">Who should review?</h2>
+<p>PDIP is well positioned to organize this. The reviewers already exist:</p>
+<ul>
+<li><strong>Law professors</strong> who teach sovereign debt and want their students working with real contracts</li>
+<li><strong>Law students</strong> who want hands-on experience with the documents they study in class</li>
+<li><strong>Sovereign debt lawyers</strong> at firms looking for pro bono work that compounds over time</li>
+<li><strong>Policy researchers</strong> who need to verify specific provisions across jurisdictions</li>
+</ul>
+<p>Each reviewer brings different expertise. A professor might catch a subtle distinction between English-law and New York-law CAC formulations. A student might flag that a “governing law” extraction actually captured a jurisdiction clause. These disagreements between reviewers are research signal, not noise.</p>
+</section>
+<section id="try-it-yourself" class="level2">
+<h2 class="anchored" data-anchor-id="try-it-yourself">Try it yourself</h2>
+<p>The Clause Eval Explorer is a working prototype of this workflow. You can review real extractions from real prospectuses right now.</p>
+<p><a href="clause-eval-explorer.html" class="btn btn-primary">Launch the Clause Eval Explorer</a></p>
 
 
 </section>
@@ -646,13 +705,13 @@ ul.task-list li input[type="checkbox"] {
   </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
-      <a href="./index.html" class="pagination-link" aria-label="Preface">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Preface</span>
+      <a href="./findings.html" class="pagination-link" aria-label="A First Peek at the Data">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-title">A First Peek at the Data</span></span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="./chapter2.html" class="pagination-link" aria-label="Preliminary Findings">
-        <span class="nav-page-text"><span class="chapter-title">Preliminary Findings</span></span> <i class="bi bi-arrow-right-short"></i>
+      <a href="./call-to-action.html" class="pagination-link" aria-label="A Call for Collaboration">
+        <span class="nav-page-text"><span class="chapter-title">A Call for Collaboration</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>
