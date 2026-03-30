@@ -14,7 +14,13 @@ from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 
 csv.field_size_limit(sys.maxsize)
 
-DATA_DIR = Path(__file__).parent / ".." / "data"
+# Try local data/ first (for shinyapps.io deployment), fall back to ../data/ (for local dev)
+_APP_DIR = Path(__file__).parent
+DATA_DIR = (
+    _APP_DIR / "data"
+    if (_APP_DIR / "data" / "all_extractions.csv").exists()
+    else _APP_DIR / ".." / "data"
+)
 CANDIDATES_PATH = DATA_DIR / "all_extractions.csv"
 FEEDBACK_PATH = DATA_DIR / "feedback_log_v2.csv"
 
@@ -111,11 +117,11 @@ app_ui = ui.page_sidebar(
         ui.h5("Clause Eval Explorer"),
         ui.tags.div(
             ui.p(
-                "Sovereign bond clause extraction for expert review.",
+                "Design proof of concept for sovereign bond clause review.",
                 style="font-size: 0.9em; font-weight: 500; margin-bottom: 4px;",
             ),
             ui.p(
-                "Part of the #PublicDebtIsPublic initiative.",
+                "Built on #PublicDebtIsPublic expert annotations. Not a production tool.",
                 style="font-size: 0.85em; color: #666; margin-bottom: 0;",
             ),
             style="margin-bottom: 12px;",
@@ -163,10 +169,10 @@ app_ui = ui.page_sidebar(
         ui.tags.div(
             ui.tags.p(
                 ui.tags.strong("How this works: "),
-                "This tool surfaces clause candidates found by automated "
-                "pattern matching. Your expert judgment validates each one. "
-                "Every review improves future identification across the "
-                "full corpus.",
+                "This is a design proof of concept, not a production tool. "
+                "It surfaces clause candidates found by automated pattern matching. "
+                "Your expert judgment validates each one. "
+                "Every review improves future identification across the full corpus.",
                 style="font-size: 0.9em; margin: 0;",
             ),
             style="background: #e8f4f8; padding: 12px 16px; border-radius: 4px; "

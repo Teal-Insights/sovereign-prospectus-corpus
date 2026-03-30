@@ -72,6 +72,6 @@ Each reviewer brings different expertise. A professor might catch a subtle disti
 
 ## Try it yourself
 
-The Clause Eval Explorer is a working prototype of this workflow. You can review real extractions from real prospectuses right now.
+The Clause Eval Explorer is a design proof of concept for this workflow. You can browse real extractions from real prospectuses right now. This is not a production tool, but it shows what the reviewer experience could look like.
 
-[Launch the Clause Eval Explorer](clause-eval-explorer.html){.btn .btn-primary}
+[Launch the Clause Eval Explorer](https://tealinsights.shinyapps.io/clause-eval-explorer/){.btn .btn-primary target="_blank"}
