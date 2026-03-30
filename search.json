@@ -84,7 +84,7 @@
     "href": "index.html#what-you-will-find-here",
     "title": "Searching the Fine Print (at Scale)",
     "section": "What you will find here",
-    "text": "What you will find here\n\nA First Peek at the Data presents preliminary findings with interactive charts\nThe Lawyer-in-the-Loop Flywheel describes how lawyers can validate extractions and improve the dataset\nA Call for Collaboration outlines what a durable version of this system would require\nTwo appendices cover technical details and the broader SovTech concept",
+    "text": "What you will find here\n\nA First Peek at the Data presents preliminary findings with interactive charts\nThe Lawyer-in-the-Loop Flywheel describes how lawyers can validate extractions and improve the dataset\nA Call for Collaboration outlines what a durable version of this system would require\nTwo appendices cover technical details and SovTech",
     "crumbs": [
       "Searching the Fine Print (at Scale)"
     ]
@@ -94,7 +94,7 @@
     "href": "index.html#credits",
     "title": "Searching the Fine Print (at Scale)",
     "section": "Credits",
-    "text": "Credits\nBuilt by Teal Insights as part of the SovTech concept, with support from NatureFinance. Open source under the MIT license, available on GitHub.\n    \nQuestions, ideas, or want to collaborate? Get in touch.",
+    "text": "Credits\nBuilt by Teal Insights, which is creating an open source ecosystem for sovereign debt analysis (we call it SovTech), with support from NatureFinance. Open source under the MIT license, available on GitHub.\n    \nQuestions, ideas, or want to collaborate? Get in touch.",
     "crumbs": [
       "Searching the Fine Print (at Scale)"
     ]
@@ -224,7 +224,7 @@
     "href": "call-to-action.html#what-i-bring",
     "title": "A Call for Collaboration",
     "section": "What I bring",
-    "text": "What I bring\nOpen source code, MIT licensed, no strings attached. Domain expertise from seven years on the buy side analyzing sovereign debt. A working prototype. Time and energy. Grant funding from NatureFinance for the SovTech concept. And a willingness to do the grunt work that makes infrastructure projects actually happen.",
+    "text": "What I bring\nOpen source code, MIT licensed, no strings attached. Domain expertise from seven years on the buy side analyzing sovereign debt. A working prototype. Time and energy. Grant funding from NatureFinance for SovTech. And a willingness to do the grunt work that makes infrastructure projects actually happen.",
     "crumbs": [
       "<span class='chapter-number'>3</span>  <span class='chapter-title'>A Call for Collaboration</span>"
     ]
@@ -265,7 +265,7 @@
     "href": "appendix-sovtech.html",
     "title": "Appendix B — SovTech and the Bigger Picture",
     "section": "",
-    "text": "Central banks and financial supervisors have been using advanced data science and tech-enabled tools for years: anti-money laundering, prudential supervision, regulatory reporting. The SupTech movement has shown that modular, technology-driven tools can transform how public institutions do analytical work. We are trying to bring that success to sovereign debt.\nSovTech is a concept: open source technology infrastructure for sovereign debt management. It is not a single tool. It is an approach to building tools: modular components that work independently but interoperate.\n\n\n\n\n\n\n\nPrinciple\nWhat it means\n\n\n\n\nModularity\nComponents work like building blocks. Adopt what you need without replacing existing systems.\n\n\nOpen source\nMIT licensed. Anyone can examine, adapt, extend. Transparency matters for institutions defending their methodologies.\n\n\nAI as enabler\nEliminate analytical toil. Free analysts to focus on hard problems. Human-in-the-loop verification for trust.\n\n\n\nWho. Teal Insights builds the tools, with support from NatureFinance. The initiative draws on experience across SupTech, sovereign advisory, and sovereign debt research. A paper on SovTech has been proposed for the 4th Public Debt Management Conference in Paris (September 2026).\nClimate connection. Sovereign debt terms affect restructuring capacity, which affects climate investment. Better contract transparency supports better debt sustainability analysis.\nThis corpus is one piece. It shows that large-scale extraction of contract terms from sovereign bond prospectuses is feasible. Other SovTech tools include QCraft, a user-friendly interface for the IMF’s QCRAFT debt sustainability tool that also serves as a proof of concept for modular open source architecture. More components are in development.\nAll code: GitHub",
+    "text": "Central banks and financial supervisors have been using advanced data science and tech-enabled tools for years: anti-money laundering, prudential supervision, regulatory reporting. The SupTech movement has shown that modular, technology-driven tools can transform how public institutions do analytical work. We are trying to bring that success to sovereign debt.\nWe are creating an open source ecosystem for sovereign debt analysis. We call it SovTech. It is not a single tool. It is an approach to building tools: modular components that work independently but interoperate.\n\n\n\n\n\n\n\nPrinciple\nWhat it means\n\n\n\n\nModularity\nComponents work like building blocks. Adopt what you need without replacing existing systems.\n\n\nOpen source\nMIT licensed. Anyone can examine, adapt, extend. Transparency matters for institutions defending their methodologies.\n\n\nAI as enabler\nEliminate analytical toil. Free analysts to focus on hard problems. Human-in-the-loop verification for trust.\n\n\n\nWho. Teal Insights builds the tools, with support from NatureFinance. The initiative draws on experience across SupTech, sovereign advisory, and sovereign debt research. A paper on SovTech has been proposed for the 4th Public Debt Management Conference in Paris (September 2026).\nClimate connection. Sovereign debt terms affect restructuring capacity, which affects climate investment. Better contract transparency supports better debt sustainability analysis.\nThis corpus is one piece. It shows that large-scale extraction of contract terms from sovereign bond prospectuses is feasible. Other SovTech tools include QCraft, a user-friendly interface for the IMF’s QCRAFT debt sustainability tool that also serves as a proof of concept for modular open source architecture. More components are in development.\nAll code: GitHub",
     "crumbs": [
       "Appendices",
       "<span class='chapter-number'>B</span>  <span class='chapter-title'>SovTech and the Bigger Picture</span>"
