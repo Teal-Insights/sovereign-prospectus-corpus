@@ -154,23 +154,18 @@ app_ui = ui.page_sidebar(
         ),
         width=300,
     ),
-    ui.tags.div(
-        ui.tags.p(
-            ui.tags.strong("Design proof of concept. "),
-            "This is not a production tool. It demonstrates how automated pattern matching "
-            "can surface sovereign bond clause candidates for expert review. "
-            "This is a proof of concept for the approach described in ",
-            ui.tags.a(
-                "Searching the Fine Print (at Scale)",
-                href="https://teal-insights.github.io/sovereign-prospectus-corpus/",
-                target="_blank",
-            ),
-            ". Extractions have not been validated by lawyers. ",
-            ui.tags.a("We welcome feedback.", href="mailto:lte@tealinsights.com"),
-            style="font-size: 0.9em; margin: 0;",
-        ),
-        style="background: #e8f4f8; padding: 12px 16px; border-radius: 4px; "
-        "border-left: 4px solid #2c7bb6; margin-bottom: 12px;",
+    ui.HTML(
+        '<div style="background:#e8f4f8;padding:12px 16px;border-radius:4px;'
+        'border-left:4px solid #2c7bb6;margin-bottom:12px;font-size:0.9em;">'
+        "<p style='margin:0 0 8px 0;'><strong>Design proof of concept.</strong> "
+        "This is not a production tool. It demonstrates how automated pattern matching "
+        "can surface sovereign bond clause candidates for expert review. "
+        "Extractions have not been validated by lawyers.</p>"
+        "<p style='margin:0;'>This tool accompanies the proposal "
+        '<a href="https://teal-insights.github.io/sovereign-prospectus-corpus/" '
+        'target="_blank">Searching the Fine Print (at Scale)</a>. '
+        '<a href="mailto:lte@tealinsights.com">We welcome feedback.</a></p>'
+        "</div>"
     ),
     ui.card(
         ui.card_header("Candidates"),
