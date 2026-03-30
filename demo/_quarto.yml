@@ -14,8 +14,6 @@ book:
     - call-to-action.qmd
   appendices:
     - appendix-technical.qmd
-    - appendix-validation.qmd
-    - appendix-coverage.qmd
     - appendix-sovtech.qmd
   page-navigation: true
 

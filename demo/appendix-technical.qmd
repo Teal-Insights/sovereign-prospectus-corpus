@@ -1,28 +1,26 @@
-# Technical Architecture {.appendix}
+# Technical Details {.appendix}
+
+The goal is to narrow the funnel so lawyers only review clauses that are likely real. Every stage cuts down the number of candidates.
 
 ```{mermaid}
-%%| fig-cap: "Pipeline stages from raw filings to verified clause extractions."
-flowchart LR
-    A["Download"] --> B["Parse"]
-    B --> C["Locate"]
-    C --> D["Extract"]
-    D --> E["Verify"]
+%%| fig-cap: "Each stage narrows the funnel. Lawyers only see the most likely matches."
+flowchart TD
+    A["4,769 documents from EDGAR, NSM, PDIP"] --> B["Parse with Docling"]
+    B --> C["Locate candidates with deterministic pattern matching"]
+    C --> D["~15,000 candidate sections"]
+    D --> E["Extract and filter with Claude Opus + Sonnet"]
+    E --> F["9,145 likely clause matches"]
+    F --> G["Lawyer review (the missing piece)"]
 ```
 
-| Stage | What it does |
-|-------|-------------|
-| **Download** | Pull sovereign bond filings from SEC EDGAR, FCA NSM, and PDIP via source-specific API adapters |
-| **Parse** | Extract text from PDFs (PyMuPDF) and HTML, preserving page boundaries |
-| **Locate** | Section-aware regex cue matching finds candidate clause regions |
-| **Extract** | LLM receives candidate region and extracts the clause verbatim |
-| **Verify** | Fuzzy string match (95% threshold) checks extraction against source text |
+**Parse.** Documents are parsed with [Docling](https://github.com/DS4SD/docling), which extracts text with document structure (headings, sections, tables) preserved.
 
-```{mermaid}
-%%| fig-cap: "Data sources and document counts."
-pie title Documents by Source
-    "SEC EDGAR" : 3301
-    "FCA NSM" : 645
-    "PDIP" : 823
-```
+**Locate.** Deterministic regex pattern matching finds candidate sections. Patterns are organized by clause family (heading cues, body-text cues). A section needs cue hits from multiple pattern families to qualify. This is fast, interpretable, and catches the obvious candidates.
 
-**Stack.** Python 3.12, DuckDB, Click CLI, PyMuPDF. MIT licensed. All code: [GitHub](https://github.com/Teal-Insights/sovereign-prospectus-corpus)
+**Extract.** Claude Opus and Sonnet receive each candidate section with multi-shot prompts showing examples from PDIP's expert-annotated contracts. The models extract the clause verbatim and flag low-confidence matches. This step cuts out the false positives that pattern matching alone cannot catch: table of contents entries, summaries, cross-references.
+
+**Verify.** Every extraction is checked against the source text using fuzzy string matching (95% similarity threshold). This catches paraphrasing, hallucination, and OCR drift.
+
+**What we can measure.** Recall against PDIP expert annotations (did we find what experts tagged?). Verbatim similarity to source text. What we cannot measure without lawyer review: precision (false positive rate) and inter-rater reliability.
+
+**The missing piece is human validation.** The pipeline narrows thousands of documents down to a manageable set of likely matches. But "likely" is not "correct." Only a lawyer can confirm that.

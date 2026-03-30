@@ -1,31 +1,19 @@
 # SovTech and the Bigger Picture {.appendix}
 
-```{mermaid}
-%%| fig-cap: "SovTech extends SupTech and RegTech principles to sovereign debt management."
-flowchart LR
-    A["SupTech / RegTech\n(financial supervision)"] --> B["SovTech\n(sovereign debt management)"]
-    B --> C["Data pipelines"]
-    B --> D["Analytical tools"]
-    B --> E["Reporting interfaces"]
-    B --> F["Contract transparency"]
-```
+Central banks and financial supervisors have been using advanced data science and tech-enabled tools for years: anti-money laundering, prudential supervision, regulatory reporting. The SupTech movement has shown that modular, technology-driven tools can transform how public institutions do analytical work. We are trying to bring that success to sovereign debt.
 
-**SovTech** is an open source initiative to bring the same technology-driven approach that transformed financial supervision (SupTech) to sovereign debt management. It is not a single tool. It is an approach to building tools: modular components that work independently but interoperate.
-
-**The problem.** Debt management offices face growing analytical demands (climate scenarios, stress testing, evolving creditor landscapes) but still rely on Excel, legacy systems, and one-off consulting models. The sovereign clause corpus is one component of a broader toolkit.
-
-**Design principles.**
+**SovTech** is an open source initiative to build technology infrastructure for sovereign debt management. It is not a single tool. It is an approach to building tools: modular components that work independently but interoperate.
 
 | Principle | What it means |
 |-----------|--------------|
-| **Modularity** | Components work like building blocks. Adopt what you need without wholesale system replacement. |
-| **Open source** | MIT licensed. Anyone can examine, adapt, and extend. Transparency matters for institutions that must defend their methodologies. |
-| **AI as enabler** | Eliminate analytical toil (document processing, data reconciliation). Free analysts to focus on the hard problems. Human-in-the-loop verification for trust. |
+| **Modularity** | Components work like building blocks. Adopt what you need without replacing existing systems. |
+| **Open source** | MIT licensed. Anyone can examine, adapt, extend. Transparency matters for institutions defending their methodologies. |
+| **AI as enabler** | Eliminate analytical toil. Free analysts to focus on hard problems. Human-in-the-loop verification for trust. |
 
-**Who.** [Teal Insights](https://tealinsights.com) builds the tools, with support from [NatureFinance](https://www.naturefinance.net/). The approach draws on NatureFinance's experience building SupTech solutions for financial regulators in emerging markets, including co-authoring the BIS foundational paper "The SupTech Generations" (di Castri, Kulenkampff, Hohl, and Prenio, 2019).
+**Who.** [Teal Insights](https://tealinsights.com) builds the tools, with support from [NatureFinance](https://www.naturefinance.net/). The initiative draws on experience across SupTech, sovereign advisory, and sovereign debt research. A paper on SovTech has been proposed for the 4th Public Debt Management Conference in Paris (September 2026).
 
 **Climate connection.** Sovereign debt terms affect restructuring capacity, which affects climate investment. Better contract transparency supports better debt sustainability analysis.
 
-**What's next.** A paper on SovTech has been proposed for the 4th Public Debt Management Conference in Paris (September 2026). This corpus is a proof of concept for one piece of the puzzle.
+**This corpus is one piece.** It shows that large-scale extraction of contract terms from sovereign bond prospectuses is feasible. Other SovTech components are in development for related problems in sovereign debt and climate finance.
 
 All code: [GitHub](https://github.com/Teal-Insights/sovereign-prospectus-corpus)

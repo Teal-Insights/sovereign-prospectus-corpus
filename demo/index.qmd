@@ -109,7 +109,7 @@ This is a prototype, with all the frailties of prototypes. While I believe this 
 - **What the Data Shows** presents preliminary findings with interactive charts
 - **The Eval Workflow** describes how lawyers can validate extractions and improve the dataset
 - **A Call for Collaboration** outlines what a durable version of this system would require
-- Four appendices cover technical architecture, validation approach, corpus coverage, and the broader SovTech initiative
+- Two appendices cover technical details and the broader SovTech initiative
 
 ## Credits
 
