@@ -1,3 +1,37 @@
 # A Call for Collaboration
 
-*Content in progress.*
+## What a durable version requires
+
+This prototype is held together with duct tape and enthusiasm. It works today because one person is paying attention to it. That is not a plan.
+
+A production system needs sustained hosting, ongoing data ingestion as new prospectuses are filed, a proper database with version control for annotations, and multi-user review workflows so lawyers can contribute without stepping on each other's work. That is infrastructure work, not a weekend project. MDI and Georgetown have the institutional capacity to build and maintain it. I do not.
+
+## The credibility question
+
+This is the hard part, and no amount of engineering solves it alone.
+
+Automated clause extraction for policy-relevant research needs an agreed methodology. What does "correct" mean when a clause is ambiguous? How do we handle edge cases where reasonable lawyers disagree? How do we report confidence so that users know what to trust and what to question?
+
+These are not technical questions. They are questions for legal scholars, technologists, and practitioners working together. Exactly the people in this room.
+
+## What I bring
+
+Open source code, MIT licensed, no strings attached. Domain expertise from seven years on the buy side analyzing sovereign debt. A working prototype. Time and energy. Grant funding from NatureFinance for the [SovTech](https://tealinsights.com/sovtech) initiative. And a willingness to do the grunt work that makes infrastructure projects actually happen.
+
+## What I am asking for
+
+Not money. Not endorsement. Three specific things:
+
+1. **Feedback on this prototype.** What is wrong? What is missing? What is misleading? The hardest bugs to find are the ones where the system looks right but is not.
+
+2. **Participation in defining the validation methodology.** This community can answer questions about credibility that I cannot answer alone.
+
+3. **Help recruiting legal experts for clause review.** PDIP's network of law professors, students, and practitioners is the most valuable asset in this space. Each expert review makes the whole system better.
+
+## A closing note
+
+I believe #PublicDebtIsPublic is one of the most important initiatives in sovereign debt transparency. PDIP's annotations are the foundation that makes everything in this prototype possible. I want to help it succeed.
+
+I am building this regardless. But it is better with you.
+
+Teal Emery | [Get in touch](mailto:lte@tealinsights.com)
