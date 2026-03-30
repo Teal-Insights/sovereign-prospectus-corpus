@@ -166,34 +166,39 @@ app_ui = ui.page_sidebar(
         width=300,
     ),
     ui.card(
-        ui.tags.div(
-            ui.tags.p(
-                ui.tags.strong("How this works: "),
-                "This is a design proof of concept, not a production tool. "
-                "It surfaces clause candidates found by automated pattern matching. "
-                "Your expert judgment validates each one. "
-                "Every review improves future identification across the full corpus.",
-                style="font-size: 0.9em; margin: 0;",
-            ),
-            style="background: #e8f4f8; padding: 12px 16px; border-radius: 4px; "
-            "border-left: 4px solid #2c7bb6;",
-        ),
-    ),
-    ui.card(
-        ui.card_header("Extracted Clauses"),
+        ui.card_header("Candidates"),
         ui.output_data_frame("candidates_table"),
     ),
     ui.card(
         ui.card_header("Extracted Clause"),
         ui.output_ui("clause_panel"),
-    ),
-    ui.card(
-        ui.card_header("Section Context"),
-        ui.output_ui("context_panel"),
-    ),
-    ui.card(
-        ui.card_header("Validation Feedback"),
+        ui.hr(),
         ui.output_ui("feedback_panel"),
+    ),
+    ui.tags.details(
+        ui.tags.summary(
+            "Section Context (click to expand)",
+            style="cursor:pointer;font-weight:600;padding:8px 0;",
+        ),
+        ui.card(
+            ui.output_ui("context_panel"),
+        ),
+    ),
+    ui.tags.details(
+        ui.tags.summary(
+            "About this tool",
+            style="cursor:pointer;font-size:0.85em;color:#666;padding:8px 0;",
+        ),
+        ui.tags.div(
+            ui.tags.p(
+                "This is a design proof of concept, not a production tool. "
+                "It surfaces clause candidates found by automated pattern matching. "
+                "Your expert judgment validates each one. "
+                "Every review improves future identification across the full corpus.",
+                style="font-size: 0.85em; color: #555;",
+            ),
+            style="padding: 8px 0;",
+        ),
     ),
     title="Clause Eval Explorer",
     theme=ui.Theme("bootstrap"),
@@ -265,7 +270,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
             display_df(),
             selection_mode="row",
             width="100%",
-            height="320px",
+            height="200px",
         )
 
     @reactive.Effect
@@ -379,7 +384,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
                 style=(
                     "font-family: Georgia, 'Times New Roman', serif; "
                     "font-size: 14px; line-height: 1.7; "
-                    "max-height: 450px; overflow-y: auto; "
+                    "max-height: 250px; overflow-y: auto; "
                     "padding: 16px; background: #f8f9fa; "
                     "border: 1px solid #dee2e6; border-radius: 4px;"
                 ),
