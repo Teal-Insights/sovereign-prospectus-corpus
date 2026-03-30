@@ -160,8 +160,21 @@ ul.task-list li input[type="checkbox"] {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
-        
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#step-1---ingest" id="toc-step-1---ingest" class="nav-link active" data-scroll-target="#step-1---ingest">Step 1 - Ingest</a></li>
+  <li><a href="#step-2---parse" id="toc-step-2---parse" class="nav-link" data-scroll-target="#step-2---parse">Step 2 - Parse</a></li>
+  <li><a href="#step-3---ground-truth" id="toc-step-3---ground-truth" class="nav-link" data-scroll-target="#step-3---ground-truth">Step 3 - Ground truth</a></li>
+  <li><a href="#step-4---locate-candidates" id="toc-step-4---locate-candidates" class="nav-link" data-scroll-target="#step-4---locate-candidates">Step 4 - Locate candidates</a></li>
+  <li><a href="#step-5---extract-and-filter-with-llms" id="toc-step-5---extract-and-filter-with-llms" class="nav-link" data-scroll-target="#step-5---extract-and-filter-with-llms">Step 5 - Extract and filter with LLMs</a></li>
+  <li><a href="#step-6---verify" id="toc-step-6---verify" class="nav-link" data-scroll-target="#step-6---verify">Step 6 - Verify</a></li>
+  <li><a href="#step-7---lawyer-review" id="toc-step-7---lawyer-review" class="nav-link" data-scroll-target="#step-7---lawyer-review">Step 7 - Lawyer review</a></li>
+  <li><a href="#stack" id="toc-stack" class="nav-link" data-scroll-target="#stack">Stack</a></li>
+  </ul>
+</nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
@@ -185,33 +198,124 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<p>The goal is to narrow the funnel so lawyers only review clauses that are likely real. Every stage cuts down the number of candidates.</p>
+<p>This appendix provides more detail on each step of the pipeline described in the main proposal.</p>
 <div class="cell" data-layout-align="default">
 <div class="cell-output-display">
 <div>
 <p></p><figure class="figure"><p></p>
 <div>
 <pre class="mermaid mermaid-js">flowchart TD
-    A["4,769 documents from EDGAR, NSM, PDIP"] --&gt; B["Parse with Docling"]
-    B --&gt; C["Locate candidates with deterministic pattern matching"]
-    C --&gt; D["~15,000 candidate sections"]
-    D --&gt; E["Extract and filter with Claude Opus + Sonnet"]
-    E --&gt; F["9,145 likely clause matches"]
-    F --&gt; G["Lawyer review (the missing piece)"]
+    A["SEC EDGAR"] --&gt; S1
+    B["FCA NSM"] --&gt; S1
+    C["PDIP"] --&gt; S1
+
+    S1["Step 1 - Ingest: Source-specific API adapters discover and download filings"] --&gt; S2
+
+    S2["Step 2 - Parse: Docling for PDFs, native parsing for EDGAR HTML/JSONL"] --&gt; S3
+
+    S3["Step 3 - Ground truth: PDIP expert annotations define what each clause type looks like"] --&gt; S4
+
+    S4["Step 4 - Locate: Regex cue patterns + document structure heuristics find candidate sections"] --&gt; S5
+
+    S5["Step 5 - Extract + filter: Opus and Sonnet with multi-shot prompts extract clauses verbatim"] --&gt; S6
+
+    S6["Step 6 - Verify: Fuzzy string matching confirms extraction appears in source text"] --&gt; S7
+
+    S7["Step 7 - Lawyer review: THE MISSING PIECE"]
+
+    style S1 fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a
+    style S2 fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a
+    style S3 fill:#e6f4ea,stroke:#34a853,color:#1a1a1a
+    style S4 fill:#e6f4ea,stroke:#34a853,color:#1a1a1a
+    style S5 fill:#fef7e0,stroke:#f9ab00,color:#1a1a1a
+    style S6 fill:#fef7e0,stroke:#f9ab00,color:#1a1a1a
+    style S7 fill:#fce8e6,stroke:#ea4335,color:#1a1a1a
 </pre>
 </div>
-<p></p><figcaption> Each stage narrows the funnel. Lawyers only see the most likely matches.</figcaption> </figure><p></p>
+<p></p><figcaption> Detailed pipeline with technical components at each step</figcaption> </figure><p></p>
 </div>
 </div>
 </div>
-<p><strong>Parse.</strong> Documents are parsed with <a href="https://github.com/DS4SD/docling">Docling</a>, which extracts text with document structure (headings, sections, tables) preserved.</p>
-<p><strong>Locate.</strong> Deterministic regex pattern matching finds candidate sections. Patterns are organized by clause family (heading cues, body-text cues). A section needs cue hits from multiple pattern families to qualify. This is fast, interpretable, and catches the obvious candidates.</p>
-<p><strong>Extract.</strong> Claude Opus and Sonnet receive each candidate section with multi-shot prompts showing examples from PDIP’s expert-annotated contracts. The models extract the clause verbatim and flag low-confidence matches. This step cuts out the false positives that pattern matching alone cannot catch: table of contents entries, summaries, cross-references.</p>
-<p><strong>Verify.</strong> Every extraction is checked against the source text using fuzzy string matching (95% similarity threshold). This catches paraphrasing, hallucination, and OCR drift.</p>
-<p><strong>What we can measure.</strong> Recall against PDIP expert annotations (did we find what experts tagged?). Verbatim similarity to source text. What we cannot measure without lawyer review: precision (false positive rate) and inter-rater reliability.</p>
-<p><strong>The missing piece is human validation.</strong> The pipeline narrows thousands of documents down to a manageable set of likely matches. But “likely” is not “correct.” Only a lawyer can confirm that.</p>
+<section id="step-1---ingest" class="level2">
+<h2 class="anchored" data-anchor-id="step-1---ingest">Step 1 - Ingest</h2>
+<p>Each source has a dedicated adapter. EDGAR and NSM adapters query APIs scoped to sovereign issuers (using LEIs and issuer name patterns), then download PDFs. PDIP documents are already available. Currently batch-mode; can be made continuous to pick up new filings as they appear.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Source</th>
+<th>Documents</th>
+<th>Format</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>SEC EDGAR</td>
+<td>~3,300</td>
+<td>HTML filings with embedded prospectuses</td>
+</tr>
+<tr class="even">
+<td>FCA NSM</td>
+<td>~650</td>
+<td>PDF filings via UK regulatory API</td>
+</tr>
+<tr class="odd">
+<td>PDIP</td>
+<td>~820</td>
+<td>PDF documents with expert annotations</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="step-2---parse" class="level2">
+<h2 class="anchored" data-anchor-id="step-2---parse">Step 2 - Parse</h2>
+<p>Different sources need different parsers:</p>
+<ul>
+<li><strong>PDFs</strong> (NSM, PDIP): Parsed with <a href="https://github.com/DS4SD/docling">Docling</a>, which extracts text with document structure (headings, sections, tables) preserved as markdown.</li>
+<li><strong>EDGAR HTML/JSONL</strong>: Parsed natively. EDGAR filings are already structured text with page boundaries.</li>
+</ul>
+<p>The output is a sequence of <strong>sections</strong>, each with a heading, body text, heading level, and source format. These sections are the unit of analysis for everything downstream.</p>
+</section>
+<section id="step-3---ground-truth" class="level2">
+<h2 class="anchored" data-anchor-id="step-3---ground-truth">Step 3 - Ground truth</h2>
+<p>PDIP’s expert-annotated contracts define what each clause type looks like. We organize search patterns into <strong>cue families</strong>: heading cues (e.g., “Collective Action”), voting threshold cues, aggregation cues, etc. A candidate section needs hits from multiple cue families to qualify. ICMA model clause language supplements the PDIP-derived patterns.</p>
+</section>
+<section id="step-4---locate-candidates" class="level2">
+<h2 class="anchored" data-anchor-id="step-4---locate-candidates">Step 4 - Locate candidates</h2>
+<p>Deterministic regex pattern matching against each section. A section qualifies as a candidate if it has:</p>
+<ul>
+<li>A heading match (the section title contains clause-relevant language), OR</li>
+<li>Body cue hits from 2+ distinct cue families (e.g., both “voting threshold” patterns and “aggregation” patterns)</li>
+</ul>
+<p>Adjacent qualifying sections are clustered together. This step is fast, interpretable, and produces a wide net of candidates.</p>
+</section>
+<section id="step-5---extract-and-filter-with-llms" class="level2">
+<h2 class="anchored" data-anchor-id="step-5---extract-and-filter-with-llms">Step 5 - Extract and filter with LLMs</h2>
+<p>Claude Opus 4.6 and Sonnet 4.6 receive each candidate section with multi-shot prompts showing real examples from PDIP-annotated contracts. The models:</p>
+<ul>
+<li>Extract the clause verbatim (copy exact text, no paraphrasing)</li>
+<li>Assign a confidence level (high, medium, low)</li>
+<li>Explain their reasoning</li>
+<li>Flag “not found” when a section does not actually contain the clause</li>
+</ul>
+<p>This step eliminates false positives that pattern matching alone cannot catch: table of contents entries, summaries, cross-references to clauses in other documents.</p>
+</section>
+<section id="step-6---verify" class="level2">
+<h2 class="anchored" data-anchor-id="step-6---verify">Step 6 - Verify</h2>
+<p>Every extraction is checked against the original document text using fuzzy string matching with a 95% similarity threshold. A windowed approach handles OCR noise and minor formatting differences. Extractions that fail verification are flagged.</p>
+<p>This catches hallucination, paraphrasing, and OCR drift. It is a safety net, not a substitute for human review.</p>
+</section>
+<section id="step-7---lawyer-review" class="level2">
+<h2 class="anchored" data-anchor-id="step-7---lawyer-review">Step 7 - Lawyer review</h2>
+<p>This is the missing piece. The pipeline narrows 4,800+ documents down to 9,145 likely clause matches. But “likely” is not “correct.” Only legal experts can confirm clause boundaries and correctness.</p>
+<p><strong>What we can measure without lawyers:</strong> Recall against PDIP expert annotations (did we find what experts tagged?). Verbatim similarity to source text.</p>
+<p><strong>What we cannot measure without lawyers:</strong> Precision (false positive rate). Whether clause boundaries are correct. Whether the system missed clauses that experts would have found.</p>
+</section>
+<section id="stack" class="level2">
+<h2 class="anchored" data-anchor-id="stack">Stack</h2>
+<p>Python 3.12, DuckDB, Docling, Click CLI. MIT licensed. All code: <a href="https://github.com/Teal-Insights/sovereign-prospectus-corpus">GitHub</a></p>
 
 
+</section>
 
 </main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">

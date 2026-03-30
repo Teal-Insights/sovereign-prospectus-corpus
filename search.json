@@ -254,7 +254,95 @@
     "href": "appendix-technical.html",
     "title": "Appendix A — Technical Details",
     "section": "",
-    "text": "The goal is to narrow the funnel so lawyers only review clauses that are likely real. Every stage cuts down the number of candidates.\n\n\n\n\n\nflowchart TD\n    A[\"4,769 documents from EDGAR, NSM, PDIP\"] --&gt; B[\"Parse with Docling\"]\n    B --&gt; C[\"Locate candidates with deterministic pattern matching\"]\n    C --&gt; D[\"~15,000 candidate sections\"]\n    D --&gt; E[\"Extract and filter with Claude Opus + Sonnet\"]\n    E --&gt; F[\"9,145 likely clause matches\"]\n    F --&gt; G[\"Lawyer review (the missing piece)\"]\n\n\n Each stage narrows the funnel. Lawyers only see the most likely matches. \n\n\n\nParse. Documents are parsed with Docling, which extracts text with document structure (headings, sections, tables) preserved.\nLocate. Deterministic regex pattern matching finds candidate sections. Patterns are organized by clause family (heading cues, body-text cues). A section needs cue hits from multiple pattern families to qualify. This is fast, interpretable, and catches the obvious candidates.\nExtract. Claude Opus and Sonnet receive each candidate section with multi-shot prompts showing examples from PDIP’s expert-annotated contracts. The models extract the clause verbatim and flag low-confidence matches. This step cuts out the false positives that pattern matching alone cannot catch: table of contents entries, summaries, cross-references.\nVerify. Every extraction is checked against the source text using fuzzy string matching (95% similarity threshold). This catches paraphrasing, hallucination, and OCR drift.\nWhat we can measure. Recall against PDIP expert annotations (did we find what experts tagged?). Verbatim similarity to source text. What we cannot measure without lawyer review: precision (false positive rate) and inter-rater reliability.\nThe missing piece is human validation. The pipeline narrows thousands of documents down to a manageable set of likely matches. But “likely” is not “correct.” Only a lawyer can confirm that.",
+    "text": "Step 1 - Ingest\nThis appendix provides more detail on each step of the pipeline described in the main proposal.\nEach source has a dedicated adapter. EDGAR and NSM adapters query APIs scoped to sovereign issuers (using LEIs and issuer name patterns), then download PDFs. PDIP documents are already available. Currently batch-mode; can be made continuous to pick up new filings as they appear.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Technical Details</span>"
+    ]
+  },
+  {
+    "objectID": "appendix-technical.html#step-1---ingest",
+    "href": "appendix-technical.html#step-1---ingest",
+    "title": "Appendix A — Technical Details",
+    "section": "",
+    "text": "Source\nDocuments\nFormat\n\n\n\n\nSEC EDGAR\n~3,300\nHTML filings with embedded prospectuses\n\n\nFCA NSM\n~650\nPDF filings via UK regulatory API\n\n\nPDIP\n~820\nPDF documents with expert annotations",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Technical Details</span>"
+    ]
+  },
+  {
+    "objectID": "appendix-technical.html#step-2---parse",
+    "href": "appendix-technical.html#step-2---parse",
+    "title": "Appendix A — Technical Details",
+    "section": "Step 2 - Parse",
+    "text": "Step 2 - Parse\nDifferent sources need different parsers:\n\nPDFs (NSM, PDIP): Parsed with Docling, which extracts text with document structure (headings, sections, tables) preserved as markdown.\nEDGAR HTML/JSONL: Parsed natively. EDGAR filings are already structured text with page boundaries.\n\nThe output is a sequence of sections, each with a heading, body text, heading level, and source format. These sections are the unit of analysis for everything downstream.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Technical Details</span>"
+    ]
+  },
+  {
+    "objectID": "appendix-technical.html#step-3---ground-truth",
+    "href": "appendix-technical.html#step-3---ground-truth",
+    "title": "Appendix A — Technical Details",
+    "section": "Step 3 - Ground truth",
+    "text": "Step 3 - Ground truth\nPDIP’s expert-annotated contracts define what each clause type looks like. We organize search patterns into cue families: heading cues (e.g., “Collective Action”), voting threshold cues, aggregation cues, etc. A candidate section needs hits from multiple cue families to qualify. ICMA model clause language supplements the PDIP-derived patterns.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Technical Details</span>"
+    ]
+  },
+  {
+    "objectID": "appendix-technical.html#step-4---locate-candidates",
+    "href": "appendix-technical.html#step-4---locate-candidates",
+    "title": "Appendix A — Technical Details",
+    "section": "Step 4 - Locate candidates",
+    "text": "Step 4 - Locate candidates\nDeterministic regex pattern matching against each section. A section qualifies as a candidate if it has:\n\nA heading match (the section title contains clause-relevant language), OR\nBody cue hits from 2+ distinct cue families (e.g., both “voting threshold” patterns and “aggregation” patterns)\n\nAdjacent qualifying sections are clustered together. This step is fast, interpretable, and produces a wide net of candidates.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Technical Details</span>"
+    ]
+  },
+  {
+    "objectID": "appendix-technical.html#step-5---extract-and-filter-with-llms",
+    "href": "appendix-technical.html#step-5---extract-and-filter-with-llms",
+    "title": "Appendix A — Technical Details",
+    "section": "Step 5 - Extract and filter with LLMs",
+    "text": "Step 5 - Extract and filter with LLMs\nClaude Opus 4.6 and Sonnet 4.6 receive each candidate section with multi-shot prompts showing real examples from PDIP-annotated contracts. The models:\n\nExtract the clause verbatim (copy exact text, no paraphrasing)\nAssign a confidence level (high, medium, low)\nExplain their reasoning\nFlag “not found” when a section does not actually contain the clause\n\nThis step eliminates false positives that pattern matching alone cannot catch: table of contents entries, summaries, cross-references to clauses in other documents.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Technical Details</span>"
+    ]
+  },
+  {
+    "objectID": "appendix-technical.html#step-6---verify",
+    "href": "appendix-technical.html#step-6---verify",
+    "title": "Appendix A — Technical Details",
+    "section": "Step 6 - Verify",
+    "text": "Step 6 - Verify\nEvery extraction is checked against the original document text using fuzzy string matching with a 95% similarity threshold. A windowed approach handles OCR noise and minor formatting differences. Extractions that fail verification are flagged.\nThis catches hallucination, paraphrasing, and OCR drift. It is a safety net, not a substitute for human review.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Technical Details</span>"
+    ]
+  },
+  {
+    "objectID": "appendix-technical.html#step-7---lawyer-review",
+    "href": "appendix-technical.html#step-7---lawyer-review",
+    "title": "Appendix A — Technical Details",
+    "section": "Step 7 - Lawyer review",
+    "text": "Step 7 - Lawyer review\nThis is the missing piece. The pipeline narrows 4,800+ documents down to 9,145 likely clause matches. But “likely” is not “correct.” Only legal experts can confirm clause boundaries and correctness.\nWhat we can measure without lawyers: Recall against PDIP expert annotations (did we find what experts tagged?). Verbatim similarity to source text.\nWhat we cannot measure without lawyers: Precision (false positive rate). Whether clause boundaries are correct. Whether the system missed clauses that experts would have found.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Technical Details</span>"
+    ]
+  },
+  {
+    "objectID": "appendix-technical.html#stack",
+    "href": "appendix-technical.html#stack",
+    "title": "Appendix A — Technical Details",
+    "section": "Stack",
+    "text": "Stack\nPython 3.12, DuckDB, Docling, Click CLI. MIT licensed. All code: GitHub",
     "crumbs": [
       "Appendices",
       "<span class='chapter-number'>A</span>  <span class='chapter-title'>Technical Details</span>"
