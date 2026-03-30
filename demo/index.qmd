@@ -65,11 +65,39 @@ Sovereign debt legal expertise is scarce and expensive. The contract terms that 
 
 I am a former Wall Street sovereign debt research analyst who became a huge data nerd and now builds grant-funded open source sovereign debt analysis tools for finance ministries and other stakeholders. Instead of writing up a proposal, I figured a prototype would make this more tangible. Here is a first try at how PDIP's expert annotations can scale:
 
-1. **Build pipelines that automatically download from major sources.** SEC EDGAR, the FCA National Storage Mechanism, PDIP itself. This prototype pulled **4,800+ sovereign bond prospectuses** from all three.
+```{mermaid}
+%%| fig-cap: "The pipeline from sources to validated clauses"
+flowchart TD
+    A["SEC EDGAR"] --> S1
+    B["FCA NSM"] --> S1
+    C["PDIP"] --> S1
+    D["More sources"] -.-> S1
 
-2. **Use PDIP's annotated contracts to find likely clause matches at scale.** The expert-tagged clauses become the reference point for finding similar language across thousands of documents. This prototype found **9,145 potential clause matches** across 6 clause families, covering **59 countries**. These are candidates, not validated findings. To validate them, we need step 3.
+    S1["Step 1 - Ingest documents from key sources (static now, can be made continuous)"] --> S2
 
-3. **Lawyer-in-the-Loop clause review.** Each clause a lawyer reviews makes the system better. Expert review improves automated extraction, which surfaces more clauses for expert review. Start the flywheel.
+    S2["Step 2 - Parse documents and preserve structure"] --> S3
+
+    S3["Step 3 - Use PDIP annotations + ICMA model clauses as ground truth"] --> S4
+    S4["Step 4 - Find candidate clauses via text patterns and document heuristics"] --> S5
+
+    S5["Step 5 - Use best LLMs plus detailed prompts to eliminate obvious false positives"] --> S6
+
+    S6["Step 6 - Lawyer-in-the-loop: Legal experts evaluate likely matches and edge cases"] --> S7
+    S7["Step 7 - The flywheel: Each review makes the system better"] --> K
+
+    K["THE GOAL - A small number of legal experts can annotate a massive number of documents, with new filings processed accurately as they come in"]
+
+    style S1 fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a
+    style S2 fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a
+    style S3 fill:#e6f4ea,stroke:#34a853,color:#1a1a1a
+    style S4 fill:#e6f4ea,stroke:#34a853,color:#1a1a1a
+    style S5 fill:#fef7e0,stroke:#f9ab00,color:#1a1a1a
+    style S6 fill:#fce8e6,stroke:#ea4335,color:#1a1a1a
+    style S7 fill:#fce8e6,stroke:#ea4335,color:#1a1a1a
+    style K fill:#e8f5e9,stroke:#2e7d32,color:#1a1a1a,stroke-width:3px
+```
+
+This prototype built steps 1-4. It pulled **4,800+ sovereign bond prospectuses** from three sources, and found **9,145 potential clause matches** across 6 clause families covering **59 countries**. These are candidates, not validated findings. Step 5 is what this roundtable can help make happen.
 
 ## The asks
 
@@ -86,8 +114,12 @@ This is open source. Free for anyone to use. I am building it regardless because
 This prototype uses PDIP's expert-annotated contracts as ground truth to find likely clause matches across 3,300 prospectuses from the SEC's EDGAR and 650 from the FCA's National Storage Mechanism, two large public repositories that are hard to navigate by hand. The remaining 820 PDIP documents are included too. These are potential matches, not validated findings. But it is a lot faster than going through PDFs one by one.
 
 ::: {.callout-note}
-## A note on AI
-This pipeline uses AI alongside deterministic tools like regular expressions and document structure analysis. AI helps identify likely candidates from thousands of documents. Those candidates must be verified by legal experts. The goal is to augment expert judgment, not replace it. This effort only works if people find it credible, which is why a clear validation methodology is one of the asks above.
+## AI: don't trust, verify
+AI has the potential to do a lot of the drudge work of reading thousands of prospectuses. But AI can also hallucinate. We do not want to blindly trust AI. Two ways to improve this:
+
+1 - **Use the best models.** This project used Opus 4.6 and Sonnet 4.6, the current strongest models from Anthropic. We prompt those models with clear examples and edge case handling.
+
+2 - **Evaluate models against lawyer-reviewed benchmarks.** This allows us to have quantitative measures of their accuracy, and to improve them over time.
 :::
 
 ## Why this matters
