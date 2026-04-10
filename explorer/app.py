@@ -1,5 +1,8 @@
 """Sovereign Bond Prospectus Explorer — deployment spike."""
 
+from pathlib import Path
+from typing import NoReturn
+
 import duckdb
 import streamlit as st
 
@@ -9,33 +12,55 @@ st.set_page_config(
     layout="wide",
 )
 
+LOCAL_DB_PATH = Path("data/db/corpus.duckdb")
+
+
+def _missing_db_error() -> NoReturn:
+    """Fail fast when neither MotherDuck nor a local DB is available.
+
+    On Streamlit Cloud, the data/ directory is gitignored and absent, so
+    silently falling back to the local path would raise a cryptic IOError.
+    Surface a clear error instead.
+    """
+    st.error(
+        "No database available. Set MOTHERDUCK_TOKEN in Streamlit secrets, "
+        "or run locally with data/db/corpus.duckdb present."
+    )
+    st.stop()
+    raise RuntimeError("unreachable")
+
 
 @st.cache_resource
-def get_connection():
-    """Connect to MotherDuck if token is available, else fall back to local DB."""
+def get_connection() -> duckdb.DuckDBPyConnection:
+    """Connect to MotherDuck when a token is set, else use local DuckDB."""
     token = st.secrets.get("MOTHERDUCK_TOKEN", None)
     if token:
-        return duckdb.connect(f"md:sovereign_corpus?motherduck_token={token}")
-    else:
-        st.warning("No MotherDuck token found. Using local DuckDB file.")
-        return duckdb.connect("data/db/corpus.duckdb", read_only=True)
+        return duckdb.connect(
+            "md:sovereign_corpus",
+            read_only=True,
+            config={"motherduck_token": token},
+        )
+
+    if LOCAL_DB_PATH.exists():
+        return duckdb.connect(str(LOCAL_DB_PATH), read_only=True)
+
+    _missing_db_error()
 
 
-def main():
+def main() -> None:
     st.title("Sovereign Bond Prospectus Explorer")
 
     con = get_connection()
 
-    # Corpus stats
     stats = con.execute(
         "SELECT COUNT(*) AS docs, COUNT(DISTINCT source) AS sources FROM documents"
     ).fetchone()
-    if stats:
-        col1, col2 = st.columns(2)
-        col1.metric("Documents", f"{stats[0]:,}")
-        col2.metric("Sources", stats[1])
+    assert stats is not None  # COUNT(*) always returns one row
 
-    # Recent documents
+    col1, col2 = st.columns(2)
+    col1.metric("Documents", f"{stats[0]:,}")
+    col2.metric("Sources", stats[1])
+
     st.subheader("Recent Prospectuses")
     df = con.execute("""
         SELECT

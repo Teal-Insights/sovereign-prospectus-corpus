@@ -155,6 +155,18 @@ building features. Everything else is wasted if this doesn't work.
 - `@st.cache_resource` for the MotherDuck connection
 - `.streamlit/secrets.toml` in `.gitignore`
 - MotherDuck token NEVER in the repo
+- Single pinned `requirements.txt` at repo root (Streamlit Cloud uses this;
+  do not split between root and `explorer/` — version drift is guaranteed)
+- Python version must be set in the Streamlit Cloud **UI** (Advanced
+  Settings → Python version dropdown). Streamlit Cloud silently ignores
+  `.python-version` files and defaults to the latest Python, which lacks
+  pre-built wheels for `duckdb`/`pyarrow` and causes pip installs to hang
+  indefinitely.
+- MotherDuck connection opens with `read_only=True` to prevent accidental
+  writes from exploratory UI queries.
+- If `MOTHERDUCK_TOKEN` secret is missing in production, the app must fail
+  fast with `st.error()` + `st.stop()`, not silently fall back to a local
+  DB path (which is gitignored and absent on Streamlit Cloud).
 
 **Connection pattern:**
 ```python
