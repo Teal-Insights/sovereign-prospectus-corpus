@@ -1,1 +1,4 @@
+# Streamlit Cloud installs from repo-root requirements.txt.
+# Only include explorer dependencies here -- NOT the full pipeline.
 streamlit
+duckdb
