@@ -25,13 +25,27 @@ the user which steps to use — just follow them. The user runs with
   running the actual pipeline (not just building it)
 - [ ] Save plan to `docs/superpowers/plans/`
 
-### Phase 3: Execute (use superpowers)
+### Phase 3: Execute
 
-- [ ] Use `superpowers:subagent-driven-development` to execute the plan
-  (always use subagents — do not ask)
-- [ ] Follow `superpowers:test-driven-development` within each task
-- [ ] After each subagent task: spec review then code quality review
-- [ ] Fix all issues before moving to next task
+The user runs with `--dangerously-skip-permissions`, which removes the usual
+subagent benefit of batching tool approvals. Pick the execution mode that
+actually fits the task:
+
+- **Default: inline execution.** When the plan is detailed enough that most
+  steps are transcription rather than judgment, execute inline. You're
+  already cached on the context from brainstorming and writing the plan;
+  restarting in a subagent wastes that. Follow
+  `superpowers:test-driven-development` within each task. Invoke the
+  `code-reviewer` skill at natural gates (after major components land,
+  before the final PR) to preserve the review discipline subagent-driven
+  was enforcing.
+- **Use subagents when:** (a) tasks are genuinely independent and
+  parallelizable, (b) the work is exploratory and might explode context,
+  (c) you want adversarial isolation for a review (spawn a fresh agent
+  that hasn't seen your work). In those cases use
+  `superpowers:dispatching-parallel-agents` or
+  `superpowers:subagent-driven-development` as appropriate.
+- Fix all issues before moving to the next task, either way.
 
 ### Phase 4: Verify (before claiming done)
 
