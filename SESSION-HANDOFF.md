@@ -3,7 +3,7 @@
 **Last updated:** 2026-04-10
 **Sprint:** Searchable Explorer for IMF/World Bank Spring Meetings
 **Target:** Monday 2026-04-13 (IMF Legal Department presentation)
-**Status:** Pre-sprint setup in progress
+**Status:** Task 1 merged. Live URL: https://sovereign-prospectus-corpus.streamlit.app
 
 ## Current Sprint
 
@@ -25,7 +25,7 @@ in `archive/phase-1/`.
 
 ## Sprint Tasks
 
-- [ ] Task 1: Deployment Spike (Streamlit Cloud + MotherDuck)
+- [x] Task 1: Deployment Spike (Streamlit Cloud + MotherDuck) — PR #61 merged
 - [ ] Task 2: Provenance URLs + Schema
 - [ ] Task 3: Search Index + Parsed Text Loading
 - [ ] Task 4: Streamlit Document Explorer
