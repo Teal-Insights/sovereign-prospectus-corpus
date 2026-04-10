@@ -83,7 +83,7 @@ def test_nsm_htm_artefact_classified_as_html() -> None:
         "source": "nsm",
         "download_url": "https://data.fca.org.uk/artefacts/NSM/RNS/abc.htm",
     }
-    url, kind = build_nsm_source_page(record)
+    _, kind = build_nsm_source_page(record)
     assert kind == "artifact_html"
 
 
@@ -102,7 +102,7 @@ def test_nsm_case_insensitive_extension() -> None:
         "source": "nsm",
         "download_url": "https://data.fca.org.uk/artefacts/NSM/RNS/abc.HTML",
     }
-    url, kind = build_nsm_source_page(record)
+    _, kind = build_nsm_source_page(record)
     assert kind == "artifact_html"
 
 

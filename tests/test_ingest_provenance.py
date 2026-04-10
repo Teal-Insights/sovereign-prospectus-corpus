@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import duckdb
 import pytest
 
 from corpus.db.ingest import ingest_manifests
 from corpus.db.schema import create_schema
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture
