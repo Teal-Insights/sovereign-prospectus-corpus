@@ -43,6 +43,8 @@ _DOCUMENT_COLUMNS = frozenset(
         "is_sovereign",
         "issuer_type",
         "scope_status",
+        "source_page_url",
+        "source_page_kind",
     }
 )
 
