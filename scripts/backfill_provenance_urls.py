@@ -28,7 +28,7 @@ def _backfill_one(path: Path) -> tuple[int, int]:
     part = path.with_suffix(path.suffix + ".part")
     total = 0
     updated = 0
-    with path.open() as src, part.open("w") as dst:
+    with path.open(encoding="utf-8") as src, part.open("w", encoding="utf-8") as dst:
         for line in src:
             line = line.strip()
             if not line:
@@ -40,12 +40,12 @@ def _backfill_one(path: Path) -> tuple[int, int]:
             # source_page_url = None and source_page_kind = "none" — both
             # are valid and should be preserved so the next run is a no-op.
             if "source_page_url" in record and "source_page_kind" in record:
-                dst.write(json.dumps(record) + "\n")
+                dst.write(json.dumps(record, ensure_ascii=False) + "\n")
                 continue
             url, kind = resolve_source_page(record)
             record["source_page_url"] = url
             record["source_page_kind"] = kind
-            dst.write(json.dumps(record) + "\n")
+            dst.write(json.dumps(record, ensure_ascii=False) + "\n")
             updated += 1
     os.replace(part, path)
     return total, updated

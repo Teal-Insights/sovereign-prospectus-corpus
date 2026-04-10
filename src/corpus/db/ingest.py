@@ -161,6 +161,19 @@ def _insert_document(conn: duckdb.DuckDBPyConnection, record: dict) -> bool:
     if extra_metadata:
         doc_values["source_metadata"] = json.dumps(extra_metadata)
 
+    # Derive provenance URL fields when the manifest didn't include them.
+    # Source adapters write most fields directly, but the per-source
+    # provenance resolvers are owned by corpus.sources.provenance — calling
+    # them here as a fallback guarantees every ingested document has the
+    # fields populated, so new downloads after this PR don't silently
+    # regress to NULL provenance columns until someone re-runs backfill.
+    if "source_page_url" not in doc_values or "source_page_kind" not in doc_values:
+        from corpus.sources.provenance import resolve_source_page
+
+        url, kind = resolve_source_page(record)
+        doc_values.setdefault("source_page_url", url)
+        doc_values.setdefault("source_page_kind", kind)
+
     # Insert and get the new document_id via RETURNING
     columns = list(doc_values.keys())
     placeholders = ", ".join(["?"] * len(columns))

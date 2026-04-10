@@ -42,11 +42,30 @@ log = logging.getLogger(__name__)
 PDIP_PDF_URL = "https://publicdebtispublic.mdi.georgetown.edu/api/pdf/{native_id}"
 
 # Date formats observed in data/pdip/pdip_document_inventory.csv as of 2026-04-10:
-#   "January 20, 2017"   → %B %d, %Y
-#   "24 September 2025"  → %d %B %Y
-#   "December 17, 2018"  → %B %d, %Y
-# Ordinal suffixes ("6th", "1st") are stripped before parsing.
-_DATE_FORMATS = ("%Y-%m-%d", "%B %d, %Y", "%d %B %Y")
+#   "January 20, 2017"   → "<Month> <day>, <year>"
+#   "24 September 2025"  → "<day> <Month> <year>"
+#   "December 17, 2018"  → "<Month> <day>, <year>"
+#   "July 6th, 2018"     → ordinal suffix stripped, then "<Month> <day>, <year>"
+# Also accepts bare ISO "YYYY-MM-DD".
+#
+# We deliberately do NOT use ``datetime.strptime`` with "%B" because %B is
+# locale-dependent — a CI runner or developer machine with a non-English
+# LC_TIME would silently fail to parse "January". The lookup table below
+# is locale-invariant.
+_MONTH_NAMES = {
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+}
 _ORDINAL_RE = re.compile(r"(\d+)(st|nd|rd|th)\b", re.IGNORECASE)
 
 
@@ -57,17 +76,43 @@ def _parse_free_text_date(raw: str | None) -> str | None:
     the known formats. Never raises — unparseable dates become ``None``
     rather than crashing the rebuild, but the raw value is logged as a
     warning so a new inventory format isn't lost silently.
+
+    Locale-invariant: uses an explicit English month-name lookup table
+    rather than ``datetime.strptime("%B")``, which would fail on a system
+    with a non-English LC_TIME.
     """
     if not raw:
         return None
     cleaned = _ORDINAL_RE.sub(r"\1", raw.strip())
     if not cleaned:
         return None
-    for fmt in _DATE_FORMATS:
-        try:
-            return dt.datetime.strptime(cleaned, fmt).date().isoformat()
-        except ValueError:
-            continue
+
+    # ISO YYYY-MM-DD (cheapest path; no tokens to split)
+    try:
+        return dt.date.fromisoformat(cleaned).isoformat()
+    except ValueError:
+        pass
+
+    # "January 20, 2017" or "24 September 2025" — 3 whitespace-separated
+    # tokens after stripping the comma, with exactly one word token.
+    tokens = cleaned.replace(",", "").split()
+    if len(tokens) == 3:
+        a, b, c = tokens
+        # "<Month> <day> <year>"
+        month_num = _MONTH_NAMES.get(a.lower())
+        if month_num and b.isdigit() and c.isdigit():
+            try:
+                return dt.date(int(c), month_num, int(b)).isoformat()
+            except ValueError:
+                pass
+        # "<day> <Month> <year>"
+        month_num = _MONTH_NAMES.get(b.lower())
+        if month_num and a.isdigit() and c.isdigit():
+            try:
+                return dt.date(int(c), month_num, int(a)).isoformat()
+            except ValueError:
+                pass
+
     log.warning("Unparseable PDIP document_date: %r", raw)
     return None
 
@@ -149,12 +194,12 @@ def regenerate_pdip_manifest(
     finally:
         conn.close()
 
-    with part.open("w") as f:
+    with part.open("w", encoding="utf-8") as f:
         for row in rows:
             db_row = dict(zip(columns, row, strict=True))
             inv_row = inventory.get(db_row["native_id"])
             record = _build_record(db_row, inv_row)
-            f.write(json.dumps(record) + "\n")
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     os.replace(part, target)
     return len(rows)

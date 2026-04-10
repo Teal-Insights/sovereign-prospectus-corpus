@@ -106,6 +106,42 @@ def test_backfill_skips_records_that_already_have_fields(
     assert result["source_page_kind"] == "filing_index"
 
 
+def test_backfill_round_trips_non_ascii_titles(tmp_path: Path) -> None:
+    """Document titles commonly contain non-ASCII characters (country
+    names like "Côte d'Ivoire", smart quotes, accents). Backfill must
+    preserve them verbatim — relying on the system default encoding
+    would corrupt them on Windows (cp1252) and json.dumps without
+    ensure_ascii=False would escape them to \\uXXXX sequences.
+    """
+    from scripts.backfill_provenance_urls import backfill_manifests
+
+    manifest_dir = tmp_path / "manifests"
+    manifest_dir.mkdir()
+    record = {
+        "source": "nsm",
+        "native_id": "cote-divoire-1",
+        "storage_key": "nsm__cote-divoire-1",
+        "title": "République de Côte d'Ivoire — Notes de 2030",
+        "issuer_name": "Côte d'Ivoire",
+        "download_url": "https://data.fca.org.uk/artefacts/NSM/RNS/cote.pdf",
+    }
+    manifest_path = manifest_dir / "nsm_manifest.jsonl"
+    manifest_path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    backfill_manifests(manifest_dir=manifest_dir)
+
+    rewritten_bytes = manifest_path.read_bytes()
+    # The raw bytes must still contain the UTF-8 encoding of "Côte d'Ivoire"
+    # (not escaped as \u00f4 etc., and not re-encoded as latin-1).
+    assert "Côte d'Ivoire".encode() in rewritten_bytes
+    assert b"\\u00f4" not in rewritten_bytes  # no ensure_ascii=True escaping
+
+    parsed = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert parsed["title"] == "République de Côte d'Ivoire — Notes de 2030"
+    assert parsed["issuer_name"] == "Côte d'Ivoire"
+    assert parsed["source_page_kind"] == "artifact_pdf"
+
+
 def test_backfill_unknown_source_record_is_idempotent(tmp_path: Path) -> None:
     """A record from an unknown source (e.g. future LSE RNS adapter before
     it has a resolver) gets ``(None, "none")`` on first pass. The second
