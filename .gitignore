@@ -1,5 +1,7 @@
 # === SECRETS ===
 .env
+.streamlit/secrets.toml
+explorer/.streamlit/secrets.toml
 
 # === DATA (rebuild from pipeline) ===
 data/**
