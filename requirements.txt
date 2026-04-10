@@ -1,0 +1,10 @@
+# Streamlit Cloud reads this file at the repo root.
+# Single source of truth for explorer deps. Do NOT add pipeline deps here
+# (pymupdf, playwright, etc.) — Streamlit Cloud will try to install them
+# and hang.
+#
+# Python version is set in the Streamlit Cloud UI (Advanced Settings),
+# not via .python-version. Keep Python at 3.12 for duckdb wheel compat.
+streamlit==1.45.1
+duckdb==1.4.4
+pandas>=2.0
