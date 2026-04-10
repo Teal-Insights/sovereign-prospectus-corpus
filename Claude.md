@@ -59,13 +59,21 @@ the user which steps to use — just follow them. The user runs with
 - [ ] Update `SESSION-HANDOFF.md` with what was completed
 - [ ] Update `TASKS.md` completion status
 
+## Current Sprint
+
+**Sprint:** Searchable Explorer for IMF/World Bank Spring Meetings
+**Target:** Monday 2026-04-13 (IMF Legal Department presentation)
+**Spec:** `planning/SPRINT-2026-04-SPRING-MEETINGS.md`
+**Status:** Phase 1 complete (tagged `v1-georgetown-2026-03-30`). Phase 2 in
+progress — building a shareable full-text search explorer.
+
 ## Project
 
 Build a structured, searchable corpus of sovereign bond prospectuses that surfaces meaningful variation in contract terms across issuers and over time. Prospectuses are ~90% boilerplate; the ~10% that varies (CACs, events of default, governing law) is where the value lives.
 
 **Who:** Teal Insights (open-source SovTech infrastructure for sovereign debt and climate finance).
-**Why now:** Proof-of-concept for Georgetown Law roundtable, March 30, 2026.
-**Sources:** FCA NSM, SEC EDGAR, World Bank PDIP.
+**Why now:** Searchable explorer for IMF/World Bank Spring Meetings, April 13, 2026.
+**Sources:** FCA NSM, SEC EDGAR, Georgetown Law PDIP, LSE RNS (new).
 
 ## Architecture Decisions (Ratified March 25, 2026)
 
@@ -112,8 +120,11 @@ These patterns were validated during the NSM source adapter build and should be 
 
 - **Python 3.12+**, PEP 8, managed by **uv**
 - **Polars** (not Pandas), **DuckDB** (not SQLite), **Click** for CLI
+- **MotherDuck** for cloud-hosted DuckDB (full-text search, hybrid execution)
+- **Streamlit Cloud** for explorer deployment (shareable URL, free tier)
 - **ruff** for linting/formatting, **pyright** basic mode, **pytest**
 - Trunk-based development, feature branches, small PRs
+- **Pandas OK in `explorer/`** (Streamlit ecosystem uses it). Polars everywhere else.
 
 ## Domain Rules
 
@@ -134,13 +145,14 @@ Full domain context: `docs/DOMAIN.md`
 
 ## Key References
 
-- **Current task:** `SESSION-HANDOFF.md`
-- **Task specs:** `planning/tasks/`
+- **Current sprint:** `planning/SPRINT-2026-04-SPRING-MEETINGS.md`
+- **Session handoff:** `SESSION-HANDOFF.md`
 - **NSM API:** `docs/nsm_api_reference.md`
 - **PDIP API:** `docs/pdip_data_extraction_assessment.md`
 - **Council decisions:** `docs/RATIFIED-DECISIONS.md`
 - **Domain context:** `docs/DOMAIN.md`
 - **Directory structure:** `docs/ARCHITECTURE.md`
+- **Phase 1 archive:** `archive/phase-1/`
 - **Reference scripts (bugs — do not copy directly):** `scripts/`
 
 ## Do Not
@@ -148,7 +160,8 @@ Full domain context: `docs/DOMAIN.md`
 - Use Pandas (use Polars)
 - Put country in file paths
 - Filter countries or doc types at download time
-- Use Docling before Monday (PyMuPDF only)
 - Use Prefect/Dagster/Luigi (Makefile only)
 - Carry forward tech debt from Phase 1 scripts
 - Skip hand-verification of any demo extraction
+- Modify V1 artifacts (`demo/_book/`, `demo/shiny-app/`, GitHub Pages config)
+- Load unbounded result sets into Streamlit memory (always use LIMIT)
