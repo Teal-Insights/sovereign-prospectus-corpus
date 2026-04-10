@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest  # noqa: F401  (reserved for future parametrize)
-
 from corpus.sources.provenance import (
     build_edgar_source_page,
     build_nsm_source_page,
@@ -121,6 +119,31 @@ def test_nsm_unknown_extension_falls_back_to_search() -> None:
     url, kind = build_nsm_source_page(record)
     assert url == NSM_SEARCH_FALLBACK
     assert kind == "search_page"
+
+
+def test_nsm_query_string_does_not_defeat_classifier() -> None:
+    """Query strings and fragments must not break extension classification.
+
+    Not present in the corpus today (all 645 NSM URLs are bare paths), but
+    the classifier uses urllib.parse.urlparse().path so a future FCA URL
+    format like foo.pdf?v=2 still resolves to artifact_pdf.
+    """
+    record = {
+        "source": "nsm",
+        "download_url": "https://data.fca.org.uk/artefacts/NSM/RNS/foo.pdf?v=2",
+    }
+    url, kind = build_nsm_source_page(record)
+    assert url == record["download_url"]
+    assert kind == "artifact_pdf"
+
+
+def test_nsm_fragment_does_not_defeat_classifier() -> None:
+    record = {
+        "source": "nsm",
+        "download_url": "https://data.fca.org.uk/artefacts/NSM/RNS/foo.html#page=5",
+    }
+    _, kind = build_nsm_source_page(record)
+    assert kind == "artifact_html"
 
 
 # ── PDIP ───────────────────────────────────────────────────────────────

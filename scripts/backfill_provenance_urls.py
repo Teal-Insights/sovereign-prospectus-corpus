@@ -35,8 +35,11 @@ def _backfill_one(path: Path) -> tuple[int, int]:
                 continue
             total += 1
             record: dict[str, Any] = json.loads(line)
-            if record.get("source_page_url") and record.get("source_page_kind"):
-                # Already has both fields — preserve as-is.
+            # Gate on key presence, not truthiness. A legitimately-resolved
+            # record whose source is unknown to the dispatcher will have
+            # source_page_url = None and source_page_kind = "none" — both
+            # are valid and should be preserved so the next run is a no-op.
+            if "source_page_url" in record and "source_page_kind" in record:
                 dst.write(json.dumps(record) + "\n")
                 continue
             url, kind = resolve_source_page(record)

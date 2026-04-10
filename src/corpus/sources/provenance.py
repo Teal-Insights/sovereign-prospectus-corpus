@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from urllib.parse import urlparse
 
 Resolution = tuple[str | None, str]
 
@@ -81,14 +82,19 @@ def build_nsm_source_page(record: dict[str, Any]) -> Resolution:
 
     The FCA site is a SPA for the search UI but artefact URLs themselves
     are direct file downloads, so they do resolve as deep links.
+
+    Classification uses the URL path only (via ``urllib.parse.urlparse``)
+    so that query strings or fragments — not present today but cheap
+    insurance against a future FCA URL format — don't defeat the
+    extension check.
     """
     download_url = record.get("download_url")
     if not download_url:
         return NSM_SEARCH_FALLBACK, "search_page"
-    lowered = str(download_url).lower()
-    if lowered.endswith(".pdf"):
+    path = urlparse(str(download_url)).path.lower()
+    if path.endswith(".pdf"):
         return download_url, "artifact_pdf"
-    if lowered.endswith(".html") or lowered.endswith(".htm"):
+    if path.endswith(".html") or path.endswith(".htm"):
         return download_url, "artifact_html"
     return NSM_SEARCH_FALLBACK, "search_page"
 

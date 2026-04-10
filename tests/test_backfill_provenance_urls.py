@@ -104,3 +104,40 @@ def test_backfill_skips_records_that_already_have_fields(
     result = json.loads((sample_manifests / "nsm_manifest.jsonl").read_text())
     assert result["source_page_url"] == "https://example.com/manually-set"
     assert result["source_page_kind"] == "filing_index"
+
+
+def test_backfill_unknown_source_record_is_idempotent(tmp_path: Path) -> None:
+    """A record from an unknown source (e.g. future LSE RNS adapter before
+    it has a resolver) gets ``(None, "none")`` on first pass. The second
+    pass must NOT re-update it — the presence of both keys is the idempotency
+    signal, not the truthiness of their values.
+
+    Regression test for a latent bug where ``if record.get("source_page_url")
+    and record.get("source_page_kind")`` evaluated to False for ``None`` and
+    caused unknown-source records to re-resolve every run.
+    """
+    from scripts.backfill_provenance_urls import backfill_manifests
+
+    manifest_dir = tmp_path / "manifests"
+    manifest_dir.mkdir()
+    record = {
+        "source": "lse_rns",
+        "native_id": "future-123",
+        "storage_key": "lse_rns__future-123",
+        "download_url": "https://www.londonstockexchange.com/news-article/future-123",
+    }
+    manifest_path = manifest_dir / "lse_rns_manifest.jsonl"
+    manifest_path.write_text(json.dumps(record) + "\n")
+
+    first = backfill_manifests(manifest_dir=manifest_dir)
+    assert first["records_updated"] == 1
+    first_rec = json.loads(manifest_path.read_text())
+    assert first_rec["source_page_url"] is None
+    assert first_rec["source_page_kind"] == "none"
+
+    second = backfill_manifests(manifest_dir=manifest_dir)
+    assert second["records_updated"] == 0, (
+        "second pass must treat (None, 'none') as already-resolved"
+    )
+    second_rec = json.loads(manifest_path.read_text())
+    assert second_rec == first_rec

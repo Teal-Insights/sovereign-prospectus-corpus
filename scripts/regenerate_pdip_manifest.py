@@ -29,12 +29,15 @@ import argparse
 import csv
 import datetime as dt
 import json
+import logging
 import os
 import re
 from pathlib import Path
 from typing import Any
 
 import duckdb
+
+log = logging.getLogger(__name__)
 
 PDIP_PDF_URL = "https://publicdebtispublic.mdi.georgetown.edu/api/pdf/{native_id}"
 
@@ -52,7 +55,8 @@ def _parse_free_text_date(raw: str | None) -> str | None:
 
     Returns ``None`` if the input is empty or cannot be parsed by any of
     the known formats. Never raises — unparseable dates become ``None``
-    rather than crashing the rebuild.
+    rather than crashing the rebuild, but the raw value is logged as a
+    warning so a new inventory format isn't lost silently.
     """
     if not raw:
         return None
@@ -64,6 +68,7 @@ def _parse_free_text_date(raw: str | None) -> str | None:
             return dt.datetime.strptime(cleaned, fmt).date().isoformat()
         except ValueError:
             continue
+    log.warning("Unparseable PDIP document_date: %r", raw)
     return None
 
 
