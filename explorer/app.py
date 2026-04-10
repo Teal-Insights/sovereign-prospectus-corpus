@@ -30,7 +30,7 @@ def _missing_db_error() -> NoReturn:
     raise RuntimeError("unreachable")
 
 
-@st.cache_resource
+@st.cache_resource(ttl=3600)  # Refresh every hour to avoid stale MotherDuck connections.
 def get_connection() -> duckdb.DuckDBPyConnection:
     """Connect to MotherDuck when a token is set, else use local DuckDB."""
     token = st.secrets.get("MOTHERDUCK_TOKEN", None)
