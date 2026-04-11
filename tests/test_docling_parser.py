@@ -71,3 +71,11 @@ def test_parse_empty_pdf():
     assert result.page_count == 0
     assert result.pages == []
     assert result.text == ""
+
+
+def test_registry_returns_docling_by_default():
+    """get_parser() with config default='docling' returns DoclingParser."""
+    from corpus.parsers.registry import get_parser
+
+    parser = get_parser("docling")
+    assert isinstance(parser, DoclingParser)

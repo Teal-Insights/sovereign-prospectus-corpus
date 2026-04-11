@@ -2,7 +2,7 @@
 # Contact info for API User-Agent headers comes from .env (see .env.example)
 
 [parser]
-default = "pymupdf"  # Switch to "docling" after Monday
+default = "docling"
 
 [nsm]
 delay_api = 1.0

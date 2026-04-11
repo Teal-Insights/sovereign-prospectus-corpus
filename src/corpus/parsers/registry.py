@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from corpus.parsers.docling_parser import DoclingParser
 from corpus.parsers.pymupdf_parser import PyMuPDFParser
 
 if TYPE_CHECKING:
@@ -18,6 +19,7 @@ _CONFIG_PATH = Path(__file__).resolve().parents[3] / "config.toml"
 
 _REGISTRY: dict[str, type[DocumentParser]] = {
     "pymupdf": PyMuPDFParser,  # type: ignore[dict-item]
+    "docling": DoclingParser,  # type: ignore[dict-item]
 }
 
 
