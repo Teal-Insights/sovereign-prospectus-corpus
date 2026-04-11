@@ -605,7 +605,7 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
 
     from corpus.logging import CorpusLogger
     from corpus.parsers.html_parser import HTMLParser
-    from corpus.parsers.pymupdf_parser import PyMuPDFParser
+    from corpus.parsers.registry import get_parser
     from corpus.parsers.text_parser import PlainTextParser
 
     config = _load_config()
@@ -616,7 +616,7 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
     logger = CorpusLogger(log_path, run_id=run_id)
 
     parsers = {
-        ".pdf": PyMuPDFParser(),
+        ".pdf": get_parser(),
         ".txt": PlainTextParser(),
         ".htm": HTMLParser(),
         ".html": HTMLParser(),
