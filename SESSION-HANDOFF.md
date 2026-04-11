@@ -14,35 +14,24 @@ You are resuming a brainstorming session that was paused for a machine switch. T
 
 The March 28 Docling outputs in `data/parsed_docling/` are broken (silently dropped pages of table-heavy content). A bug was diagnosed in `scripts/docling_reparse.py` on the stale `feature/30-docling-reparse` branch. The immediate next step is to run a smoke test that reproduces the bug and validates a fix, then rewrite the sprint spec as v2, then execute.
 
-### Immediate next actions on the Mac Mini
+### How the handoff actually happens
 
-**First, read `docs/mac-mini-handoff-2026-04-11.md`** — it is the operational setup guide, modeled on the March 29 handoff pattern we learned from the last sprint. Key points: the Mac Mini works in `~/Projects/sovereign-prospectus-corpus`, NOT inside Dropbox; `data/` is a symlink to Dropbox; the Dropbox `data/` folder must be "Available offline" in Finder; each machine works on its own feature branch.
+**The human (Teal) does two things:**
 
-Short version:
+1. Opens Claude Code on the Mac Mini in `~/Projects/sovereign-prospectus-corpus` (the March-run directory; `data/` is a symlink to Dropbox).
+2. Pastes the section between `═══` bars in `docs/mac-mini-handoff-2026-04-11.md` into Claude Code as the opening message.
 
-1. **On Mac Mini:**
-   ```bash
-   cd ~/Projects/sovereign-prospectus-corpus   # NOT ~/Dropbox — the repo lives in ~/Projects with data/ symlinked
-   git fetch && git checkout main && git pull --ff-only
-   gh pr merge 74 --squash --admin --delete-branch   # merge the handoff PR
-   git pull --ff-only                                 # pick up the squashed commit
-   ls -la data                                        # verify symlink
-   uv sync --all-extras
-   uv run python -c "import docling; print(docling.__version__)"   # confirm Docling
-   ```
+**Claude then executes seven phases autonomously**, stopping only at ⏸ markers for user confirmation:
 
-2. **Read, in order:**
-   - `docs/mac-mini-handoff-2026-04-11.md` (operational setup — read FIRST)
-   - `SESSION-HANDOFF.md` (this file — context and decisions)
-   - `docs/superpowers/specs/2026-04-11-spring-meetings-sequencing-design.md` (spec v1 — the previous session's first attempt; being rewritten as v2 after the smoke test)
-   - `CLAUDE.md` (always, but especially the Environment Setup + NSM Lessons Learned sections)
-   - `planning/SPRINT-2026-04-SPRING-MEETINGS.md` (original sprint plan that v1 partially supersedes)
+- **Phase 1:** Load context (SESSION-HANDOFF, Mac Mini handoff, spec v1, CLAUDE.md, March 29 handoff)
+- **Phase 2:** Verify environment (git state, symlink, venv, Docling install)
+- **Phase 3:** Run `/tmp/verify_data_integrity.py` — counts and sample-reads every expected data cluster (PASS/FAIL per cluster, catches Smart Sync placeholders)
+- **Phase 4:** `git pull`, `gh pr merge 74 --squash --admin`, create `feature/docling-bug-fix-and-sprint-v2`
+- **Phase 5:** Reproduce the Docling page-drop bug on `nsm__101126915_20200330172131895.pdf`, discover the correct per-page API via context7, write the fix, verify on 3 files, measure per-doc elapsed time
+- **Phase 6:** Write spec v2 at `docs/superpowers/specs/2026-04-11-spring-meetings-sequencing-design-v2.md` incorporating all accepted review findings
+- **Phase 7:** ⏸ Commit + push spec v2, STOP, wait for user approval before `superpowers:writing-plans`
 
-3. **Run the smoke test** (details in the "Smoke test" section below)
-
-4. **Rewrite spec v2** incorporating all accepted review findings (listed below)
-
-5. **Get user approval on v2**, then invoke `superpowers:writing-plans` to build the implementation plan
+The full Claude prompt (everything above is for the human; the prompt itself is inline in the Mac Mini handoff doc) includes all locked-in decisions, all forbidden re-litigations, and explicit pause points. A fresh Claude session on the Mac Mini should not need to ask any clarifying questions before Phase 5 — everything is captured in the handoff docs.
 
 ---
 
