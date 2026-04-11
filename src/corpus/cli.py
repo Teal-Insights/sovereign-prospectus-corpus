@@ -320,6 +320,92 @@ def pdip(
         raise SystemExit(1)
 
 
+@download.command()
+@click.option("--run-id", default=None, help="Pipeline run identifier.")
+@click.option(
+    "--discovery-file",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/luxse_discovery.jsonl",
+    help="Path to discovery JSONL from 'corpus discover luxse'.",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default="data/original",
+    help="Directory for downloaded PDFs.",
+)
+@click.option(
+    "--manifest-dir",
+    type=click.Path(path_type=Path),
+    default="data/manifests",
+    help="Directory for manifest JSONL files.",
+)
+@click.option(
+    "--log-dir",
+    type=click.Path(path_type=Path),
+    default="data/telemetry",
+    help="Directory for structured log files.",
+)
+def luxse(
+    run_id: str | None,
+    discovery_file: Path,
+    output_dir: Path,
+    manifest_dir: Path,
+    log_dir: Path,
+) -> None:
+    """Download documents from Luxembourg Stock Exchange (reads discovery file)."""
+    import uuid
+
+    from corpus.io.http import CorpusHTTPClient
+    from corpus.logging import CorpusLogger
+    from corpus.sources.luxse import run_luxse_download
+
+    cfg = _load_config().get("luxse", {})
+    cb_cfg = cfg.get("circuit_breaker", {})
+
+    if run_id is None:
+        run_id = f"luxse-{uuid.uuid4().hex[:12]}"
+
+    client = CorpusHTTPClient(
+        max_retries=int(cfg.get("max_retries", 3)),
+        backoff_factor=float(cfg.get("backoff_factor", 0.5)),
+        timeout=int(cfg.get("timeout", 60)),
+    )
+
+    log_file = log_dir / f"luxse_{run_id}.jsonl"
+    logger = CorpusLogger(log_file, run_id=run_id)
+
+    click.echo(f"Starting LuxSE download from {discovery_file} (run_id={run_id})...")
+    stats = run_luxse_download(
+        client=client,
+        discovery_file=discovery_file,
+        output_dir=output_dir,
+        manifest_dir=manifest_dir,
+        logger=logger,
+        run_id=run_id,
+        delay=float(cfg.get("delay", 1.0)),
+        total_failures_abort=int(cb_cfg.get("total_failures_abort", 10)),
+    )
+
+    from corpus.reporting import write_run_report
+
+    report_path = write_run_report(
+        source="luxse",
+        run_id=run_id,
+        stats=stats,
+        telemetry_dir=log_dir,
+    )
+
+    click.echo(
+        f"LuxSE download complete: {stats['downloaded']} downloaded, "
+        f"{stats['skipped']} skipped, {stats['failed']} failed "
+        f"(of {stats['total_in_discovery']} in discovery)."
+    )
+    if stats["aborted"]:
+        click.echo("WARNING: Download aborted due to too many failures.")
+    click.echo(f"Report: {report_path}")
+
+
 # ── Discover group ─────────────────────────────────────────────────
 
 
@@ -471,6 +557,49 @@ def discover_pdip_cmd(run_id: str | None, output: Path) -> None:
 
     click.echo(f"Discovery complete: {stats['total_documents']} documents found.")
     click.echo(f"Output: {output}")
+
+
+@discover.command("luxse")
+@click.option("--run-id", default=None, help="Pipeline run identifier.")
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default="data/luxse_discovery.jsonl",
+    help="Output path for discovery JSONL.",
+)
+def discover_luxse_cmd(run_id: str | None, output: Path) -> None:
+    """Discover sovereign filings from Luxembourg Stock Exchange (metadata only)."""
+    import uuid
+
+    from corpus.io.http import CorpusHTTPClient
+    from corpus.sources.luxse import discover_luxse
+
+    cfg = _load_config().get("luxse", {})
+
+    if run_id is None:
+        run_id = f"discover-luxse-{uuid.uuid4().hex[:8]}"
+
+    client = CorpusHTTPClient(
+        max_retries=int(cfg.get("max_retries", 3)),
+        backoff_factor=float(cfg.get("backoff_factor", 0.5)),
+        timeout=int(cfg.get("timeout", 60)),
+    )
+
+    click.echo(f"Discovering LuxSE sovereign documents (run_id={run_id})...")
+
+    stats = discover_luxse(
+        client=client,
+        output_path=output,
+        delay=float(cfg.get("delay", 1.0)),
+    )
+
+    click.echo(
+        f"Discovery complete: {stats['unique_filings']} unique filings "
+        f"from {stats['total_hits_raw']} raw hits."
+    )
+    click.echo(f"Output: {output}")
+    for pq in stats["per_query"]:
+        click.echo(f"  {pq['label']}: {pq['hits']} hits, {pq['new']} new")
 
 
 # ── Scrape group ───────────────────────────────────────────────────

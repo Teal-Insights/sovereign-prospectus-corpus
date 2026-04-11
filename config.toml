@@ -31,6 +31,14 @@ timeout = 60
 [pdip.circuit_breaker]
 total_failures_abort = 10
 
+[luxse]
+delay = 1.0
+max_retries = 3
+timeout = 60
+
+[luxse.circuit_breaker]
+total_failures_abort = 10
+
 [pdip_annotations]
 delay = 1.0
 max_retries = 3
