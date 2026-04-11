@@ -66,13 +66,14 @@ def build_pages(
 
         # Skip header (line 0), process page lines (line 1+)
         batch: list[tuple[int, int, str, int]] = []
-        for line in lines[1:]:
+        for line_idx, line in enumerate(lines[1:], start=2):
             line = line.strip()
             if not line:
                 continue
             try:
                 page = json.loads(line)
             except json.JSONDecodeError:
+                log.warning("Malformed JSON at %s line %d", jsonl_path.name, line_idx)
                 continue
             page_number = page.get("page", 0) + 1  # 0-indexed → 1-indexed
             text = page.get("text", "")

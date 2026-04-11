@@ -27,8 +27,14 @@ def strip_markdown(text: str) -> str:
     # Bold/italic: **text** or *text* → text
     text = re.sub(r"\*{1,2}(.+?)\*{1,2}", r"\1", text)
 
-    # List markers: "- item" or "* item" or "+ item" → "item"
+    # Markdown links: [text](url) → text
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+
+    # Unordered list markers: "- item" or "* item" or "+ item" → "item"
     text = re.sub(r"^\s*[-*+]\s+", "", text, flags=re.MULTILINE)
+
+    # Numbered list markers: "1. item" → "item"
+    text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)
 
     # Table separator rows: |---|---|---| → remove entirely
     text = re.sub(r"^\|[-:\s|]+\|$", "", text, flags=re.MULTILINE)

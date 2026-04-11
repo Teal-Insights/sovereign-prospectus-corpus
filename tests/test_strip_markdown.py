@@ -48,6 +48,25 @@ def test_empty_string():
     assert strip_markdown("") == ""
 
 
+def test_strips_numbered_list_markers():
+    text = "1. First item\n2. Second item\n10. Tenth item"
+    result = strip_markdown(text)
+    assert "First item" in result
+    assert "Second item" in result
+    assert "Tenth item" in result
+    assert "1." not in result
+    assert "10." not in result
+
+
+def test_strips_markdown_links():
+    text = "See [the prospectus](https://example.com/doc.pdf) for details"
+    result = strip_markdown(text)
+    assert "the prospectus" in result
+    assert "https://example.com" not in result
+    assert "[" not in result
+    assert "]" not in result
+
+
 def test_image_placeholders_removed():
     assert (
         strip_markdown("Text before\n<!-- image -->\nText after").strip()
