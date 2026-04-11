@@ -26,7 +26,8 @@ import shutil
 import signal
 import sys
 import time
-from concurrent.futures import BrokenProcessPool, ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from datetime import UTC, datetime
 from pathlib import Path
 
