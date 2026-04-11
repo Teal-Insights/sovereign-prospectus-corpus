@@ -1218,7 +1218,13 @@ def extract_pdip(run_id: str) -> None:
     help="Path to the DuckDB database file.",
 )
 @click.option("--run-id", default=None, help="Pipeline run identifier.")
-def ingest(manifest_dir: Path, db_path: Path, run_id: str | None) -> None:
+@click.option(
+    "--parsed-dir",
+    type=click.Path(path_type=Path),
+    default="data/parsed",
+    help="Directory containing parsed JSONL files (for parse_tool/page_count backfill).",
+)
+def ingest(manifest_dir: Path, db_path: Path, run_id: str | None, parsed_dir: Path) -> None:
     """Load JSONL manifests into DuckDB (serial, single-writer)."""
     import duckdb
 
@@ -1227,9 +1233,11 @@ def ingest(manifest_dir: Path, db_path: Path, run_id: str | None) -> None:
     manifest_dir.mkdir(parents=True, exist_ok=True)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
+    _parsed = parsed_dir if parsed_dir.exists() else None
+
     with duckdb.connect(str(db_path)) as conn:
         create_schema(conn)
-        stats = ingest_manifests(conn, manifest_dir, run_id=run_id)
+        stats = ingest_manifests(conn, manifest_dir, run_id=run_id, parsed_dir=_parsed)
 
     click.echo(
         f"Ingest complete: {stats['documents_inserted']} inserted, "

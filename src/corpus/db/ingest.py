@@ -23,6 +23,30 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+_JSONL_HEADER_FIELDS = frozenset({"parse_tool", "parse_version", "page_count"})
+
+
+def read_jsonl_header(parsed_dir: Path, storage_key: str) -> dict[str, Any]:
+    """Read the header line from a parsed JSONL file.
+
+    Returns a dict with parse_tool, parse_version, page_count (if found),
+    or an empty dict if the file doesn't exist.
+    """
+    jsonl_path = parsed_dir / f"{storage_key}.jsonl"
+    if not jsonl_path.exists():
+        return {}
+    try:
+        with jsonl_path.open() as f:
+            first_line = f.readline().strip()
+            if not first_line:
+                return {}
+            header = json.loads(first_line)
+            return {k: v for k, v in header.items() if k in _JSONL_HEADER_FIELDS}
+    except (json.JSONDecodeError, OSError):
+        log.warning("Failed to read JSONL header for %s", storage_key)
+        return {}
+
+
 # Columns in the documents table that we map directly from manifest records.
 _DOCUMENT_COLUMNS = frozenset(
     {
@@ -59,6 +83,7 @@ def ingest_manifests(
     manifest_dir: Path,
     *,
     run_id: str | None = None,
+    parsed_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Read ``*_manifest.jsonl`` files and insert into DuckDB.
 
@@ -97,7 +122,7 @@ def ingest_manifests(
                         )
                         errors += 1
                         continue
-                    ok = _insert_document(conn, record)
+                    ok = _insert_document(conn, record, parsed_dir=parsed_dir)
                     if ok:
                         inserted += 1
                     else:
@@ -124,8 +149,17 @@ def ingest_manifests(
     }
 
 
-def _insert_document(conn: duckdb.DuckDBPyConnection, record: dict) -> bool:
-    """Insert a single document record. Returns True if inserted, False if skipped."""
+def _insert_document(
+    conn: duckdb.DuckDBPyConnection,
+    record: dict,
+    *,
+    parsed_dir: Path | None = None,
+) -> bool:
+    """Insert a single document record. Returns True if inserted, False if skipped.
+
+    If parsed_dir is given and the manifest record lacks parse_tool/page_count,
+    reads them from the corresponding JSONL header in parsed_dir.
+    """
     storage_key = record.get("storage_key")
     if storage_key is None:
         return False
@@ -136,6 +170,15 @@ def _insert_document(conn: duckdb.DuckDBPyConnection, record: dict) -> bool:
     ).fetchone()
     if existing is not None:
         return False
+
+    # Backfill parse_tool/page_count from JSONL header if missing
+    if parsed_dir is not None:
+        needs_backfill = any(record.get(f) is None for f in _JSONL_HEADER_FIELDS)
+        if needs_backfill:
+            header = read_jsonl_header(parsed_dir, storage_key)
+            for field in _JSONL_HEADER_FIELDS:
+                if record.get(field) is None and field in header:
+                    record[field] = header[field]
 
     # Separate known columns from extra metadata
     doc_values: dict[str, Any] = {}
