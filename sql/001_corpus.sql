@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS documents (
     issuer_type     VARCHAR DEFAULT 'sovereign', -- sovereign | quasi-sovereign | corporate
     scope_status    VARCHAR DEFAULT 'in_scope',  -- in_scope | excluded | quarantine
     source_metadata VARCHAR,                     -- JSON blob for source-specific fields
+    source_page_url VARCHAR,                     -- URL to human-facing filing page on source
+    source_page_kind VARCHAR,                    -- filing_index | artifact_html | artifact_pdf | search_page | none
     created_at      TIMESTAMP DEFAULT current_timestamp,
     updated_at      TIMESTAMP DEFAULT current_timestamp
 );
@@ -57,6 +59,9 @@ CREATE TABLE IF NOT EXISTS grep_matches (
 -- Display layers (CLI, views, reports) always show 1-indexed page numbers.
 
 ALTER TABLE grep_matches ADD COLUMN IF NOT EXISTS run_id VARCHAR;
+
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS source_page_url VARCHAR;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS source_page_kind VARCHAR;
 
 CREATE SEQUENCE IF NOT EXISTS pdip_clauses_seq START 1;
 

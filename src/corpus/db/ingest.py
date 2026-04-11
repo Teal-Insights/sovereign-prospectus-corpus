@@ -16,6 +16,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from corpus.sources.provenance import resolve_source_page
+
 if TYPE_CHECKING:
     import duckdb
 
@@ -43,6 +45,8 @@ _DOCUMENT_COLUMNS = frozenset(
         "is_sovereign",
         "issuer_type",
         "scope_status",
+        "source_page_url",
+        "source_page_kind",
     }
 )
 
@@ -152,12 +156,44 @@ def _insert_document(conn: duckdb.DuckDBPyConnection, record: dict) -> bool:
             try:
                 existing_meta = json.loads(existing_meta)
             except json.JSONDecodeError:
+                log.warning(
+                    "Failed to parse source_metadata JSON for storage_key=%s, "
+                    "preserving raw string",
+                    storage_key,
+                )
                 existing_meta = {"_raw_source_metadata": existing_meta}
         if isinstance(existing_meta, dict):
             extra_metadata.update(existing_meta)
 
     if extra_metadata:
-        doc_values["source_metadata"] = json.dumps(extra_metadata)
+        # ensure_ascii=False mirrors the backfill + regenerate scripts so
+        # non-ASCII characters in titles, country names, etc. land as their
+        # native UTF-8 bytes in the DuckDB VARCHAR column rather than as
+        # \uXXXX escape sequences. DuckDB's JSON functions parse both forms
+        # correctly, but human SQL inspection is much easier with the
+        # non-escaped form.
+        doc_values["source_metadata"] = json.dumps(extra_metadata, ensure_ascii=False)
+
+    # Derive provenance URL fields atomically. The pair (source_page_url,
+    # source_page_kind) is "canonical" if BOTH values are present and
+    # non-null — otherwise we re-derive both and overwrite both. This
+    # prevents three failure modes:
+    #   (a) the manifest omits the fields entirely (current source adapters
+    #       don't write them), producing NULL columns on new downloads
+    #   (b) a manifest writes `"source_page_url": null` thinking the
+    #       system will derive it, and the system doesn't
+    #   (c) a manifest has one field but not the other, and a partial
+    #       fallback mixes a manual URL with a derived kind that doesn't
+    #       match it
+    # The resolver is deterministic and idempotent for unknown sources
+    # (returns (None, "none") every time), so re-running this on an
+    # already-null record produces the same output.
+    existing_url = doc_values.get("source_page_url")
+    existing_kind = doc_values.get("source_page_kind")
+    if existing_url is None or existing_kind is None:
+        url, kind = resolve_source_page(record)
+        doc_values["source_page_url"] = url
+        doc_values["source_page_kind"] = kind
 
     # Insert and get the new document_id via RETURNING
     columns = list(doc_values.keys())
