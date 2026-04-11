@@ -58,6 +58,8 @@ ruff → pyright → pytest. No network tests in CI. `typeCheckingMode: "basic"`
 ## 18. Provenance Chain
 `parse_tool` and `parse_version` columns. Grep patterns versioned in config file.
 
+**Update (2026-04-11):** Docling is now the default PDF parser (`config.toml [parser].default = "docling"`). `DoclingParser` uses per-page `export_to_markdown(page_no=N)` with `strip_markdown()` for plain-text JSONL output. PyMuPDF remains available via `get_parser("pymupdf")`. EDGAR HTML/TXT files continue using `HTMLParser`/`PlainTextParser` — Docling does not apply to non-PDF formats.
+
 ## 19. Real-Time Monitoring (Post-Monday)
 Daily cron polling NSM. `source_events` table for dedup.
 
