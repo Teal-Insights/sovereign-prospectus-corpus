@@ -166,7 +166,13 @@ def _insert_document(conn: duckdb.DuckDBPyConnection, record: dict) -> bool:
             extra_metadata.update(existing_meta)
 
     if extra_metadata:
-        doc_values["source_metadata"] = json.dumps(extra_metadata)
+        # ensure_ascii=False mirrors the backfill + regenerate scripts so
+        # non-ASCII characters in titles, country names, etc. land as their
+        # native UTF-8 bytes in the DuckDB VARCHAR column rather than as
+        # \uXXXX escape sequences. DuckDB's JSON functions parse both forms
+        # correctly, but human SQL inspection is much easier with the
+        # non-escaped form.
+        doc_values["source_metadata"] = json.dumps(extra_metadata, ensure_ascii=False)
 
     # Derive provenance URL fields atomically. The pair (source_page_url,
     # source_page_kind) is "canonical" if BOTH values are present and

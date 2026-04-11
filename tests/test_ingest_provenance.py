@@ -259,6 +259,48 @@ def test_ingest_re_derives_on_explicit_null_url(
     assert kind == "filing_index"
 
 
+def test_ingest_writes_source_metadata_as_utf8_not_escaped(
+    tmp_db: duckdb.DuckDBPyConnection, tmp_path: Path
+) -> None:
+    """Non-ASCII characters in source_metadata must land as native UTF-8
+    bytes in the DuckDB VARCHAR column, not as \\uXXXX escape sequences.
+    Mirrors the backfill + regenerate scripts which already use
+    ``ensure_ascii=False``.
+
+    Regression test for a finding from gemini-code-assist on PR #69.
+    """
+    manifest_dir = tmp_path / "manifests"
+    manifest_dir.mkdir()
+    record = {
+        "source": "nsm",
+        "native_id": "cote-divoire-encoding",
+        "storage_key": "nsm__cote-divoire-encoding",
+        "download_url": "https://data.fca.org.uk/artefacts/NSM/RNS/cote.pdf",
+        "source_metadata": {
+            "country": "Côte d'Ivoire",
+            "title": "République de Côte d'Ivoire — Notes",
+        },
+    }
+    (manifest_dir / "nsm_manifest.jsonl").write_text(
+        json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+    ingest_manifests(tmp_db, manifest_dir)
+
+    row = tmp_db.execute(
+        "SELECT source_metadata FROM documents WHERE storage_key = ?",
+        ["nsm__cote-divoire-encoding"],
+    ).fetchone()
+    assert row is not None
+    raw = row[0]
+    # The raw VARCHAR must contain literal "Côte d'Ivoire", not the escaped form.
+    assert "Côte d'Ivoire" in raw
+    assert "C\\u00f4te" not in raw
+    # Sanity: still parseable as JSON.
+    parsed = json.loads(raw)
+    assert parsed["country"] == "Côte d'Ivoire"
+
+
 def test_ingest_preserves_null_pair_for_unknown_source(
     tmp_db: duckdb.DuckDBPyConnection, tmp_path: Path
 ) -> None:
