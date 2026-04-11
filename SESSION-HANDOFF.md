@@ -16,16 +16,24 @@ The March 28 Docling outputs in `data/parsed_docling/` are broken (silently drop
 
 ### Immediate next actions on the Mac Mini
 
-1. **Pull and sync:**
+**First, read `docs/mac-mini-handoff-2026-04-11.md`** — it is the operational setup guide, modeled on the March 29 handoff pattern we learned from the last sprint. Key points: the Mac Mini works in `~/Projects/sovereign-prospectus-corpus`, NOT inside Dropbox; `data/` is a symlink to Dropbox; the Dropbox `data/` folder must be "Available offline" in Finder; each machine works on its own feature branch.
+
+Short version:
+
+1. **On Mac Mini:**
    ```bash
-   cd ~/Dropbox/2026-03_Sovereign-Prospectus-Corpus  # or wherever it lives on Mac Mini
-   git checkout main && git pull --ff-only
-   uv sync --all-extras  # verify canonical venv is healthy
-   uv run python -c "import docling; print(docling.__version__)"  # confirm Docling installed
+   cd ~/Projects/sovereign-prospectus-corpus   # NOT ~/Dropbox — the repo lives in ~/Projects with data/ symlinked
+   git fetch && git checkout main && git pull --ff-only
+   gh pr merge 74 --squash --admin --delete-branch   # merge the handoff PR
+   git pull --ff-only                                 # pick up the squashed commit
+   ls -la data                                        # verify symlink
+   uv sync --all-extras
+   uv run python -c "import docling; print(docling.__version__)"   # confirm Docling
    ```
 
 2. **Read, in order:**
-   - `SESSION-HANDOFF.md` (this file)
+   - `docs/mac-mini-handoff-2026-04-11.md` (operational setup — read FIRST)
+   - `SESSION-HANDOFF.md` (this file — context and decisions)
    - `docs/superpowers/specs/2026-04-11-spring-meetings-sequencing-design.md` (spec v1 — the previous session's first attempt; being rewritten as v2 after the smoke test)
    - `CLAUDE.md` (always, but especially the Environment Setup + NSM Lessons Learned sections)
    - `planning/SPRINT-2026-04-SPRING-MEETINGS.md` (original sprint plan that v1 partially supersedes)
