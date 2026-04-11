@@ -142,15 +142,16 @@ def test_backfill_round_trips_non_ascii_titles(tmp_path: Path) -> None:
     assert parsed["source_page_kind"] == "artifact_pdf"
 
 
-def test_backfill_unknown_source_record_is_idempotent(tmp_path: Path) -> None:
+def test_backfill_unknown_source_record_is_byte_stable(tmp_path: Path) -> None:
     """A record from an unknown source (e.g. future LSE RNS adapter before
-    it has a resolver) gets ``(None, "none")`` on first pass. The second
-    pass must NOT re-update it — the presence of both keys is the idempotency
-    signal, not the truthiness of their values.
+    it has a resolver) gets ``(None, "none")`` from the dispatcher on
+    first pass. Repeated runs must produce byte-identical output — the
+    resolver is deterministic, so re-derivation on subsequent passes
+    writes the same values.
 
-    Regression test for a latent bug where ``if record.get("source_page_url")
-    and record.get("source_page_kind")`` evaluated to False for ``None`` and
-    caused unknown-source records to re-resolve every run.
+    ``records_updated`` counts records whose values actually changed, so
+    the second pass sees 0 updates even though it re-ran the resolver:
+    old == new for unknown sources.
     """
     from scripts.backfill_provenance_urls import backfill_manifests
 
@@ -163,17 +164,92 @@ def test_backfill_unknown_source_record_is_idempotent(tmp_path: Path) -> None:
         "download_url": "https://www.londonstockexchange.com/news-article/future-123",
     }
     manifest_path = manifest_dir / "lse_rns_manifest.jsonl"
-    manifest_path.write_text(json.dumps(record) + "\n")
+    manifest_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
 
     first = backfill_manifests(manifest_dir=manifest_dir)
     assert first["records_updated"] == 1
-    first_rec = json.loads(manifest_path.read_text())
+    first_bytes = manifest_path.read_bytes()
+    first_rec = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert first_rec["source_page_url"] is None
     assert first_rec["source_page_kind"] == "none"
 
     second = backfill_manifests(manifest_dir=manifest_dir)
-    assert second["records_updated"] == 0, (
-        "second pass must treat (None, 'none') as already-resolved"
-    )
-    second_rec = json.loads(manifest_path.read_text())
-    assert second_rec == first_rec
+    # The counter reflects values-changed, not passes-through, so the
+    # second run sees (None, 'none') → (None, 'none') and counts 0.
+    assert second["records_updated"] == 0
+    assert manifest_path.read_bytes() == first_bytes
+
+
+def test_backfill_re_derives_on_partial_key_records(tmp_path: Path) -> None:
+    """A manifest record with only one provenance key present must get
+    both re-derived atomically — partial data is bad input. Regression
+    test for a convergent 3-reviewer finding where the earlier
+    ``if "source_page_url" in record and "source_page_kind" in record``
+    gate was overwriting a manually-set value in the partial case while
+    leaving it alone in the present-both case (inconsistent).
+    """
+    from scripts.backfill_provenance_urls import backfill_manifests
+
+    manifest_dir = tmp_path / "manifests"
+    manifest_dir.mkdir()
+    # URL only, no kind
+    record_url_only = {
+        "source": "edgar",
+        "native_id": "partial-url",
+        "storage_key": "edgar__partial-url",
+        "source_metadata": {
+            "cik": "0000914021",
+            "accession_number": "0001193125-20-188103",
+        },
+        "source_page_url": "https://example.com/manual-bad-input",
+    }
+    # Kind only, no URL
+    record_kind_only = {
+        "source": "nsm",
+        "native_id": "partial-kind",
+        "storage_key": "nsm__partial-kind",
+        "download_url": "https://data.fca.org.uk/artefacts/NSM/RNS/abc.pdf",
+        "source_page_kind": "filing_index",  # wrong for NSM
+    }
+    edgar_path = manifest_dir / "edgar_manifest.jsonl"
+    edgar_path.write_text(json.dumps(record_url_only) + "\n", encoding="utf-8")
+    nsm_path = manifest_dir / "nsm_manifest.jsonl"
+    nsm_path.write_text(json.dumps(record_kind_only) + "\n", encoding="utf-8")
+
+    backfill_manifests(manifest_dir=manifest_dir)
+
+    edgar_rec = json.loads(edgar_path.read_text(encoding="utf-8"))
+    # The bogus manual URL is replaced by the derived one.
+    assert "914021" in edgar_rec["source_page_url"]
+    assert edgar_rec["source_page_url"] != "https://example.com/manual-bad-input"
+    assert edgar_rec["source_page_kind"] == "filing_index"
+
+    nsm_rec = json.loads(nsm_path.read_text(encoding="utf-8"))
+    # The bogus manual kind is replaced by the derived one.
+    assert nsm_rec["source_page_url"] == "https://data.fca.org.uk/artefacts/NSM/RNS/abc.pdf"
+    assert nsm_rec["source_page_kind"] == "artifact_pdf"
+
+
+def test_backfill_re_derives_on_explicit_null(tmp_path: Path) -> None:
+    """A manifest with both keys present but one set to null must still
+    trigger re-derivation. "Canonical" = both present AND non-null."""
+    from scripts.backfill_provenance_urls import backfill_manifests
+
+    manifest_dir = tmp_path / "manifests"
+    manifest_dir.mkdir()
+    record = {
+        "source": "nsm",
+        "native_id": "null-url",
+        "storage_key": "nsm__null-url",
+        "download_url": "https://data.fca.org.uk/artefacts/NSM/RNS/null-url.pdf",
+        "source_page_url": None,
+        "source_page_kind": "artifact_pdf",
+    }
+    manifest_path = manifest_dir / "nsm_manifest.jsonl"
+    manifest_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+    backfill_manifests(manifest_dir=manifest_dir)
+
+    result = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert result["source_page_url"] == ("https://data.fca.org.uk/artefacts/NSM/RNS/null-url.pdf")
+    assert result["source_page_kind"] == "artifact_pdf"

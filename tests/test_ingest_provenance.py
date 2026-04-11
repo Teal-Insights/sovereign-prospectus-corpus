@@ -151,3 +151,138 @@ def test_ingest_respects_manifest_values_when_both_keys_present(
     ).fetchone()
     assert row is not None
     assert row[0] == "https://example.com/manually-set"
+
+
+def test_ingest_re_derives_when_only_url_is_present(
+    tmp_db: duckdb.DuckDBPyConnection, tmp_path: Path
+) -> None:
+    """Partial-key manifest: URL set, kind missing. The pair is atomic —
+    we re-derive both fields rather than mix a manual URL with a derived
+    kind. The manually-set URL is intentionally lost because a partial
+    record is bad input.
+
+    Regression test for a convergent finding across 3 external reviewers
+    (pre-merge round): 'setdefault' was letting the manual URL survive
+    while the kind got derived, producing potentially mismatched pairs.
+    """
+    manifest_dir = tmp_path / "manifests"
+    manifest_dir.mkdir()
+    record = {
+        "source": "edgar",
+        "native_id": "partial-url",
+        "storage_key": "edgar__partial-url",
+        "source_metadata": {
+            "cik": "0000914021",
+            "accession_number": "0001193125-20-188103",
+        },
+        "source_page_url": "https://example.com/only-url-manually-set",
+        # source_page_kind deliberately absent
+    }
+    (manifest_dir / "edgar_manifest.jsonl").write_text(json.dumps(record) + "\n")
+
+    ingest_manifests(tmp_db, manifest_dir)
+
+    row = tmp_db.execute(
+        "SELECT source_page_url, source_page_kind FROM documents WHERE storage_key = ?",
+        ["edgar__partial-url"],
+    ).fetchone()
+    assert row is not None
+    url, kind = row
+    # The resolver's output overrides both fields atomically.
+    assert "914021" in url
+    assert kind == "filing_index"
+
+
+def test_ingest_re_derives_when_only_kind_is_present(
+    tmp_db: duckdb.DuckDBPyConnection, tmp_path: Path
+) -> None:
+    """Mirror of the URL-only case: kind set, URL missing. Same atomic
+    rule — re-derive both from the source_metadata."""
+    manifest_dir = tmp_path / "manifests"
+    manifest_dir.mkdir()
+    record = {
+        "source": "edgar",
+        "native_id": "partial-kind",
+        "storage_key": "edgar__partial-kind",
+        "source_metadata": {
+            "cik": "0000914021",
+            "accession_number": "0001193125-20-188103",
+        },
+        "source_page_kind": "search_page",  # wrong for EDGAR, manual bad input
+        # source_page_url deliberately absent
+    }
+    (manifest_dir / "edgar_manifest.jsonl").write_text(json.dumps(record) + "\n")
+
+    ingest_manifests(tmp_db, manifest_dir)
+
+    row = tmp_db.execute(
+        "SELECT source_page_url, source_page_kind FROM documents WHERE storage_key = ?",
+        ["edgar__partial-kind"],
+    ).fetchone()
+    assert row is not None
+    url, kind = row
+    assert "914021" in url
+    assert kind == "filing_index"  # wrong manual kind overwritten
+
+
+def test_ingest_re_derives_on_explicit_null_url(
+    tmp_db: duckdb.DuckDBPyConnection, tmp_path: Path
+) -> None:
+    """A manifest that writes `"source_page_url": null` (both keys present
+    but URL is null) must still trigger re-derivation. Earlier draft used
+    key-presence as the gate, which let explicit null slip through."""
+    manifest_dir = tmp_path / "manifests"
+    manifest_dir.mkdir()
+    record = {
+        "source": "edgar",
+        "native_id": "null-url",
+        "storage_key": "edgar__null-url",
+        "source_metadata": {
+            "cik": "0000914021",
+            "accession_number": "0001193125-20-188103",
+        },
+        "source_page_url": None,
+        "source_page_kind": "filing_index",
+    }
+    (manifest_dir / "edgar_manifest.jsonl").write_text(json.dumps(record) + "\n")
+
+    ingest_manifests(tmp_db, manifest_dir)
+
+    row = tmp_db.execute(
+        "SELECT source_page_url, source_page_kind FROM documents WHERE storage_key = ?",
+        ["edgar__null-url"],
+    ).fetchone()
+    assert row is not None
+    url, kind = row
+    assert url is not None
+    assert "914021" in url
+    assert kind == "filing_index"
+
+
+def test_ingest_preserves_null_pair_for_unknown_source(
+    tmp_db: duckdb.DuckDBPyConnection, tmp_path: Path
+) -> None:
+    """An unknown-source record with (null URL, 'none' kind) must round
+    trip unchanged — the resolver returns (None, 'none') for unknown
+    sources, so re-derivation is idempotent."""
+    manifest_dir = tmp_path / "manifests"
+    manifest_dir.mkdir()
+    record = {
+        "source": "lse_rns",  # no resolver registered
+        "native_id": "future-42",
+        "storage_key": "lse_rns__future-42",
+        "download_url": "https://www.londonstockexchange.com/future-42",
+        "source_page_url": None,
+        "source_page_kind": "none",
+    }
+    (manifest_dir / "lse_rns_manifest.jsonl").write_text(json.dumps(record) + "\n")
+
+    ingest_manifests(tmp_db, manifest_dir)
+
+    row = tmp_db.execute(
+        "SELECT source_page_url, source_page_kind FROM documents WHERE storage_key = ?",
+        ["lse_rns__future-42"],
+    ).fetchone()
+    assert row is not None
+    assert row[0] is None
+    assert row[1] == "none"

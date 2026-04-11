@@ -51,7 +51,7 @@ actually fits the task:
 
 - [ ] `uv run ruff check src/ tests/` — no lint errors
 - [ ] `uv run ruff format --check src/ tests/` — formatting OK
-- [ ] `uv run pyright src/corpus/` — no type errors
+- [ ] `uv run pyright src/ tests/` — match what `.github/workflows/ci.yml` runs (there are pre-existing errors in `verify.py` and `test_verify.py` tracked separately; fix any NEW errors introduced by the current task)
 - [ ] `uv run pytest -v` — all tests pass
 - [ ] Actually run the pipeline/command end-to-end (not just tests)
 - [ ] Use `superpowers:verification-before-completion`
