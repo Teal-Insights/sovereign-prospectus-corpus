@@ -168,10 +168,7 @@ def process_one_pdf(args: tuple[str, str]) -> dict:
             parse_status = "parse_empty"
         else:
             thin_pages = sum(1 for t in pages_text.values() if len(t) < 50)
-            if thin_pages > page_count * 0.5:
-                parse_status = "parse_partial"
-            else:
-                parse_status = "parse_ok"
+            parse_status = "parse_partial" if thin_pages > page_count * 0.5 else "parse_ok"
 
         # Write markdown sidecar (atomic)
         md_path = OUTPUT_DIR / f"{storage_key}.md"

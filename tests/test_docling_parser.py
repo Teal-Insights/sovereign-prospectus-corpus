@@ -30,8 +30,8 @@ def test_parse_returns_parse_result():
     mock_result = MagicMock()
     mock_result.document = mock_doc
 
-    with patch("docling.document_converter.DocumentConverter") as MockConverter:
-        MockConverter.return_value.convert.return_value = mock_result
+    with patch("docling.document_converter.DocumentConverter") as mock_converter:
+        mock_converter.return_value.convert.return_value = mock_result
         parser = DoclingParser()
         result = parser.parse(MagicMock())
 
@@ -63,8 +63,8 @@ def test_parse_empty_pdf():
     mock_result = MagicMock()
     mock_result.document = mock_doc
 
-    with patch("docling.document_converter.DocumentConverter") as MockConverter:
-        MockConverter.return_value.convert.return_value = mock_result
+    with patch("docling.document_converter.DocumentConverter") as mock_converter:
+        mock_converter.return_value.convert.return_value = mock_result
         parser = DoclingParser()
         result = parser.parse(MagicMock())
 

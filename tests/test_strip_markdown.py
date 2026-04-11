@@ -1,4 +1,5 @@
 """Tests for strip_markdown — must preserve table content as plain text."""
+
 from __future__ import annotations
 
 from corpus.parsers.markdown import strip_markdown
@@ -48,4 +49,7 @@ def test_empty_string():
 
 
 def test_image_placeholders_removed():
-    assert strip_markdown("Text before\n<!-- image -->\nText after").strip() == "Text before\n\nText after"
+    assert (
+        strip_markdown("Text before\n<!-- image -->\nText after").strip()
+        == "Text before\n\nText after"
+    )

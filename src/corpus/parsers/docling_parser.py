@@ -8,10 +8,13 @@ in result.metadata["markdown"] for the Streamlit detail panel.
 from __future__ import annotations
 
 from importlib.metadata import version as pkg_version
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from corpus.parsers.base import ParseResult
 from corpus.parsers.markdown import strip_markdown
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class DoclingParser:
