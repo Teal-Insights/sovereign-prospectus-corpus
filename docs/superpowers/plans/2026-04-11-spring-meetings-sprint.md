@@ -410,12 +410,24 @@ default = "docling"
 Run: `uv run pytest tests/test_docling_parser.py -v`
 Expected: all PASS
 
-- [ ] **Step 7: Run existing parser tests to check no regressions**
+- [ ] **Step 7: Fix existing parser default test**
+
+The config flip breaks `tests/test_parsers.py::test_get_parser_default_returns_pymupdf` — it asserts `PyMuPDFParser` but `get_parser()` now returns `DoclingParser`. Update the test:
+
+```python
+# In tests/test_parsers.py, find test_get_parser_default_returns_pymupdf and replace with:
+def test_get_parser_default_returns_docling() -> None:
+    from corpus.parsers.docling_parser import DoclingParser
+    parser = get_parser()
+    assert isinstance(parser, DoclingParser)
+```
+
+- [ ] **Step 8: Run existing parser tests to verify all pass**
 
 Run: `uv run pytest tests/test_parsers.py -v`
-Expected: all PASS
+Expected: all PASS (including the renamed test)
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/corpus/parsers/registry.py src/corpus/parsers/__init__.py config.toml
@@ -522,16 +534,14 @@ def discover_pdfs() -> list[tuple[str, Path]]:
 
 - [ ] **Step 3: Fix `strip_markdown()` — use the shared utility**
 
-Replace the inline `strip_markdown()` function in the script with an import:
+Replace the inline `strip_markdown()` function in the script with an import. Since `uv run` creates an editable install, `import corpus` already works — no `sys.path` hack needed:
 
 ```python
-# At the top of the file, add:
-import sys
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
+# At the top of the file, with the other imports:
 from corpus.parsers.markdown import strip_markdown
 ```
 
-Delete the old inline `strip_markdown()` function from the script.
+Delete the old inline `strip_markdown()` function from the script. Do NOT add any `sys.path.insert` — `uv run` handles the path automatically.
 
 - [ ] **Step 4: Fix `process_one_pdf()` — per-page markdown export + JSONL contract**
 
@@ -578,6 +588,17 @@ def process_one_pdf(args: tuple[str, str]) -> dict:
         elapsed = time.monotonic() - start
         docling_version = pkg_version("docling")
 
+        # Determine parse_status using the same heuristic as cli.py:700-711
+        total_chars = sum(len(t) for t in pages_text.values())
+        if page_count == 0 or total_chars == 0:
+            parse_status = "parse_empty"
+        else:
+            thin_pages = sum(1 for t in pages_text.values() if len(t) < 50)
+            if thin_pages > page_count * 0.5:
+                parse_status = "parse_partial"
+            else:
+                parse_status = "parse_ok"
+
         # Write markdown sidecar (atomic)
         md_path = OUTPUT_DIR / f"{storage_key}.md"
         md_part = md_path.with_suffix(".md.part")
@@ -593,7 +614,7 @@ def process_one_pdf(args: tuple[str, str]) -> dict:
                 "page_count": page_count,
                 "parse_tool": "docling",
                 "parse_version": docling_version,
-                "parse_status": "parse_ok" if page_count > 0 else "parse_empty",
+                "parse_status": parse_status,
                 "parsed_at": datetime.now(UTC).isoformat(),
             }
             f.write(json.dumps(header) + "\n")
@@ -1015,7 +1036,7 @@ if parsed_dir is not None:
         with jsonl_path.open() as jf:
             first_line = jf.readline().strip()
             if first_line:
-                header = _json.loads(first_line)
+                header = json.loads(first_line)
                 if "parse_tool" in header:
                     record["parse_tool"] = header["parse_tool"]
                 if "page_count" in header:
@@ -1039,6 +1060,61 @@ Expected: all PASS (the new parameter is optional, so existing calls are unaffec
 ```bash
 git add src/corpus/db/ingest.py tests/test_ingest_parse_fields.py
 git commit -m "feat: ingest reads parse_tool + page_count from JSONL headers"
+```
+
+- [ ] **Step 7: Wire `--parsed-dir` into the CLI ingest command**
+
+In `src/corpus/cli.py`, find the existing `ingest` command and add the `--parsed-dir` option:
+
+```python
+@cli.command()
+@click.option(
+    "--manifest-dir",
+    type=click.Path(path_type=Path),
+    default="data/manifests",
+    help="Directory containing *_manifest.jsonl files.",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(path_type=Path),
+    default="data/db/corpus.duckdb",
+    help="Path to the DuckDB database file.",
+)
+@click.option(
+    "--parsed-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Directory containing parsed *.jsonl files. If provided, reads parse_tool + page_count from JSONL headers.",
+)
+@click.option("--run-id", default=None, help="Pipeline run identifier.")
+def ingest(manifest_dir: Path, db_path: Path, parsed_dir: Path | None, run_id: str | None) -> None:
+    """Load JSONL manifests into DuckDB (serial, single-writer)."""
+```
+
+In the body, pass `parsed_dir` through:
+
+```python
+    # Resolve parsed_dir if provided
+    resolved_parsed_dir = None
+    if parsed_dir is not None:
+        resolved_parsed_dir = _PROJECT_ROOT / parsed_dir if not parsed_dir.is_absolute() else parsed_dir
+
+    stats = ingest_manifests(conn, manifest_dir, run_id=run_id, parsed_dir=resolved_parsed_dir)
+```
+
+- [ ] **Step 8: Verify CLI loads**
+
+```bash
+uv run corpus ingest --help
+```
+
+Expected: shows `--parsed-dir` option.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add src/corpus/cli.py
+git commit -m "feat: wire --parsed-dir into corpus ingest CLI command"
 ```
 
 ---
@@ -1242,16 +1318,15 @@ def test_fts_search(tmp_path: Path):
     build_pages(conn, parsed_dir)
     create_fts_index(conn)
 
+    # DuckDB FTS: fts_main_<table>.match_bm25(id_col, query) returns score
     results = conn.execute("""
-        SELECT dp.page_text, fts.score
-        FROM (SELECT *, fts_main_document_pages.match_bm25(page_id, 'collective action') AS score
-              FROM document_pages) dp
-        JOIN fts_main_document_pages fts ON dp.page_id = fts.page_id
+        SELECT page_text, fts_main_document_pages.match_bm25(page_id, 'collective action') AS score
+        FROM document_pages
         WHERE score IS NOT NULL
         ORDER BY score DESC
     """).fetchall()
-    # DuckDB FTS syntax varies; adjust if needed during implementation
     assert len(results) >= 1
+    assert "collective" in results[0][0].lower()
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1319,13 +1394,13 @@ def create_fts_index(conn: duckdb.DuckDBPyConnection) -> None:
     """Create DuckDB full-text search index on document_pages."""
     conn.execute("INSTALL fts")
     conn.execute("LOAD fts")
-    # Drop existing index if any
+    # Drop existing FTS index if any (DuckDB FTS uses PRAGMA, not DROP INDEX)
     try:
-        conn.execute("DROP INDEX IF EXISTS fts_main_document_pages")
+        conn.execute("PRAGMA drop_fts_index('document_pages')")
     except Exception:
-        pass
+        pass  # No existing index to drop
     conn.execute(
-        "PRAGMA create_fts_index('document_pages', 'page_id', 'page_text', stemmer='porter')"
+        "PRAGMA create_fts_index('document_pages', 'page_id', 'page_text', stemmer='porter', overwrite=1)"
     )
 ```
 
@@ -1375,7 +1450,7 @@ def publish_to_motherduck(
         "grep_matches",
     ),
 ) -> dict[str, int]:
-    """Copy tables from local DuckDB to MotherDuck.
+    """Copy tables from local DuckDB to MotherDuck using ATTACH (no pandas, no OOM).
 
     Requires MOTHERDUCK_TOKEN environment variable.
     Returns dict of table_name → row_count.
@@ -1384,24 +1459,24 @@ def publish_to_motherduck(
     if not token:
         raise RuntimeError("MOTHERDUCK_TOKEN environment variable is required")
 
-    local_conn = duckdb.connect(str(local_db_path), read_only=True)
+    # Connect to MotherDuck, then ATTACH local DB — streams data directly
     md_conn = duckdb.connect(
         f"md:{motherduck_db}",
         config={"motherduck_token": token},
     )
+    md_conn.execute(f"ATTACH '{local_db_path}' AS local_db (READ_ONLY)")
 
     stats: dict[str, int] = {}
 
     for table in tables:
         # Check table exists locally
-        exists = local_conn.execute(
-            f"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{table}'"
+        exists = md_conn.execute(
+            f"SELECT COUNT(*) FROM local_db.information_schema.tables WHERE table_name = '{table}'"
         ).fetchone()
         if not exists or exists[0] == 0:
             continue
 
-        df = local_conn.execute(f"SELECT * FROM {table}").fetchdf()
-        md_conn.execute(f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM df")
+        md_conn.execute(f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM local_db.{table}")
         count = md_conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
         stats[table] = count[0] if count else 0
 
@@ -1410,12 +1485,12 @@ def publish_to_motherduck(
         md_conn.execute("INSTALL fts")
         md_conn.execute("LOAD fts")
         md_conn.execute(
-            "PRAGMA create_fts_index('document_pages', 'page_id', 'page_text', stemmer='porter')"
+            "PRAGMA create_fts_index('document_pages', 'page_id', 'page_text', stemmer='porter', overwrite=1)"
         )
     except Exception:
         pass  # FTS may not be available on MotherDuck free tier
 
-    local_conn.close()
+    md_conn.execute("DETACH local_db")
     md_conn.close()
 
     return stats
@@ -1629,23 +1704,47 @@ def main() -> None:
 
     # --- Build results query ---
     if search_query:
-        # FTS search via document_pages
-        results = conn.execute("""
-            SELECT DISTINCT
-                d.document_id,
-                d.source,
-                d.title,
-                d.issuer_name,
-                d.publication_date,
-                d.doc_type,
-                d.page_count
-            FROM documents d
-            JOIN document_pages dp ON d.document_id = dp.document_id
-            WHERE dp.page_text ILIKE ?
-              AND d.source IN (SELECT UNNEST(?::VARCHAR[]))
-            ORDER BY d.publication_date DESC NULLS LAST
-            LIMIT 200
-        """, [f"%{search_query}%", selected_sources]).fetchdf()
+        # FTS search via DuckDB full-text search index (match_bm25)
+        # Falls back to ILIKE if FTS is not available (e.g., index not built)
+        try:
+            results = conn.execute("""
+                SELECT DISTINCT
+                    d.document_id,
+                    d.source,
+                    d.title,
+                    d.issuer_name,
+                    d.publication_date,
+                    d.doc_type,
+                    d.page_count
+                FROM documents d
+                JOIN (
+                    SELECT document_id,
+                           fts_main_document_pages.match_bm25(page_id, ?) AS score
+                    FROM document_pages
+                    WHERE score IS NOT NULL
+                ) dp ON d.document_id = dp.document_id
+                WHERE d.source IN (SELECT UNNEST(?::VARCHAR[]))
+                ORDER BY d.publication_date DESC NULLS LAST
+                LIMIT 200
+            """, [search_query, selected_sources]).fetchdf()
+        except Exception:
+            # Fallback to ILIKE if FTS index doesn't exist
+            results = conn.execute("""
+                SELECT DISTINCT
+                    d.document_id,
+                    d.source,
+                    d.title,
+                    d.issuer_name,
+                    d.publication_date,
+                    d.doc_type,
+                    d.page_count
+                FROM documents d
+                JOIN document_pages dp ON d.document_id = dp.document_id
+                WHERE dp.page_text ILIKE ?
+                  AND d.source IN (SELECT UNNEST(?::VARCHAR[]))
+                ORDER BY d.publication_date DESC NULLS LAST
+                LIMIT 200
+            """, [f"%{search_query}%", selected_sources]).fetchdf()
     else:
         where_clauses = ["d.source IN (SELECT UNNEST(?::VARCHAR[]))"]
         params_list: list = [selected_sources]
@@ -1820,8 +1919,11 @@ Sunday morning:
   Task 9: Run promote_parsed_dir.py
   Task 10: Ingest with parse_tool + page_count
   Tasks 11-14: markdown ingest, pages, FTS, MotherDuck publish
+  (grep rerun and ingest are now in the detailed section below)
+
+  Clean stale grep: uv run python -c "import duckdb; c=duckdb.connect('data/db/corpus.duckdb'); c.execute('DELETE FROM grep_matches'); print('Cleared', c.fetchone())"
   Re-run: corpus grep run --run-id grep-docling
-  Re-run: corpus ingest (to rebuild documents table)
+  Re-run: corpus ingest --parsed-dir data/parsed --run-id ingest-docling
 
 Sunday afternoon:
   Task 15-16: Streamlit explorer + deploy
