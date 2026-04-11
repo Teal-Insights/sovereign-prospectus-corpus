@@ -173,13 +173,20 @@ def process_one_pdf(args: tuple[str, str]) -> dict:
         elapsed = time.monotonic() - start
         docling_version = pkg_version("docling")
 
-        # Determine parse_status using the same heuristic as cli.py
-        total_chars = sum(len(t) for t in pages_text.values())
+        # Determine parse_status — must match cli.py:830 logic exactly
+        stripped_lengths = [len(t.strip()) for t in pages_text.values()]
+        total_chars = sum(stripped_lengths)
         if page_count == 0 or total_chars == 0:
             parse_status = "parse_empty"
         else:
-            thin_pages = sum(1 for t in pages_text.values() if len(t) < 50)
-            parse_status = "parse_partial" if thin_pages > page_count * 0.5 else "parse_ok"
+            empty_pages = sum(1 for sl in stripped_lengths if sl < 50)
+            parse_status = (
+                "parse_empty"
+                if empty_pages == page_count
+                else "parse_partial"
+                if empty_pages > page_count * 0.5
+                else "parse_ok"
+            )
 
         # Write markdown sidecar (atomic)
         md_path = OUTPUT_DIR / f"{storage_key}.md"

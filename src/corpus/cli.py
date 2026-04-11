@@ -402,8 +402,10 @@ def luxse(
         f"(of {stats['total_in_discovery']} in discovery)."
     )
     if stats["aborted"]:
-        click.echo("WARNING: Download aborted due to too many failures.")
+        click.echo("ERROR: Download aborted due to too many failures.", err=True)
     click.echo(f"Report: {report_path}")
+    if stats["aborted"]:
+        raise SystemExit(1)
 
 
 # ── Discover group ─────────────────────────────────────────────────
@@ -1263,8 +1265,10 @@ def build_pages_cmd(db_path: Path, parsed_dir: Path) -> None:
     import duckdb
 
     from corpus.db.pages import build_pages, create_fts_index
+    from corpus.db.schema import create_schema
 
     with duckdb.connect(str(db_path)) as conn:
+        create_schema(conn)
         click.echo("Building document_pages...")
         stats = build_pages(conn, parsed_dir)
         click.echo(
@@ -1296,8 +1300,10 @@ def build_markdown_cmd(db_path: Path, parsed_dir: Path) -> None:
     import duckdb
 
     from corpus.db.markdown import build_markdown
+    from corpus.db.schema import create_schema
 
     with duckdb.connect(str(db_path)) as conn:
+        create_schema(conn)
         stats = build_markdown(conn, parsed_dir)
         click.echo(
             f"Markdown: {stats['inserted']} inserted, "

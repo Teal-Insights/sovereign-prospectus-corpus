@@ -78,7 +78,7 @@ def test_discover_deduplicates(tmp_path: Path):
         delay=0,
     )
 
-    # 6 sovereign patterns, all return the same doc → only 1 unique
+    # All sovereign patterns return the same doc → only 1 unique
     assert stats["unique_filings"] == 1
     lines = output.read_text().strip().split("\n")
     assert len(lines) == 1

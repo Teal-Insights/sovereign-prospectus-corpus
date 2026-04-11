@@ -32,6 +32,7 @@ _SOVEREIGN_PATTERNS = [
     "Government",
     "Sultanate",
     "Emirate",
+    "State",
 ]
 
 _DOCUMENT_QUERY = """\
@@ -220,6 +221,11 @@ def download_luxse_document(
     if resp.status_code != 200:
         return None, "failed_http"
 
+    # dl.luxse.com returns 302 → 200 HTML page when rate-limited.
+    # Detect via final URL or content — don't count as a failure.
+    if "download-limit-reached" in resp.url:
+        return None, "rate_limited"
+
     content = resp.content
     if not content.startswith(PDF_HEADER):
         return None, "failed_invalid_pdf"
@@ -298,6 +304,13 @@ def run_luxse_download(
             logger.log(
                 document_id=doc_id, step="download", duration_ms=elapsed_ms, status="success"
             )
+        elif dl_status == "rate_limited":
+            stats["skipped"] += 1
+            logger.log(
+                document_id=doc_id, step="download", duration_ms=elapsed_ms, status="rate_limited"
+            )
+            time.sleep(60)  # Back off on rate limit
+            continue
         elif dl_status.startswith("skipped"):
             stats["skipped"] += 1
         elif dl_status != "error":
