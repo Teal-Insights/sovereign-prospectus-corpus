@@ -107,6 +107,23 @@ Build a structured, searchable corpus of sovereign bond prospectuses that surfac
 
 Full rationale: `docs/RATIFIED-DECISIONS.md`
 
+## Environment setup (Dropbox + uv)
+
+The project lives inside Dropbox, which doesn't play well with venv directories (file locks, partial sync, performance). The canonical project venv lives **outside** Dropbox at `~/.local/venvs/sovereign-corpus`, configured via `~/.zshrc`:
+
+```bash
+export UV_PROJECT_ENVIRONMENT=~/.local/venvs/sovereign-corpus
+```
+
+**Do not create `.venv/` in the project root.** A stray `.venv/` will collide with `UV_PROJECT_ENVIRONMENT` and uv will warn `VIRTUAL_ENV does not match the project environment path... will be ignored`. If you see that warning, it means something put a `.venv/` in the project root and/or activated it. Fix: `rm -rf .venv && unset VIRTUAL_ENV` (or open a new terminal). Never `python -m venv .venv` in this repo, and never `source .venv/bin/activate` for it.
+
+To verify the canonical venv is healthy:
+```bash
+uv run python -c "import sys, duckdb, polars, pytest; print(sys.executable, duckdb.__version__, polars.__version__, pytest.__version__)"
+```
+
+If anything is missing, run `uv sync --all-extras` to repopulate.
+
 ## Lessons Learned from NSM Adapter (March 26, 2026)
 
 These patterns were validated during the NSM source adapter build and should be followed for EDGAR/PDIP:
