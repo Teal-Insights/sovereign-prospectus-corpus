@@ -109,12 +109,22 @@ def discover_pdfs() -> list[tuple[str, Path]]:
 
 
 def filter_already_done(pdfs: list[tuple[str, Path]]) -> list[tuple[str, Path]]:
-    """Skip PDFs that already have completed output (resume support)."""
+    """Skip PDFs that already have completed output (resume support).
+
+    Both .jsonl AND .md must exist — if one is missing (crash between
+    the two atomic writes), the document is re-processed.
+    """
     remaining: list[tuple[str, Path]] = []
     for storage_key, pdf_path in pdfs:
         output_jsonl = OUTPUT_DIR / f"{storage_key}.jsonl"
-        if output_jsonl.exists() and output_jsonl.stat().st_size > 0:
-            continue  # Already done
+        output_md = OUTPUT_DIR / f"{storage_key}.md"
+        if (
+            output_jsonl.exists()
+            and output_jsonl.stat().st_size > 0
+            and output_md.exists()
+            and output_md.stat().st_size > 0
+        ):
+            continue  # Both outputs present
         remaining.append((storage_key, pdf_path))
     return remaining
 
@@ -403,7 +413,7 @@ def write_progress(result: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Docling PDF re-parse")
     parser.add_argument("--workers", type=int, default=4, help="Number of worker processes")
-    parser.add_argument("--timeout", type=int, default=300, help="Per-document timeout in seconds")
+    parser.add_argument("--timeout", type=int, default=600, help="Per-document timeout in seconds")
     parser.add_argument("--limit", type=int, default=None, help="Max documents to process")
     args = parser.parse_args()
 
@@ -417,6 +427,19 @@ def main() -> None:
     logging.info("  Workers: %d", args.workers)
     logging.info("  Timeout: %ds", args.timeout)
     logging.info("  Output: %s", OUTPUT_DIR)
+
+    # Pre-flight checks
+    usage = shutil.disk_usage(str(PROJECT_ROOT))
+    free_gb = usage.free / (1024**3)
+    logging.info("  Disk free: %.1f GB", free_gb)
+    if free_gb < 5.0:
+        logging.error("Less than 5 GB free disk space. Aborting.")
+        sys.exit(1)
+
+    # Clean up stale .part files from previous crashed runs
+    for part_file in OUTPUT_DIR.glob("*.part"):
+        logging.warning("Removing stale .part file: %s", part_file.name)
+        part_file.unlink()
 
     # Discover and filter
     all_pdfs = discover_pdfs()
