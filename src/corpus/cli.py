@@ -1245,6 +1245,90 @@ def ingest(manifest_dir: Path, db_path: Path, run_id: str | None, parsed_dir: Pa
     )
 
 
+@cli.command("build-pages")
+@click.option(
+    "--db-path",
+    type=click.Path(path_type=Path),
+    default="data/db/corpus.duckdb",
+    help="Path to the DuckDB database file.",
+)
+@click.option(
+    "--parsed-dir",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/parsed",
+    help="Directory containing parsed JSONL files.",
+)
+def build_pages_cmd(db_path: Path, parsed_dir: Path) -> None:
+    """Build document_pages table and FTS index from parsed JSONL files."""
+    import duckdb
+
+    from corpus.db.pages import build_pages, create_fts_index
+
+    with duckdb.connect(str(db_path)) as conn:
+        click.echo("Building document_pages...")
+        stats = build_pages(conn, parsed_dir)
+        click.echo(
+            f"Pages: {stats['pages_inserted']} inserted, "
+            f"{stats['files_processed']} files processed, "
+            f"{stats['files_skipped']} skipped."
+        )
+
+        click.echo("Creating FTS index...")
+        create_fts_index(conn)
+        click.echo("FTS index ready.")
+
+
+@cli.command("build-markdown")
+@click.option(
+    "--db-path",
+    type=click.Path(path_type=Path),
+    default="data/db/corpus.duckdb",
+    help="Path to the DuckDB database file.",
+)
+@click.option(
+    "--parsed-dir",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/parsed",
+    help="Directory containing .md sidecar files.",
+)
+def build_markdown_cmd(db_path: Path, parsed_dir: Path) -> None:
+    """Load .md files into document_markdown table for the Streamlit detail panel."""
+    import duckdb
+
+    from corpus.db.markdown import build_markdown
+
+    with duckdb.connect(str(db_path)) as conn:
+        stats = build_markdown(conn, parsed_dir)
+        click.echo(
+            f"Markdown: {stats['inserted']} inserted, "
+            f"{stats['skipped']} skipped, "
+            f"{stats['no_document']} no matching document."
+        )
+
+
+@cli.command("publish-motherduck")
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/db/corpus.duckdb",
+    help="Path to the local DuckDB database file.",
+)
+@click.option(
+    "--remote-db",
+    default="sovereign_corpus",
+    help="MotherDuck database name.",
+)
+def publish_motherduck_cmd(db_path: Path, remote_db: str) -> None:
+    """Publish local DuckDB tables to MotherDuck cloud."""
+    from corpus.db.publish import publish_to_motherduck
+
+    click.echo(f"Publishing to MotherDuck ({remote_db})...")
+    stats = publish_to_motherduck(db_path, remote_db=remote_db)
+    click.echo(f"Published {stats['tables_published']} tables:")
+    for table, rows in stats["table_rows"].items():
+        click.echo(f"  {table}: {rows:,} rows")
+
+
 # ── Status command ─────────────────────────────────────────────────
 
 
