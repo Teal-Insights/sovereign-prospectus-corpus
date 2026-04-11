@@ -27,12 +27,11 @@ DOWNLOAD_BASE_URL = "https://dl.luxse.com/dl?v="
 PDF_HEADER = b"%PDF"
 
 _SOVEREIGN_PATTERNS = [
-    "Republic of",
-    "Kingdom of",
-    "Government of",
-    "State of",
-    "Emirate of",
-    "Sultanate of",
+    "Republic",
+    "Kingdom",
+    "Government",
+    "Sultanate",
+    "Emirate",
 ]
 
 _DOCUMENT_QUERY = """\
@@ -82,21 +81,29 @@ def query_luxse_documents(
     size: int = 100,
     graphql_endpoint: str = GRAPHQL_ENDPOINT,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Query LuxSE GraphQL for documents. Returns (documents, total_hits)."""
-    payload = {
-        "query": _DOCUMENT_QUERY,
-        "variables": {"term": search_term, "size": size, "page": page},
-    }
-    resp = client.post(graphql_endpoint, json=payload)
-    data = resp.json()
+    """Query LuxSE GraphQL for documents. Returns (documents, total_hits).
 
-    if "errors" in data:
-        raise RuntimeError(f"GraphQL error: {data['errors']}")
+    Some documents have null non-nullable fields (publishDate) which causes
+    GraphQL errors. On error, retries with smaller page size to skip bad records.
+    """
+    for attempt_size in [size, size // 2, size // 4]:
+        if attempt_size < 1:
+            attempt_size = 1
+        payload = {
+            "query": _DOCUMENT_QUERY,
+            "variables": {"term": search_term, "size": attempt_size, "page": page},
+        }
+        resp = client.post(graphql_endpoint, json=payload)
+        data = resp.json()
 
-    result = data.get("data", {}).get("luxseDocumentsSearch", {})
-    documents = result.get("documents", [])
-    total_hits = result.get("totalHits", 0)
-    return documents, total_hits
+        if "errors" not in data:
+            result = data.get("data", {}).get("luxseDocumentsSearch", {})
+            documents = result.get("documents", [])
+            total_hits = result.get("totalHits", 0)
+            return documents, total_hits
+
+    # All retries failed — return empty to allow pagination to continue
+    return [], 0
 
 
 def discover_luxse(
