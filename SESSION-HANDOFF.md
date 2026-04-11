@@ -1,22 +1,56 @@
 # SESSION-HANDOFF.md — Current Sprint
 
-**Last updated:** 2026-04-10
+**Last updated:** 2026-04-11 (end of Task 2 session)
 **Sprint:** Searchable Explorer for IMF/World Bank Spring Meetings
 **Target:** Monday 2026-04-13 (IMF Legal Department presentation)
 **Sprint spec:** `planning/SPRINT-2026-04-SPRING-MEETINGS.md`
-**Status:** Task 2 PR #69 open, awaiting external reviews. Next up: Task 3 (Search Index + Parsed Text Loading).
+**Status:** Tasks 1 + 2 merged. **Sprint order revised — Docling migration (#72) is now next**, then Task 3.
+
+## ⏭️ START HERE TOMORROW
+
+**Next task:** Issue #72 — "Migrate to Docling as default PDF parser + bulk reparse the corpus"
+
+The full plan is in the issue body. Five phases (A-E), ~6-8 hours wall clock total, ~2-3 hours user-attended (the rest is unattended bulk reparse on the M4 Pro). **Phase A is the only piece that needs an active code session — everything else is "kick off the bulk reparse and check on it."**
+
+**Phase A starting commands** (from the issue):
+
+```bash
+# Create the feature branch from current main
+git checkout main && git pull --ff-only
+git checkout -b feature/docling-default
+
+# Cherry-pick JUST the script file from the stale branch (NOT git cherry-pick — that
+# would pull in the commit which touches obsolete pre-Phase-2 files)
+git checkout feature/30-docling-reparse -- scripts/docling_reparse.py
+
+# Then: add docling to pyproject.toml, write src/corpus/parsers/docling_parser.py
+# implementing the parser protocol, register it in registry.py, set as default,
+# add tests, run pytest, commit + PR
+```
+
+**Why Docling before Task 3:** Task 3 builds the FTS index over `data/parsed/*.jsonl`. Building it over PyMuPDF text now and reparsing later means rebuilding the FTS index. Reparse first → build FTS once. Saves ~2-3 hours of rework on Task 3.
+
+**Critical fact for Phase A:** `feature/30-docling-reparse` is forked from pre-Phase-2 main and is missing every clause-extraction-v2 file + every Task 2 file. **Do NOT try to merge or cherry-pick the branch wholesale.** Use `git checkout feature/30-docling-reparse -- scripts/docling_reparse.py` to grab just the one file. The rest of Phase A is fresh code on top of current main.
+
+**Bulk reparse context:**
+- ~1,470 documents already Docling-parsed at `data/parsed_docling/` (from a prior partial run)
+- ~3,300 documents still need work
+- Script has resume support, will skip already-parsed docs
+- ~4-5 hours unattended on the M4 Pro (user-validated)
+- Run with `tail -f data/parsed_docling/_progress.jsonl` to monitor
 
 ## Live artifacts
 
 - **Explorer URL:** https://sovereign-prospectus-corpus.streamlit.app
-- **MotherDuck database:** `sovereign_corpus` (4,769 documents, duckdb 1.4.4 client/server) — still on the pre-Task-2 schema. Task 3 publishes the new columns.
+- **MotherDuck database:** `sovereign_corpus` (4,769 documents, duckdb 1.4.4 client/server). **Still on the pre-Task-2 schema** — Task 3 publishes the new provenance columns. Docling migration doesn't touch MotherDuck either.
 - **V1 Georgetown demo:** tagged `v1-georgetown-2026-03-30` (Quarto book on `gh-pages` branch — do NOT modify)
 
-## Sprint Tasks
+## Sprint Tasks (revised order — Docling inserted before Task 3)
 
 - [x] Task 1: Deployment Spike (Streamlit Cloud + MotherDuck) — PR #61 merged
-- [x] Task 2: Provenance URLs + Schema — PR #69 open
-- [ ] **Task 3: Search Index + Parsed Text Loading** ← NEXT
+- [x] Task 2: Provenance URLs + Schema — PR #69 merged 2026-04-11
+- [ ] **Docling migration + bulk reparse — issue #72** ← NEXT
+- [ ] Task 3: Search Index + Parsed Text Loading
 - [ ] Task 4: Streamlit Document Explorer
 - [ ] Task 5: LSE RNS Adapter + Congo Ingest (gated)
 - [ ] Task 6: LuxSE Adapter (gated, overflow)
@@ -24,46 +58,71 @@
 - [ ] Task 8: ESMA Adapter (overflow)
 - [ ] Task 9: Demo Polish (overflow)
 
-Sprint GitHub issues: #51-#59 with label `sprint:spring-meetings-2026`.
+Sprint GitHub issues: #51-#59 with label `sprint:spring-meetings-2026`. Plus #72 (Docling) added 2026-04-11.
 
-## Task 2 recap (what shipped in PR #69)
+## Task 2 recap (PR #69, merged 2026-04-11 as `d99f9a27`)
 
-**Plan:** `docs/superpowers/plans/2026-04-10-task2-provenance-urls.md` (went through 3 external reviews + 1 internal pre-push review before merging).
+The full implementation plan is at `docs/superpowers/plans/2026-04-10-task2-provenance-urls.md`. It went through 6 rounds of review (3 plan-stage external + 1 internal pre-PR + 2 GitHub bot rounds) before merging.
 
-- `documents.source_page_url` and `documents.source_page_kind` columns added
+What shipped:
+- `documents.source_page_url` + `source_page_kind` columns populated for all 4,769 docs (zero null URLs)
 - Per-source resolvers in `src/corpus/sources/provenance.py`:
-  - EDGAR: constructs SEC filing-index URL from `cik` + `accession_number`
-  - NSM: uses `download_url` as-is, classifies by extension via `urllib.parse.urlparse` so query strings can't defeat it
+  - EDGAR: SEC filing-index URL builder from `cik` + `accession_number`
+  - NSM: extension classifier via `urllib.parse.urlparse` (handles future query strings)
   - PDIP: static Georgetown search page (no per-doc deep links exist)
-  - Dispatcher returns `(None, "none")` for unknown sources — safe for future adapters
-- `scripts/regenerate_pdip_manifest.py` — one-off bridge that regenerates `pdip_manifest.jsonl` from current DB + inventory CSV, normalizing free-text dates to ISO via a small parser (`"January 20, 2017"`, `"24 September 2025"`, `"July 6th, 2018"` all handled)
-- `scripts/backfill_provenance_urls.py` — atomic rewrite of all three manifests, idempotent including for unknown-source records (gates on key presence, not truthiness)
-- Local DB rebuilt: 4,769 docs with non-null `source_page_url`, `pdip_clauses` (6,251) and `grep_matches` (106,229) preserved via `ATTACH` + `INSERT` with `storage_key`-based FK remap
-- `.pre-commit-config.yaml:26` YAML bug fixed (pre-existing, blocked every invocation of `pre-commit run`)
+  - Dispatcher returns `(None, "none")` for unknown sources — crash-safe for future adapters
+- Atomic-pair semantics in both ingest fallback and backfill — no setdefault-and-mix or preserve-explicit-null bugs
+- `scripts/regenerate_pdip_manifest.py` — one-off bridge with locale-invariant date parser (`_MONTH_NAMES` lookup table, no `strptime("%B")`)
+- `scripts/backfill_provenance_urls.py` — atomic rewrite of all three manifests, idempotent with byte stability
+- UTF-8 + `ensure_ascii=False` everywhere JSON gets written
+- DB rebuild preserved `pdip_clauses` (6,251) + `grep_matches` (106,229) via `ATTACH` + storage_key remap, zero data loss
+- 35 new tests, 397 total passing
+- 3 EDGAR + 3 NSM + 1 PDIP URLs verified live with HTTP 200
 
-## Follow-up issues filed during Task 2
+## PR #71 (env hygiene, merged 2026-04-11 as `04278de1`)
 
-- **#66** — PDIP ingest bypasses manifest-canonical pipeline. Worked around, not fixed. Scripts/inventory/file-paths should eventually migrate.
-- **#67** — Pre-commit was broken on main (163 ruff errors in `scripts/`, 9 format violations, and the YAML parse error). YAML fixed in this PR; the rest is tech debt.
-- **#68** — DB rebuild preservation (`pdip_clauses` + `grep_matches` ATTACH + INSERT) should be promoted from an ad-hoc heredoc to a committed script before Task 3's `make publish-motherduck` runs.
+Side effort that surfaced during Task 2 cleanup. Two operational gotchas resolved:
 
-## Task 3 — what's ready
+1. **Stray `.venv/` collided with `UV_PROJECT_ENVIRONMENT`.** The project lives inside Dropbox; `~/.zshrc` deliberately sets `UV_PROJECT_ENVIRONMENT=~/.local/venvs/sovereign-corpus` to keep the venv outside Dropbox. Something created a competing `.venv/` in the project root. `uv run` warned + intermittently fell through to `/opt/anaconda3/bin/python`. Fix: stray `.venv/` deleted, canonical venv synced to `pyproject.toml` via `uv sync --all-extras` (it had drifted to duckdb 1.5.1 + missing pytest/polars). New "Environment setup (Dropbox + uv)" section added to `CLAUDE.md`.
 
-**Spec:** `planning/SPRINT-2026-04-SPRING-MEETINGS.md` lines 242-332. Issue #53.
-**Branch:** not yet created. Use `feature/search-index`.
+2. **`Claude.md` was tracked as mixed-case** while every other doc reference used `CLAUDE.md`. macOS's case-insensitive filesystem hid the mismatch until `git add CLAUDE.md` silently no-op'd. Fix: `git mv Claude.md → _temp → CLAUDE.md` (two-step rename trick). `AGENTS.md` updated to point at the new canonical name.
 
-Task 3 is five subtasks:
-- 3A: `documents_search` denormalized view/table
-- 3B: `document_pages` table from `data/parsed/*.jsonl` + FTS index
-- 3C: `country_classifications` from World Bank data
-- 3D: Heuristic country backfill for EDGAR/NSM rows
-- 3E: Makefile targets `make build-search-index` + `make publish-motherduck`
+**Read `CLAUDE.md` (uppercase) tomorrow** — it has the new env setup section.
 
-**Pre-flight reminders for Task 3:**
-- Resolve #68 (DB preservation script) before the first `make publish-motherduck` runs, or re-derive the ATTACH + INSERT block from the Task 2 plan (`docs/superpowers/plans/2026-04-10-task2-provenance-urls.md`, Task 7 Step 9).
-- `data/parsed/` contents should be checked for per-source / per-document coverage before loading — counts of parsed documents should roughly match the `documents` counts (4,769 expected).
-- MotherDuck publish needs the same `MOTHERDUCK_TOKEN` in `.env` that Task 1 used. Token is not committed.
-- The live explorer currently reads from MotherDuck without the new provenance columns. After Task 3 runs `publish-motherduck`, the explorer needs a restart (Streamlit Cloud auto-redeploys on git push; no-op push might be needed).
+## Local cleanup done at session end
+
+- 7 merged feature branches deleted (feature/29-review-fixes-and-specs, feature/29-shiny-display-fixes, feature/clause-extraction-v2, feature/clause-extraction-v2-spec, feature/roundtable-demo, feature/scaffold, feature/source-nsm)
+- 4 cruft files deleted (`pr_diff.txt`, `pr_code_diff.txt`, 2 logo PNGs)
+- 2 DB backups deleted (`corpus.duckdb.bak`, `corpus.duckdb.prev`)
+- Stray `.venv/` deleted (~737 MB)
+- **~1.02 GB freed total**
+
+## Local branches preserved (do NOT delete tomorrow without checking)
+
+- `feature/19-pdip-annotations-harvester` — unmerged WIP
+- `feature/30-docling-reparse` — **the source of `scripts/docling_reparse.py`** for issue #72. Don't delete until Phase A cherry-picks the file. Then can be deleted in Phase E.
+- `feature/clause-extraction-docs` — unmerged WIP
+- `feature/run-reports` — unmerged WIP
+- `feature/source-edgar` — unmerged WIP
+- `gh-pages` — V1 Quarto book serving branch, frozen
+
+## Untracked files left in working tree (deliberately not deleted)
+
+- `.claude/settings.local.json` — personal Claude Code settings, gitignored
+- `scripts/process_cac_batches_101_150.py` — real batch processing script, related to issue #70
+- `demo/data/all_extractions.csv` (79M), `demo/data/classification.csv`, `demo/data/corpus_summary.csv` — substantial extraction outputs, unknown owner
+- `demo/shiny-app/data/all_extractions.csv` (79M) — V1 Shiny territory, frozen per CLAUDE.md
+- `demo/shiny-app/rsconnect-python/` — shinyapps.io deploy config
+
+## Open follow-up issues filed during Task 2
+
+| # | Title | Priority |
+|---|---|---|
+| #66 | PDIP ingest bypasses manifest-canonical pipeline | Worked around in Task 2; revisit eventually |
+| #67 | Pre-commit broken on main: 163 ruff errors in `scripts/`, 28 pyright errors in `verify.py`/`test_reflow.py`/`test_verify.py` | YAML parse bug fixed in Task 2; the rest is debt |
+| #68 | DB rebuild preservation should be a committed script | **Pre-Task-3 work** — resolve before `make publish-motherduck` runs |
+| #70 | Stale `clause_candidates_v2.csv` orphan work (rescue branch deleted, intent preserved) | Revisit if/when V1 Shiny is unfrozen |
+| **#72** | **Docling migration + bulk reparse** | **NEXT — sprint priority** |
 
 ## Phase 1 (Complete, reference only)
 
@@ -78,4 +137,11 @@ All Phase 1 planning docs archived in `archive/phase-1/`.
 
 Carried from Phase 1: #5, #6, #7, #8, #9, #11, #12, #13, #16, #18, #19, #24, #25, #30, #33-#42. Don't block on these unless directly relevant to current task.
 
-Task-2-discovered: #66 (PDIP tech debt), #67 (pre-commit tech debt), #68 (DB preservation script).
+Task-2-discovered: #66, #67, #68, #70, #72 (see above).
+
+## Environment notes (in CLAUDE.md but worth flagging here too)
+
+- The canonical venv lives at `~/.local/venvs/sovereign-corpus` (NOT `.venv/` in the project root). Configured via `~/.zshrc`'s `UV_PROJECT_ENVIRONMENT`.
+- If `uv run` warns about `VIRTUAL_ENV=.venv does not match...`, check that nothing created a new `.venv/` in the project root. Fix with `rm -rf .venv && unset VIRTUAL_ENV` (or open a new terminal).
+- To verify the venv is healthy: `uv run python -c "import sys, duckdb, polars, pytest; print(sys.executable, duckdb.__version__, polars.__version__, pytest.__version__)"`. Expect Python 3.12.8, duckdb 1.4.4, polars >=1.39, pytest 9.x.
+- If anything's missing: `uv sync --all-extras`.
