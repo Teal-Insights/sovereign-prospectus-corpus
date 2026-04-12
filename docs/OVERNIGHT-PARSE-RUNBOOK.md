@@ -87,12 +87,26 @@ echo "Started PID $!"
 
 ### Machine-specific configurations
 
-| Mac | RAM | Command |
-|-----|-----|---------|
-| M4 Pro (64 GB) | 64 GB | `--workers 4 --memory-throttle 36 --memory-ceiling 48` |
-| M3 Pro (36 GB) | 36 GB | `--workers 2 --memory-throttle 20 --memory-ceiling 28` |
-| M3 Max (128 GB) | 128 GB | `--workers 6 --memory-throttle 72 --memory-ceiling 96` |
-| M2 MacBook Air (16 GB) | 16 GB | `--workers 1 --memory-throttle 8 --memory-ceiling 12` |
+**Our machines:**
+
+| Machine | Chip | Cores | RAM | Workers | Throttle | Ceiling | Est. 5K docs |
+|---------|------|-------|-----|---------|----------|---------|-------------|
+| Mac Mini (primary) | M4 Pro | 14 (10P+4E) | 64 GB | 4 | 36 GB | 48 GB | 6-8 hrs |
+| MacBook Air | M5 | 10 | 24 GB | 2 | 14 GB | 18 GB | 15-20 hrs |
+| MacBook Air | M5 | 10 | 32 GB | 2 | 18 GB | 24 GB | 15-20 hrs |
+
+**For colleagues (common configs):**
+
+| Machine | RAM | Workers | Throttle | Ceiling | Est. 5K docs |
+|---------|-----|---------|----------|---------|-------------|
+| M3/M4 MacBook Air (16 GB) | 16 GB | 1 | 8 GB | 12 GB | 30+ hrs |
+| M3/M4 MacBook Pro (36 GB) | 36 GB | 3 | 20 GB | 27 GB | 10-15 hrs |
+| M3/M4 Pro Mac Mini (64 GB) | 64 GB | 4 | 36 GB | 48 GB | 6-8 hrs |
+
+The pre-flight script auto-detects your hardware and calculates these:
+```bash
+uv run python scripts/verify_parse_environment.py
+```
 
 **Formula:** `workers = min((cores - 2) // 3, 6)`, `ceiling = RAM * 0.75`,
 `throttle = ceiling * 0.75`.

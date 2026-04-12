@@ -265,12 +265,23 @@ for running Docling (and similar ML batch jobs) on any Mac. Key components:
 
 ### Machine scaling table
 
-| Mac Model | RAM | Workers | Throttle | Ceiling | Est. 5K docs |
-|-----------|-----|---------|----------|---------|-------------|
-| M4 Pro (14-core, 64 GB) | 64 GB | 4 | 36 GB | 48 GB | 6-8 hrs |
-| M3 Pro (12-core, 36 GB) | 36 GB | 2-3 | 20 GB | 28 GB | 10-15 hrs |
-| M3 Max (14-core, 128 GB) | 128 GB | 4-6 | 72 GB | 96 GB | 4-6 hrs |
-| M2 MacBook Air (16 GB) | 16 GB | 1 | 8 GB | 12 GB | 30+ hrs |
+**Our machines:**
+
+| Machine | Chip | RAM | Workers | Throttle | Ceiling | Est. 5K docs |
+|---------|------|-----|---------|----------|---------|-------------|
+| Mac Mini (primary) | M4 Pro | 64 GB | 4 | 36 GB | 48 GB | 6-8 hrs |
+| MacBook Air | M5 | 24 GB | 2 | 14 GB | 18 GB | 15-20 hrs |
+| MacBook Air | M5 | 32 GB | 2 | 18 GB | 24 GB | 15-20 hrs |
+
+**For colleagues:**
+
+| Machine | RAM | Workers | Throttle | Ceiling | Est. 5K docs |
+|---------|-----|---------|----------|---------|-------------|
+| MacBook Air (16 GB) | 16 GB | 1 | 8 GB | 12 GB | 30+ hrs |
+| MacBook Pro (36 GB) | 36 GB | 3 | 20 GB | 27 GB | 10-15 hrs |
+
+The pre-flight script auto-detects hardware and calculates the right config:
+`uv run python scripts/verify_parse_environment.py`
 
 Formula: `workers = min((cores - 2) // 3, 6)`, `ceiling = RAM * 0.75`,
 `throttle = ceiling * 0.75`.
