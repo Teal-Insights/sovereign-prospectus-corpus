@@ -82,8 +82,10 @@ log_stage "edgar_parse" "started"
 
 cd "$DIR"
 # Don't use set -e — we want to continue to validation even if EDGAR has some failures
+set -o pipefail
 uv run python scripts/docling_reparse_edgar.py 2>&1 | tee -a /tmp/docling_edgar.log
-EDGAR_EXIT=$?
+EDGAR_EXIT=${PIPESTATUS[0]:-$?}
+set +o pipefail
 
 if [ "$EDGAR_EXIT" -ne 0 ]; then
     echo "WARNING: EDGAR parse exited with code $EDGAR_EXIT"

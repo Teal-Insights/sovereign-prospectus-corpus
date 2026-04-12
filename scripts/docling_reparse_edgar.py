@@ -78,12 +78,11 @@ def split_htm_pages(html: str) -> list[str]:
         tag.decompose()
 
     # Insert page-break markers (separate handling for before/after)
+    # Use style=True filter to avoid iterating every tag in large EDGAR filings
     marker = "\x00PAGE_BREAK\x00"
     found = False
-    for tag in soup.find_all(True):
-        style = tag.get("style", "")
-        if not isinstance(style, str):
-            continue
+    for tag in soup.find_all(style=True):
+        style = tag["style"]
         if _PAGE_BREAK_BEFORE_RE.search(style):
             tag.insert_before(marker)
             found = True
@@ -160,7 +159,9 @@ def html_to_markdown(converter, html_content: str) -> str:
 # ── Single-file processing ────────────────────────────────────────
 
 
-def process_one_edgar(storage_key: str, file_path: Path, converter) -> dict:
+def process_one_edgar(
+    storage_key: str, file_path: Path, converter, docling_version: str = "unknown"
+) -> dict:
     """Process a single EDGAR file. Returns result dict.
 
     Routing is by FILE EXTENSION, not content sniffing (Codex review fix):
@@ -169,7 +170,7 @@ def process_one_edgar(storage_key: str, file_path: Path, converter) -> dict:
     """
     start = time.monotonic()
     file_size_mb = round(file_path.stat().st_size / (1024 * 1024), 1)
-    is_htm = file_path.suffix in (".htm", ".html")
+    is_htm = file_path.suffix.lower() in (".htm", ".html")
 
     try:
         raw_bytes = file_path.read_bytes()
@@ -205,9 +206,6 @@ def process_one_edgar(storage_key: str, file_path: Path, converter) -> dict:
             full_markdown = "\n\n".join(pages_text)
 
         elapsed = time.monotonic() - start
-        from importlib.metadata import version as pkg_version
-
-        docling_version = pkg_version("docling")
 
         # Determine parse status
         stripped_lengths = [len(p.strip()) for p in pages_text]
@@ -287,7 +285,7 @@ def discover_edgar_files() -> list[tuple[str, Path]]:
         for path in sorted(original_dir.iterdir()):
             if not path.name.startswith("edgar__"):
                 continue
-            if path.suffix in (".htm", ".html") or path.suffix == ".txt":
+            if path.suffix.lower() in (".htm", ".html", ".txt"):
                 files.append((path.stem, path))
             # .paper files skipped (empty stubs)
     return files
@@ -369,13 +367,16 @@ def main() -> None:
     # allowed_formats=[InputFormat.HTML] ensures SimplePipeline, not StandardPdfPipeline
     logging.info("Creating Docling HTML converter (SimplePipeline, no ML models)...")
     converter = create_html_converter()
+    from importlib.metadata import version as pkg_version
+
+    docling_version = pkg_version("docling")
 
     # Smoke test: first 5 files
     logging.info("Smoke testing first %d files...", min(5, len(remaining)))
     smoke_failures = 0
     smoke_count = min(5, len(remaining))
     for sk, path in remaining[:smoke_count]:
-        result = process_one_edgar(sk, path, converter)
+        result = process_one_edgar(sk, path, converter, docling_version)
         if result["status"] != "success":
             logging.error("Smoke test FAILED: %s — %s", sk, result["error"])
             smoke_failures += 1
@@ -402,7 +403,7 @@ def main() -> None:
     total = len(all_files)
 
     for _i, (storage_key, path) in enumerate(remaining):
-        result = process_one_edgar(storage_key, path, converter)
+        result = process_one_edgar(storage_key, path, converter, docling_version)
 
         if result["status"] == "success":
             completed += 1
