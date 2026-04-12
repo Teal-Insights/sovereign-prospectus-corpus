@@ -26,7 +26,7 @@ import shutil
 import signal
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from datetime import UTC, datetime
 from pathlib import Path
@@ -251,7 +251,18 @@ def run_supervised(
     max_workers: int,
     timeout: int,
 ) -> dict:
-    """Process all PDFs with automatic pool restart on worker death."""
+    """Process all PDFs with batched submission and automatic pool restart.
+
+    Key design decisions (from Codex/Gemini code reviews):
+    - Submit in small batches (max_workers * 2), NOT the entire queue.
+      This prevents a pool crash from removing thousands of queued items.
+    - Use concurrent.futures.wait() with a timeout to detect hung workers,
+      since as_completed + future.result(timeout) is ineffective.
+    - On BrokenProcessPool, re-check output files to distinguish completed
+      items from truly crashed ones.
+    """
+    from concurrent.futures import FIRST_COMPLETED, wait
+
     global shutdown_requested
     total = len(pdf_list)
     remaining = [(sk, str(p)) for sk, p in pdf_list]
@@ -261,137 +272,152 @@ def run_supervised(
     mps_errors = 0
     pool_restarts = 0
     start_time = time.monotonic()
+    batch_size = max_workers * 2
 
     logging.info("Starting Docling re-parse: %d documents, %d workers", total, max_workers)
 
     while remaining and not shutdown_requested:
         try:
             with ProcessPoolExecutor(max_workers=max_workers) as pool:
-                futures = {}
-                for args in remaining[:]:
-                    if shutdown_requested:
+                # Submit in batches to limit blast radius on pool crash
+                futures: dict[object, tuple[str, str]] = {}
+
+                while (remaining or futures) and not shutdown_requested:
+                    # Top up the futures pool to batch_size
+                    while remaining and len(futures) < batch_size:
+                        args = remaining.pop(0)
+                        fut = pool.submit(process_one_pdf, args)
+                        futures[fut] = args
+
+                    if not futures:
                         break
-                    futures[pool.submit(process_one_pdf, args)] = args
 
-                for future in as_completed(futures):
-                    if shutdown_requested:
-                        break
+                    # Wait for at least one future with a global timeout
+                    done_set, _pending = wait(
+                        futures.keys(), timeout=timeout, return_when=FIRST_COMPLETED
+                    )
 
-                    args = futures[future]
-                    storage_key = args[0]
+                    if not done_set:
+                        # Timeout: no future completed within timeout period.
+                        # Cancel all pending and log as timeouts.
+                        for fut, args in list(futures.items()):
+                            fut.cancel()
+                            sk = args[0]
+                            skipped += 1
+                            logging.warning("TIMEOUT: %s (no progress in %ds)", sk, timeout)
+                            write_progress(
+                                {
+                                    "status": "timeout",
+                                    "storage_key": sk,
+                                    "page_count": 0,
+                                    "elapsed_s": timeout,
+                                    "error": f"Exceeded {timeout}s timeout",
+                                }
+                            )
+                        futures.clear()
+                        continue
 
-                    try:
-                        result = future.result(timeout=timeout)
-                    except TimeoutError:
-                        result = {
-                            "status": "timeout",
-                            "storage_key": storage_key,
-                            "page_count": 0,
-                            "elapsed_s": timeout,
-                            "error": f"Exceeded {timeout}s timeout",
-                        }
-                    except Exception as exc:
-                        result = {
-                            "status": "failed",
-                            "storage_key": storage_key,
-                            "page_count": 0,
-                            "elapsed_s": 0,
-                            "error": f"{type(exc).__name__}: {exc}",
-                        }
+                    for future in done_set:
+                        args = futures.pop(future)
+                        storage_key = args[0]
 
-                    # Remove from remaining
-                    if args in remaining:
-                        remaining.remove(args)
+                        try:
+                            result = future.result()
+                        except Exception as exc:
+                            result = {
+                                "status": "failed",
+                                "storage_key": storage_key,
+                                "page_count": 0,
+                                "elapsed_s": 0,
+                                "error": f"{type(exc).__name__}: {exc}",
+                            }
 
-                    # Track results
-                    if result["status"] == "success":
-                        completed += 1
-                    elif result["status"] == "mps_error":
-                        mps_errors += 1
-                        failed += 1
-                    elif result["status"] == "timeout":
-                        skipped += 1
-                    else:
-                        failed += 1
+                        # Track results
+                        if result["status"] == "success":
+                            completed += 1
+                        elif result["status"] == "mps_error":
+                            mps_errors += 1
+                            failed += 1
+                        else:
+                            failed += 1
 
-                    # Log progress
-                    done = completed + failed + skipped
-                    if result["status"] == "success":
-                        logging.info(
-                            "[%d/%d] %s — %d pages — %.1fs — OK",
-                            done,
-                            total,
-                            result["storage_key"],
-                            result["page_count"],
-                            result["elapsed_s"],
-                        )
-                    else:
-                        logging.warning(
-                            "[%d/%d] %s — %s — %.1fs — %s",
-                            done,
-                            total,
-                            result["storage_key"],
-                            result["status"],
-                            result["elapsed_s"],
-                            result.get("error", ""),
-                        )
-                        logging.error(
-                            "FAILED: %s — %s",
-                            result["storage_key"],
-                            result.get("error", ""),
-                        )
+                        # Log progress
+                        done = completed + failed + skipped
+                        if result["status"] == "success":
+                            logging.info(
+                                "[%d/%d] %s — %d pages — %.1fs — OK",
+                                done,
+                                total,
+                                result["storage_key"],
+                                result["page_count"],
+                                result["elapsed_s"],
+                            )
+                        else:
+                            logging.warning(
+                                "[%d/%d] %s — %s — %.1fs — %s",
+                                done,
+                                total,
+                                result["storage_key"],
+                                result["status"],
+                                result["elapsed_s"],
+                                result.get("error", ""),
+                            )
+                            logging.error(
+                                "FAILED: %s — %s", result["storage_key"], result.get("error", "")
+                            )
 
-                    # Write progress
-                    write_progress(result)
+                        write_progress(result)
 
-                    # Periodic summary
-                    if done % 50 == 0 and done > 0:
-                        elapsed = time.monotonic() - start_time
-                        rate = done / elapsed if elapsed > 0 else 0
-                        eta = (total - done) / rate if rate > 0 else 0
-                        logging.info(
-                            "Progress: %d/%d (%.1f%%) — %d OK, %d failed, %d skipped — "
-                            "ETA %.0fm — pool restarts: %d",
-                            done,
-                            total,
-                            100 * done / total,
-                            completed,
-                            failed,
-                            skipped,
-                            eta / 60,
-                            pool_restarts,
-                        )
+                        # Periodic summary
+                        if done % 50 == 0 and done > 0:
+                            elapsed = time.monotonic() - start_time
+                            rate = done / elapsed if elapsed > 0 else 0
+                            eta = (total - done) / rate if rate > 0 else 0
+                            logging.info(
+                                "Progress: %d/%d (%.1f%%) — %d OK, %d failed, %d skipped — "
+                                "ETA %.0fm — pool restarts: %d",
+                                done,
+                                total,
+                                100 * done / total,
+                                completed,
+                                failed,
+                                skipped,
+                                eta / 60,
+                                pool_restarts,
+                            )
+                            usage = shutil.disk_usage(str(OUTPUT_DIR))
+                            free_gb = usage.free / (1024**3)
+                            if free_gb < 1.0:
+                                logging.error("Low disk space: %.1f GB free. Stopping.", free_gb)
+                                shutdown_requested = True
 
-                        # Check disk space
-                        usage = shutil.disk_usage(str(OUTPUT_DIR))
-                        free_gb = usage.free / (1024**3)
-                        if free_gb < 1.0:
-                            logging.error("Low disk space: %.1f GB free. Stopping.", free_gb)
-                            shutdown_requested = True
-
-                    # MPS fallback
-                    if mps_errors >= 3:
-                        logging.warning(
-                            "%d MPS errors. Setting DOCLING_DEVICE=cpu for remaining docs.",
-                            mps_errors,
-                        )
-                        os.environ["DOCLING_DEVICE"] = "cpu"
-                        mps_errors = -999  # Don't trigger again
+                        if mps_errors >= 3:
+                            logging.warning(
+                                "%d MPS errors. Setting DOCLING_DEVICE=cpu.", mps_errors
+                            )
+                            os.environ["DOCLING_DEVICE"] = "cpu"
+                            mps_errors = -999
 
         except BrokenProcessPool:
             pool_restarts += 1
-            # Remove all in-flight tasks from remaining to avoid
-            # resubmitting the crashing PDF in an infinite loop
-            in_flight = set(futures.values())
+            # Only the small batch was in-flight. Re-check which actually
+            # completed (have output files) vs truly crashed.
             crashed_keys = []
-            for args in in_flight:
-                if args in remaining:
-                    remaining.remove(args)
-                    crashed_keys.append(args[0])
+            for args in futures.values():
+                sk = args[0]
+                jsonl_out = OUTPUT_DIR / f"{sk}.jsonl"
+                md_out = OUTPUT_DIR / f"{sk}.md"
+                if jsonl_out.exists() and md_out.exists():
+                    completed += 1  # Actually finished before crash
+                else:
+                    crashed_keys.append(sk)
                     failed += 1
+            # Don't put crashed items back in remaining — they caused the crash
+            futures.clear()
             logging.warning(
-                "Pool crashed (restart #%d). Removed %d in-flight tasks: %s. %d remaining.",
+                "Pool crashed (restart #%d). %d in-flight, %d crashed: %s. %d remaining.",
                 pool_restarts,
+                len(crashed_keys) + (completed - completed),
                 len(crashed_keys),
                 crashed_keys[:5],
                 len(remaining),

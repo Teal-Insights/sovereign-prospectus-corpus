@@ -72,14 +72,16 @@ def publish_to_motherduck(
             stats["table_rows"][table] = row_count
             log.info("Published %s: %d rows", table, row_count)
 
-        # Recreate FTS index on remote document_pages
+        # Recreate FTS index on remote document_pages.
+        # PRAGMA create_fts_index doesn't work with schema-qualified names,
+        # so we switch the active schema to remote first.
         if "document_pages" in stats["table_rows"]:
             log.info("Creating FTS index on remote document_pages...")
             conn.execute("INSTALL fts")
             conn.execute("LOAD fts")
+            conn.execute(f"USE {remote_db}")
             conn.execute(
-                "PRAGMA create_fts_index('remote.document_pages', 'page_id', "
-                "'page_text', overwrite=1)"
+                "PRAGMA create_fts_index('document_pages', 'page_id', 'page_text', overwrite=1)"
             )
             log.info("FTS index created on MotherDuck")
 
