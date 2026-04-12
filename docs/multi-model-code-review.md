@@ -1,290 +1,295 @@
-# Multi-Model Code Review: Council of Experts
+# Council of Experts: Multi-Model Review Pattern
 
 **Last updated:** 2026-04-11
-**Context:** Patterns learned during the Spring Meetings sprint, where 15+
-independent reviews across 3 AI models caught critical bugs that would have
-destroyed a 7-hour overnight pipeline run.
+**Origin:** Patterns developed during the Spring Meetings sprint, where 15+
+reviews across 3 AI models caught critical bugs in a 7-hour overnight pipeline.
 
-## Why multi-model review works
+## The pattern
 
-Each model has different blind spots. In our testing:
+Use the three best AI coding models — Claude Opus, GPT-5.4, and Gemini 2.5
+Pro — as independent reviewers at key gates in the development workflow.
+Each model has different strengths and blind spots. The combination catches
+what any single model misses.
 
-| Model | Strength | Blind spot |
-|-------|----------|------------|
-| **Claude (subagents)** | Deep architectural reasoning, protocol compliance | Can miss low-level concurrency bugs |
-| **Gemini CLI** | Excellent at finding crash/data-loss scenarios | Less focused on style/consistency |
-| **Codex CLI** | Strong on concurrency, timeouts, edge cases | Sandbox limits prevent execution-based verification |
+### When to invoke the Council
 
-**Real example from this sprint:**
-- Claude found: parse_status divergence, FTS not on MotherDuck, rate-limit misclassification
-- Gemini found: **infinite crash loop** on pool restart (same PDF resubmitted forever)
-- Codex found: **mass data loss** (submit-all pattern), **dead timeout** code, catalog alias bug
-- External Claude instances found: **pool shutdown hangs forever** on C-extension deadlock, **poison pill** crash loop, **validation script passes bad runs**
+| Gate | After | Before | What to review |
+|------|-------|--------|----------------|
+| **Spec review** | `superpowers:brainstorming` | `superpowers:writing-plans` | Design doc / spec |
+| **Plan review** | `superpowers:writing-plans` | Implementation | Implementation plan |
+| **PR review** | Implementation complete | Merge / ship | Code changes |
+| **Ad-hoc** | Any time | Any time | Specific aspect, question, or concern |
 
-Every reviewer caught something the others missed. The convergence on the top
-issues (3+ reviewers independently flagged the same pool management bugs)
-confirmed the findings were real, not hallucinated.
+The main Claude session creates a focused review prompt, dispatches it to
+all three models in parallel, triages findings, and fixes everything that
+fits the project intent.
+
+### Why this works
+
+While adding review time per step, it dramatically reduces rework:
+- Errors caught at the spec stage cost minutes to fix; the same errors
+  caught after implementation cost hours.
+- Three models find genuinely complementary things. In our testing:
+  - **Claude** excels at protocol compliance, architecture, and cross-file consistency
+  - **Gemini** excels at crash scenarios, data loss paths, and edge cases
+  - **Codex** excels at concurrency bugs, timeout issues, and structured analysis
+- When 2+ models independently flag the same issue, it's almost certainly
+  real (convergence validation). Single-model findings need verification.
+- Multi-round reviews converge: tell reviewers to flag when they're only
+  finding nits and it's ready to move on.
 
 ---
 
-## Invocation Patterns
+## Model configuration
 
-### Claude Code (subagents from within a session)
+All three use top-tier subscriptions with maximum reasoning depth. There is
+no marginal cost per review — use the best models every time.
 
-Use the built-in `Agent` tool with `subagent_type: "superpowers:code-reviewer"`.
-Each subagent gets its own context window and returns findings to the parent.
+### Claude Code (Max + Team Premium)
 
-```
-# In Claude Code, use the Agent tool:
+| Setting | Value |
+|---------|-------|
+| Model | `opus[1m]` (Opus 4.6, 1M context) |
+| Thinking | `--effort max` |
+| Config | `~/.claude/settings.json` → `"model": "opus[1m]"` |
+
+**Invocation from within a session (subagent):**
+```python
+# Background subagent — shares project context
 Agent(
   subagent_type="superpowers:code-reviewer",
-  description="Review overnight parse resilience",
-  prompt="Review scripts/docling_reparse.py focusing on...",
+  prompt="Review ...",
   run_in_background=True
 )
 ```
 
-**Strengths:** Deep file access, can read multiple files, understands project context from CLAUDE.md.
-**Limits:** Same model as the parent session. For true diversity, spawn external instances.
-
-### Claude Code (fresh external instances)
-
-Spawn a completely independent Claude Code process via Bash. Best for
-adversarial review (fresh context, no shared assumptions).
-
+**Invocation as fresh external instance (adversarial):**
 ```bash
-# Non-interactive review with file access
-claude -p "Review scripts/docling_reparse.py for overnight resilience..." \
+claude --model "opus[1m]" --effort max \
+  -p "Review ..." \
   --allowedTools "Read,Grep,Glob" \
-  --model opus \
   --output-format json \
   --no-session-persistence
-
-# Pipe a diff for focused review
-git diff main...HEAD | claude -p "Review this diff for bugs..." \
-  --allowedTools "Read,Grep,Glob" \
-  --output-format json
-
-# Structured output with JSON schema
-claude -p "Review src/ for issues" \
-  --output-format json \
-  --json-schema '{"type":"object","properties":{"issues":{"type":"array","items":{"type":"object","properties":{"file":{"type":"string"},"severity":{"type":"string","enum":["critical","important","suggestion"]},"description":{"type":"string"}},"required":["file","severity","description"]}}}}'
-
-# Fast, bare-mode review (skips CLAUDE.md, hooks, plugins)
-claude --bare -p "Review this code" \
-  --allowedTools "Read,Grep,Glob" \
-  --model sonnet \
-  --no-session-persistence
 ```
 
-**Key flags:**
-| Flag | Purpose |
-|------|---------|
-| `-p "prompt"` | Non-interactive mode (required) |
-| `--model sonnet` / `opus` | Model selection |
-| `--output-format json` | Machine-parseable output |
-| `--json-schema '{...}'` | Structured output enforcement |
-| `--allowedTools "Read,Grep,Glob"` | Read-only tool access |
-| `--no-session-persistence` | Don't save session to disk |
-| `--bare` | Skip CLAUDE.md, hooks, plugins (faster) |
-| `--continue` | Continue most recent conversation |
-| `--max-budget-usd 5.00` | Cost cap |
-| `--append-system-prompt "..."` | Add custom instructions |
-
-### Gemini CLI
-
-Non-interactive mode via `-p` flag with `--yolo` for auto-approval of tool
-calls (file reads, shell commands).
-
+**Piping content:**
 ```bash
-# Basic review with file access
-gemini -p "Review scripts/docling_reparse.py for resilience..." --yolo
-
-# Read-only review (safest)
-gemini -p "Review this codebase for bugs..." --approval-mode plan
-
-# JSON output for parsing
-gemini -p "Review and report findings as JSON" \
-  --output-format json \
-  --approval-mode plan
-
-# Specific model
-gemini -m gemini-2.5-flash -p "Quick review of this diff"
+git diff main...HEAD | claude -p "Review this diff..." --model sonnet
 ```
 
-**Key flags:**
-| Flag | Purpose |
-|------|---------|
-| `-p "prompt"` | Non-interactive/headless mode |
-| `--yolo` / `--approval-mode yolo` | Auto-approve all tools |
-| `--approval-mode plan` | Read-only (safest for review) |
-| `--output-format json` | Single JSON object output |
-| `--output-format stream-json` | NDJSON streaming events |
-| `-m gemini-2.5-flash` | Model override |
-| `--sandbox` | Additional sandbox isolation |
+### Codex CLI (ChatGPT Pro $200)
 
-**Important:** The prompt must be the direct value of `-p`:
+| Setting | Value |
+|---------|-------|
+| Model | `gpt-5.4` (GPT-5) |
+| Reasoning | `model_reasoning_effort = "xhigh"` |
+| Config | `~/.codex/config.toml` |
+
+**Primary invocation (pipe diff):**
 ```bash
-# CORRECT:
-gemini -p "Your prompt here" --yolo
-
-# WRONG (fails with "Not enough arguments following: p"):
-gemini --yolo -p "Your prompt here"
-```
-
-**Config files:** `GEMINI.md` (project-level) or `~/.gemini/GEMINI.md` (global)
-for persistent review instructions. Supports `@path/to/file` imports.
-
-**Rate limits:** 1,000 requests/day (free), 1,500 (Pro), 2,000 (Ultra).
-
-### Codex CLI
-
-Non-interactive mode via `codex exec`. The dedicated `codex review` subcommand
-exists but has limitations (cannot combine `--base` with a custom prompt).
-
-```bash
-# Pipe diff for review (recommended pattern)
 git diff main...HEAD | codex exec \
   -s read-only \
-  "Review this diff for bugs, security, and correctness."
+  -m gpt-5.4 \
+  -c 'model_reasoning_effort="xhigh"' \
+  "Review this diff for bugs, security, and correctness. Report CRITICAL/IMPORTANT/SUGGESTION with file:line."
+```
 
-# With structured JSON output
+**Built-in review (no custom prompt, uses AGENTS.md):**
+```bash
+codex review --base main
+```
+
+**With structured output:**
+```bash
 git diff main...HEAD | codex exec \
   -s read-only \
   --output-schema ./review_schema.json \
-  -o /tmp/codex_review.json \
-  "Review the diff. Report findings as structured JSON."
-
-# With project-specific instructions
-git diff main...HEAD | codex exec \
-  -s read-only \
-  -c 'developer_instructions="Focus on concurrency bugs and data loss."' \
-  "Review this code change."
-
-# Built-in review (no custom prompt, but uses AGENTS.md)
-codex review --base main
-codex review --uncommitted
-codex review --commit abc123
+  -o /tmp/review.json \
+  "Review this diff."
 ```
 
-**Key flags:**
-| Flag | Purpose |
-|------|---------|
-| `exec "prompt"` | Non-interactive execution |
-| `-s read-only` | Read-only sandbox (safest) |
-| `--json` | NDJSON event stream output |
-| `--output-schema path` | Structured JSON output schema |
-| `-o path` | Write final message to file |
-| `--ephemeral` | Don't persist session |
-| `-m gpt-5.3-codex` | Model selection |
-| `-c key=value` | Override config inline |
-| `--full-auto` | Workspace-write + auto-approve |
+**Limitation:** `codex review --base main` cannot combine with a custom
+prompt (GitHub issue #7825). Use `codex exec` with piped diff instead.
 
-**The `--base` + PROMPT limitation:** `codex review --base main "custom prompt"`
-does NOT work (GitHub issue #7825, closed as not planned). Workaround: pipe
-the diff to `codex exec` instead.
+### Gemini CLI (Gemini Ultra $200)
 
-**Config files:** `AGENTS.md` (project root or `~/.codex/AGENTS.md`) for
-persistent review instructions. Supports hierarchy from global to project level.
+| Setting | Value |
+|---------|-------|
+| Model | `gemini-3.1-pro-preview` (Gemini 2.5 Pro) |
+| Thinking | Built-in (no separate flag) |
+| Config | `~/.gemini/settings.json` |
 
-**Auth:** Set `CODEX_API_KEY` environment variable. OAuth doesn't work in
-non-interactive mode.
+**Primary invocation:**
+```bash
+gemini -m gemini-3.1-pro-preview \
+  -p "Review scripts/docling_reparse.py for overnight resilience. Report CRITICAL/IMPORTANT/SUGGESTION." \
+  --yolo
+```
+
+**Read-only review (safest):**
+```bash
+gemini -p "Review this codebase for bugs..." --approval-mode plan
+```
+
+**JSON output:**
+```bash
+gemini -p "Review and report findings" --output-format json --approval-mode plan
+```
+
+**Important:** The prompt must immediately follow `-p`. Put other flags after:
+```bash
+# CORRECT:
+gemini -p "prompt here" --yolo
+# WRONG:
+gemini --yolo -p "prompt here"
+```
 
 ---
 
-## Recommended Review Orchestration
+## Workflow: Spec review
 
-### From within a Claude Code session
+After brainstorming produces a spec, before writing the implementation plan.
 
-Dispatch all reviews in parallel using Bash background commands:
+**1. Main session creates the review prompt:**
+```
+Review this spec at docs/superpowers/specs/YYYY-MM-DD-topic-design.md.
 
-```python
-# 1. Claude subagents (use Agent tool with run_in_background=True)
-Agent(subagent_type="superpowers:code-reviewer", prompt="...", run_in_background=True)
+Check:
+1. Are the requirements complete and unambiguous?
+2. Are there contradictions between sections?
+3. Is the scope appropriate for a single implementation plan?
+4. Are the technical decisions sound?
+5. What's missing that will cause problems during implementation?
 
-# 2. Gemini (via Bash tool)
-Bash("gemini -p '...' --yolo 2>&1", run_in_background=True)
-
-# 3. Codex (via Bash tool, pipe diff)
-Bash("git diff main...HEAD | codex exec -s read-only '...' 2>&1", run_in_background=True)
-
-# 4. Fresh Claude instance (via Bash tool)
-Bash("claude -p '...' --allowedTools 'Read,Grep,Glob' --model sonnet --output-format json 2>&1", run_in_background=True)
+Report CRITICAL / IMPORTANT / SUGGESTION.
 ```
 
-### Review prompt template
+**2. Dispatch to all three models** (from within the session, in parallel):
+```python
+# Claude subagent
+Agent(subagent_type="superpowers:code-reviewer", prompt="...", run_in_background=True)
 
+# Gemini
+Bash("gemini -p '...' --yolo", run_in_background=True)
+
+# Codex
+Bash("cat docs/superpowers/specs/the-spec.md | codex exec -s read-only '...'", run_in_background=True)
+```
+
+**3. Triage:** Fix all reasonable findings. File issues for deferred items.
+
+---
+
+## Workflow: Plan review
+
+After writing-plans produces the implementation plan.
+
+**Same dispatch pattern.** Prompt focuses on:
+- Will these steps actually achieve the spec's requirements?
+- Are there missing steps or wrong ordering?
+- Are the time estimates realistic?
+- What will go wrong during execution?
+
+---
+
+## Workflow: PR / code review
+
+After implementation, before merge.
+
+**Prompt template:**
 ```
 You are reviewing [COMPONENT] for [PURPOSE]. The code runs [CONTEXT].
 
 Read these files: [FILE LIST]
 
 Focus on:
-1. [SPECIFIC CONCERN 1]
-2. [SPECIFIC CONCERN 2]
-3. [SPECIFIC CONCERN 3]
+1. [SPECIFIC CONCERN]
+2. [SPECIFIC CONCERN]
+3. [SPECIFIC CONCERN]
 
-Report findings as CRITICAL / IMPORTANT / SUGGESTION with file:line references.
-[Optional: This code has been through N prior reviews. You are looking for
-what they missed.]
+Report CRITICAL / IMPORTANT / SUGGESTION with file:line references.
 ```
 
-### Triage pattern
+**For later rounds:** "This code has been through N prior reviews. They
+found and fixed: [list]. Your job is to find what they all missed."
+
+**Convergence signal:** When reviewers are only finding nits (formatting,
+naming, comments), the code is ready. Tell the reviewers to explicitly
+state "no more substantive findings" when they reach that point.
+
+---
+
+## Workflow: Ad-hoc review
+
+For specific questions, design decisions, or risk assessments:
+
+```
+We're considering [APPROACH] for [PROBLEM]. The alternatives are [A, B, C].
+
+Given [CONTEXT], which approach is best? What risks does each carry?
+What would you recommend and why?
+```
+
+Or for a specific file/function:
+```
+Review [FILE:FUNCTION] specifically for [CONCERN]. Ignore everything else.
+```
+
+---
+
+## Triage protocol
 
 After all reviews complete:
-1. Extract CRITICAL findings from each
-2. Check for **convergence** — issues flagged by 2+ reviewers are almost certainly real
-3. Fix all CRITICALs immediately
-4. Fix IMPORTANTs that affect the immediate workflow
-5. File issues for deferred SUGGESTIONs
-6. Commit fixes, push, optionally re-review the fixes
+
+1. **Extract** all CRITICAL and IMPORTANT findings from each reviewer
+2. **Check convergence** — issues flagged by 2+ reviewers are almost certainly real
+3. **Fix all CRITICALs** immediately
+4. **Fix IMPORTANTs** that fit the project intent
+5. **Evaluate SUGGESTIONs** — fix the easy ones, defer the rest
+6. **File issues** for anything consciously deferred (with rationale)
+7. **Commit fixes, push** — optionally run another review round on the fixes
+
+**False positive handling:** If a finding doesn't apply (wrong assumption,
+out of scope, already handled elsewhere), note the rationale and move on.
+Don't fix things that make the code worse to satisfy a reviewer.
 
 ---
 
-## Practical Lessons
+## Practical lessons from the Spring Meetings sprint
 
-1. **Each model finds different things.** Don't assume one review is enough.
-   Claude is best at protocol/architecture compliance. Gemini excels at
-   crash/data-loss scenarios. Codex catches concurrency and timeout bugs.
+1. **15+ reviews across 3 models caught 8 critical bugs** that would have
+   destroyed a 7-hour overnight run. No single model found all of them.
 
-2. **Provide specific focus areas.** Generic "review this code" produces
-   generic findings. "Check if a hung worker can stall the entire 7-hour
-   run" produces actionable results.
+2. **Each model has genuine blind spots.** Claude missed the pool crash loop.
+   Gemini missed the dead timeout code. Codex missed the rate-limit handling.
+   Together they caught everything.
 
-3. **Tell later reviewers what earlier ones found.** "This code has been
-   through 12 reviews. Prior reviews found and fixed: [list]. Your job is
-   to find what they all missed." This focuses attention on gaps.
+3. **External instances are better than subagents for adversarial review.**
+   Subagents share context with the session that wrote the code. A fresh
+   instance has no shared assumptions.
 
-4. **Convergence validates findings.** When 3 reviewers independently flag
-   the same issue, it's real. When only 1 reviewer flags something, verify
-   before fixing — it may be a hallucination.
+4. **Specific prompts produce better results.** "Check if a hung worker can
+   stall the 7-hour run" beats "review for bugs."
 
-5. **External instances are better than subagents for adversarial review.**
-   A subagent shares context with the parent session that wrote the code.
-   A fresh `claude -p` instance or Gemini/Codex has no shared assumptions.
+5. **Multi-round reviews converge.** Round 1 finds the big issues. Round 2
+   finds what Round 1 missed. Round 3 typically finds only nits — that's
+   the signal to stop.
 
-6. **Run reviews in parallel.** All three CLIs support background execution.
-   A round of 6 reviews takes 3-5 minutes wall-clock, not 30 minutes serial.
-
-7. **The `codex review` subcommand is limited.** Use `codex exec` with piped
-   diffs for custom prompts. Use `AGENTS.md` for persistent review standards.
-
-8. **Gemini's `-p` flag is positional-sensitive.** The prompt must immediately
-   follow `-p`. Put other flags after the prompt string.
+6. **The time investment pays for itself.** The reviews added ~2 hours to
+   the sprint. Without them, the overnight parse would have failed in at
+   least 3 different ways, each requiring hours of debugging and re-running.
 
 ---
 
-## Cost Estimates
+## Reference: CLI quick-reference
 
-For a typical code review session (6 parallel reviews on a medium PR):
-
-| Reviewer | Tokens (approx) | Cost |
-|----------|-----------------|------|
-| Claude subagent (Opus) | ~50k | ~$0.75 |
-| Claude external (Sonnet) | ~30k | ~$0.10 |
-| Gemini (free tier) | ~40k | $0.00 |
-| Codex (API key) | ~100k | ~$0.50 |
-| **Total per round** | | **~$1.35** |
-
-Two rounds of review on a critical overnight pipeline: ~$3-5. Extremely
-cheap insurance against a failed 7-hour run.
+| Action | Claude | Codex | Gemini |
+|--------|--------|-------|--------|
+| Non-interactive | `-p "prompt"` | `exec "prompt"` | `-p "prompt"` |
+| Best model | `--model "opus[1m]"` | `-m gpt-5.4` | `-m gemini-3.1-pro-preview` |
+| Max thinking | `--effort max` | `-c model_reasoning_effort="xhigh"` | (built-in) |
+| Read-only | `--allowedTools "Read,Grep,Glob"` | `-s read-only` | `--approval-mode plan` |
+| Auto-approve | `--dangerously-skip-permissions` | `--full-auto` | `--yolo` |
+| JSON output | `--output-format json` | `--json` | `--output-format json` |
+| Pipe stdin | `cat file \| claude -p` | `cat file \| codex exec` | (use -p with file reads) |
+| Config file | `CLAUDE.md` | `AGENTS.md` | `GEMINI.md` |
