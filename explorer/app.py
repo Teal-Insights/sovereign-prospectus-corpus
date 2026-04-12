@@ -284,10 +284,59 @@ def browse_view(con):
 
 
 def search_view(con):
-    """Stub -- replaced in Task 4."""
-    st.warning("Search view not yet implemented")
-    if st.button("\u2190 Back"):
+    """Full-text search results."""
+    query = st.session_state.get("search_query_submitted", "")
+
+    if st.button("\u2190 Back to browse"):
         _navigate_to("browse")
+
+    st.subheader(f'Search results for "{query}"')
+
+    # Filters (same as browse)
+    filters = render_filters(con)
+
+    if not query:
+        st.info("Enter a search term.")
+        return
+
+    from explorer.highlight import extract_snippet, highlight_text
+    from explorer.queries import search_documents
+
+    with st.spinner("Searching..."):
+        results = search_documents(con, query, limit=50, **filters)
+
+    if results.empty:
+        st.warning(f'No results for "{query}". Try different terms or adjust filters.')
+        return
+
+    # Only say "showing top 50" if we actually hit the limit
+    if len(results) >= 50:
+        st.markdown(f"**Showing top 50 results** for _{query}_")
+    else:
+        st.markdown(f"**{len(results)} results** for _{query}_")
+
+    for _, row in results.iterrows():
+        display = row["display_name"]
+        source = row["source"]
+        date = row["publication_date"]
+        date_str = str(date) if pd.notna(date) else "undated"
+        page_num = row["page_number"]
+
+        with st.expander(f"**{display}** -- {source} -- p.{page_num} -- {date_str}"):
+            snippet = extract_snippet(row["page_text"] or "", query)
+            highlighted = highlight_text(snippet, query)
+            st.markdown(highlighted, unsafe_allow_html=True)
+
+            if st.button(
+                "View full document",
+                key=f"search_{row['document_id']}_{page_num}",
+            ):
+                _navigate_to(
+                    "detail",
+                    doc_id=row["document_id"],
+                    start_page=int(page_num),
+                    nav_origin="search",
+                )
 
 
 def detail_view(con):
