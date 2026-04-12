@@ -161,9 +161,15 @@ def html_to_markdown(converter, html_content: str) -> str:
 
 
 def process_one_edgar(storage_key: str, file_path: Path, converter) -> dict:
-    """Process a single EDGAR file. Returns result dict."""
+    """Process a single EDGAR file. Returns result dict.
+
+    Routing is by FILE EXTENSION, not content sniffing (Codex review fix):
+    - .htm/.html → SGML strip → CSS page-break split → Docling markdown
+    - .txt → SGML strip → <PAGE> marker split → plain text passthrough
+    """
     start = time.monotonic()
     file_size_mb = round(file_path.stat().st_size / (1024 * 1024), 1)
+    is_htm = file_path.suffix in (".htm", ".html")
 
     try:
         raw_bytes = file_path.read_bytes()
@@ -179,10 +185,10 @@ def process_one_edgar(storage_key: str, file_path: Path, converter) -> dict:
             raw_text = raw_bytes.decode("latin-1")
 
         # Step 1: Strip SGML
-        content, is_html = strip_sgml_wrapper(raw_text)
+        content, _is_html = strip_sgml_wrapper(raw_text)
 
-        # Step 2: Split pages
-        if is_html:
+        # Step 2: Split pages — route by extension, not content sniffing
+        if is_htm:
             pages_text = split_htm_pages(content)
             parse_tool = "docling-html"
         else:
@@ -192,9 +198,10 @@ def process_one_edgar(storage_key: str, file_path: Path, converter) -> dict:
         page_count = len(pages_text)
 
         # Step 3: Generate full-document markdown
-        if is_html and content.strip():
+        if is_htm and content.strip():
             full_markdown = html_to_markdown(converter, content)
         else:
+            # Plain text: use as-is (already readable)
             full_markdown = "\n\n".join(pages_text)
 
         elapsed = time.monotonic() - start
