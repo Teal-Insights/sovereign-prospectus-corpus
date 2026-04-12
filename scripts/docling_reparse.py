@@ -265,7 +265,9 @@ def run_supervised(
 
     global shutdown_requested
     total = len(pdf_list)
-    remaining = [(sk, str(p)) for sk, p in pdf_list]
+    from collections import deque
+
+    remaining: deque[tuple[str, str]] = deque((sk, str(p)) for sk, p in pdf_list)
     completed = 0
     failed = 0
     skipped = 0
@@ -285,7 +287,7 @@ def run_supervised(
                 while (remaining or futures) and not shutdown_requested:
                     # Top up the futures pool to batch_size
                     while remaining and len(futures) < batch_size:
-                        args = remaining.pop(0)
+                        args = remaining.popleft()
                         fut = pool.submit(process_one_pdf, args)
                         futures[fut] = args
 
@@ -298,24 +300,27 @@ def run_supervised(
                     )
 
                     if not done_set:
-                        # Timeout: no future completed within timeout period.
-                        # Cancel all pending and log as timeouts.
+                        # Timeout: no future completed — workers are hung.
+                        # Put queued items back, log running ones as timeout,
+                        # then BREAK to kill the pool via context manager exit.
                         for fut, args in list(futures.items()):
-                            fut.cancel()
                             sk = args[0]
-                            skipped += 1
-                            logging.warning("TIMEOUT: %s (no progress in %ds)", sk, timeout)
-                            write_progress(
-                                {
-                                    "status": "timeout",
-                                    "storage_key": sk,
-                                    "page_count": 0,
-                                    "elapsed_s": timeout,
-                                    "error": f"Exceeded {timeout}s timeout",
-                                }
-                            )
+                            if fut.cancel():
+                                remaining.appendleft(args)
+                            else:
+                                skipped += 1
+                                logging.warning("TIMEOUT: %s (hung worker, %ds)", sk, timeout)
+                                write_progress(
+                                    {
+                                        "status": "timeout",
+                                        "storage_key": sk,
+                                        "page_count": 0,
+                                        "elapsed_s": timeout,
+                                        "error": f"Exceeded {timeout}s timeout",
+                                    }
+                                )
                         futures.clear()
-                        continue
+                        break  # Exit inner loop → pool.__exit__ kills workers
 
                     for future in done_set:
                         args = futures.pop(future)
@@ -403,21 +408,24 @@ def run_supervised(
             # Only the small batch was in-flight. Re-check which actually
             # completed (have output files) vs truly crashed.
             crashed_keys = []
+            saved_keys = []
             for args in futures.values():
                 sk = args[0]
                 jsonl_out = OUTPUT_DIR / f"{sk}.jsonl"
                 md_out = OUTPUT_DIR / f"{sk}.md"
                 if jsonl_out.exists() and md_out.exists():
                     completed += 1  # Actually finished before crash
+                    saved_keys.append(sk)
                 else:
                     crashed_keys.append(sk)
                     failed += 1
             # Don't put crashed items back in remaining — they caused the crash
             futures.clear()
             logging.warning(
-                "Pool crashed (restart #%d). %d in-flight, %d crashed: %s. %d remaining.",
+                "Pool crashed (restart #%d). %d in batch, %d saved, %d crashed: %s. %d remaining.",
                 pool_restarts,
-                len(crashed_keys) + (completed - completed),
+                len(saved_keys) + len(crashed_keys),
+                len(saved_keys),
                 len(crashed_keys),
                 crashed_keys[:5],
                 len(remaining),
