@@ -340,10 +340,195 @@ def search_view(con):
 
 
 def detail_view(con):
-    """Stub -- replaced in Task 5."""
-    st.warning("Detail view not yet implemented")
-    if st.button("\u2190 Back"):
+    """Document detail: metadata, filing link, markdown/page rendering."""
+    doc_id = st.session_state.get("doc_id")
+    if doc_id is None:
         _navigate_to("browse")
+        return
+
+    from explorer.queries import (
+        get_document_detail,
+        get_markdown_size,
+        get_max_page,
+    )
+
+    detail = get_document_detail(con, doc_id)
+    if detail is None:
+        st.error(f"Document {doc_id} not found.")
+        if st.button("\u2190 Back"):
+            _navigate_to("browse")
+        return
+
+    # Back button -- use nav_origin to determine correct target
+    nav_origin = st.session_state.get("nav_origin", "browse")
+    back_label = (
+        "\u2190 Back to search results" if nav_origin == "search" else "\u2190 Back to browse"
+    )
+    if st.button(back_label):
+        _navigate_to(nav_origin)
+
+    # Header
+    st.title(detail["display_name"])
+
+    # Metadata row
+    meta_parts = [f"**Source:** {detail['source']}"]
+    if detail["publication_date"]:
+        meta_parts.append(f"**Date:** {detail['publication_date']}")
+    else:
+        meta_parts.append("**Date:** undated")
+    if detail["doc_type"]:
+        meta_parts.append(f"**Type:** {detail['doc_type']}")
+    meta_parts.append(f"**Country:** {detail['country_name']}")
+    meta_parts.append(f"**Region:** {detail['region']}")
+    st.markdown(" | ".join(meta_parts))
+
+    # Filing link
+    if detail["filing_url"]:
+        st.markdown(
+            ext_link(detail["filing_url"], "View original filing"),
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("---")
+
+    # In-document search
+    doc_search = st.text_input(
+        "Search within this document",
+        key="doc_search",
+        placeholder="Find text in this prospectus...",
+    )
+
+    # Determine rendering mode
+    md_size = get_markdown_size(con, doc_id)
+    max_page = get_max_page(con, doc_id)
+    start_page = st.session_state.get("start_page", 1)
+
+    has_markdown = md_size > 0
+    has_pages = max_page > 0
+    use_full_markdown = has_markdown and md_size < MARKDOWN_SIZE_LIMIT
+
+    if not has_markdown and not has_pages:
+        # Unparsed document
+        st.info("Full text not yet available -- this document is being processed.")
+        if detail["filing_url"]:
+            st.markdown(
+                "In the meantime, you can "
+                + ext_link(detail["filing_url"], "view the original filing")
+                + ".",
+                unsafe_allow_html=True,
+            )
+        return
+
+    if use_full_markdown:
+        _render_full_markdown(con, doc_id, doc_search)
+    elif has_pages:
+        _render_page_by_page(con, doc_id, max_page, start_page, doc_search)
+    else:
+        # Markdown-only, over size limit -- force render anyway (5 docs)
+        _render_full_markdown(con, doc_id, doc_search)
+
+
+def _render_full_markdown(con, doc_id: int, search_query: str):
+    """Render full markdown with optional highlighting and ToC."""
+    import re
+
+    from explorer.queries import get_markdown
+
+    md_text = get_markdown(con, doc_id)
+    if not md_text:
+        st.info("No markdown available.")
+        return
+
+    # Extract headings for ToC
+    headings = re.findall(r"^(#{2,3})\s+(.+)$", md_text, re.MULTILINE)
+    if headings:
+        with st.expander("Table of Contents", expanded=False):
+            for marker, title in headings:
+                level = len(marker) - 2  # ## = 0 indent, ### = 1 indent
+                indent = "\u00a0\u00a0\u00a0\u00a0" * level
+                st.markdown(f"{indent}\u2022 {title}")
+
+    # Highlight search terms if present
+    if search_query:
+        from explorer.highlight import highlight_text
+
+        highlighted, count = highlight_text(md_text, search_query, return_count=True)
+        if count > 100:
+            st.info(f"{count} matches found -- showing first 100 highlights.")
+        elif count > 0:
+            st.info(f"{count} matches found.")
+        else:
+            st.warning(f'"{search_query}" not found in this document.')
+        st.markdown(highlighted, unsafe_allow_html=True)
+    else:
+        st.markdown(md_text)
+
+
+def _render_page_by_page(con, doc_id: int, max_page: int, start_page: int, search_query: str):
+    """Render one page at a time with navigation."""
+    from explorer.queries import get_page_text, search_pages_in_document
+
+    # Page-level search results
+    if search_query:
+        matching_pages = search_pages_in_document(con, doc_id, search_query)
+        if matching_pages:
+            st.info(
+                f'Found "{search_query}" on {len(matching_pages)} pages: '
+                + ", ".join(str(p) for p in matching_pages[:20])
+                + ("..." if len(matching_pages) > 20 else "")
+            )
+            # Buttons to jump to matching pages
+            cols = st.columns(min(len(matching_pages), 10))
+            for i, pg in enumerate(matching_pages[:10]):
+                with cols[i]:
+                    if st.button(f"p.{pg}", key=f"jump_{pg}"):
+                        st.session_state["current_page"] = pg
+                        st.rerun()
+        else:
+            st.warning(f'"{search_query}" not found in this document.')
+
+    # Clamp start_page to valid range (prevents stale state crash)
+    initial_page = max(1, min(start_page, max_page))
+    page_num = st.session_state.get("current_page", initial_page)
+    page_num = max(1, min(page_num, max_page))  # Double-clamp for safety
+
+    # Use a key namespaced by doc_id to prevent stale values across documents
+    page_num = st.number_input(
+        f"Page (1--{max_page})",
+        min_value=1,
+        max_value=max_page,
+        value=page_num,
+        key=f"page_selector_{doc_id}",
+    )
+    st.session_state["current_page"] = page_num
+
+    text = get_page_text(con, doc_id, page_num)
+    if text:
+        if search_query:
+            from explorer.highlight import highlight_text
+
+            highlighted, count = highlight_text(text, search_query, return_count=True)
+            st.markdown(f"**Page {page_num} of {max_page}** ({count} matches on this page)")
+            if count > 0:
+                st.markdown(highlighted, unsafe_allow_html=True)
+            else:
+                st.text(text)
+        else:
+            st.markdown(f"**Page {page_num} of {max_page}**")
+            st.text(text)
+    else:
+        st.info(f"No text available for page {page_num}.")
+
+    # Prev/Next
+    nav1, nav2 = st.columns(2)
+    with nav1:
+        if page_num > 1 and st.button("\u2190 Previous page"):
+            st.session_state["current_page"] = page_num - 1
+            st.rerun()
+    with nav2:
+        if page_num < max_page and st.button("Next page \u2192"):
+            st.session_state["current_page"] = page_num + 1
+            st.rerun()
 
 
 # -- Main ----------------------------------------------------------------------
