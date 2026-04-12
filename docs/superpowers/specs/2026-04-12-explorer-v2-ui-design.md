@@ -106,23 +106,31 @@ target.
 Triggered when user enters a query in the search bar.
 
 - **BM25 full-text search** via DuckDB FTS on `document_pages.page_text`
-- Results **grouped by document** -- show the best-matching page's snippet per
-  document, not one result per matching page
-- Each result shows: issuer name, source badge, publication date, and a 2-3
-  line text snippet with the search term in context
-- Filters (source, region, income group, country) apply to search results
-- Click a result to open document detail view, scrolled/navigated to the
-  matching page
+- Results **grouped by document** using a CTE with window function:
+  `ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY score DESC)` to get
+  the best-matching page per document, then fetch only the top 50 snippets.
+  This ordering (rank first, fetch snippets second) is critical -- the
+  reverse (snippets first, then rank) measured 12x slower in testing.
+- Each result shows: issuer name (with `COALESCE(issuer_name, title,
+  storage_key)` fallback for 215 docs with no issuer), source badge,
+  publication date, and a 2-3 line text snippet with the search term in
+  context. Snippets extracted in Python (DuckDB FTS has no built-in
+  snippet function): find search term in `page_text`, grab ~200 chars of
+  surrounding context.
+- Filters (source, region, income group, country) apply to search results.
+  Filter dropdown values cached with `@st.cache_data`.
+- Click a result to open document detail view at the matching page
 - 50 results cap with a note ("Showing top 50 results") if more exist
 - "No results" state with helpful suggestion text
+- Show `st.spinner` during search -- expect ~1-1.5s warm, ~3s cold
 
 ### View 3: Document Detail
 
 Opened when clicking a document from browse or search results.
 
 **Header:**
-- Document title / issuer name (large heading)
-- Metadata row: source, date, doc type
+- Document title / issuer name (large heading) -- use same COALESCE chain
+- Metadata row: source, date (or "undated"), doc type (or omit if null)
 - **"View original filing ↗"** link -- opens source page URL in new tab
   (`target="_blank" rel="noopener noreferrer"`). For LuxSE (no source page
   URL), link to the PDF download URL. The `↗` signals new-tab behavior.
@@ -130,22 +138,36 @@ Opened when clicking a document from browse or search results.
 
 **In-document search:**
 - Search box at top of document body: "Search within this document"
-- On search: highlight all matches with `<mark>` tags, show match count
-  ("12 matches found"), up/down arrows to jump between matches via anchor
-  links
-- First match auto-scrolls into view
+- On search: highlight matches with `<mark>` tags via regex-safe replacement
+  (must skip HTML tags/attributes to avoid breaking links or markdown syntax),
+  show match count ("12 matches found")
+- **Cap at 100 highlights** to prevent HTML bloat from stop-word searches
+  ("the", "and"). Show "100+ matches -- showing first 100 highlights."
+- No anchor-based jump navigation. Streamlit does not support in-page
+  `#anchor` links -- they trigger full app reruns. Instead: match count +
+  highlights only for full-markdown mode; match count + page list for
+  page-by-page mode.
 
 **Document body (hybrid rendering):**
 
-- **Full markdown mode** (docs under ~500KB markdown): render the complete
-  Docling markdown as scrollable content. If the markdown has `##` headings,
-  render a sidebar/expander ToC with jump links to each heading. This is the
-  default for most prospectuses (50-200 pages).
-- **Page-by-page mode** (docs over ~500KB): page selector (number input or
-  slider), show one page at a time. In-document search shows "Found on pages
-  3, 17, 42" as clickable links. Current page gets inline highlighting.
+- **Full markdown mode** (docs under 200KB markdown -- hard cutoff enforced
+  before rendering): render the complete Docling markdown as scrollable
+  content. If the markdown has `##` headings, render a ToC in `st.sidebar`
+  or an expander with heading list. Covers ~67% of docs (3,256 under 100KB
+  + portion of the 1,112 in 100-500KB range).
+- **Page-by-page mode** (docs at or over 200KB, or docs with pages but no
+  markdown): `st.number_input` page selector (not slider -- corpus max is
+  4,108 pages). Show one page at a time. In-document search shows "Found on
+  pages 3, 17, 42" as clickable page-load buttons. Current page gets inline
+  highlighting.
+- **Markdown-only docs** (5 docs with markdown but no pages): render in
+  full markdown mode regardless of size. In-document search uses the
+  markdown text directly.
+- Page count for navigation derived from `SELECT MAX(page_number) FROM
+  document_pages WHERE document_id = ?`, not from `documents.page_count`
+  (which is NULL for all rows).
 
-The Congo prospectus (~150 pages, well under 500KB) gets full-markdown with
+The Congo prospectus (~150 pages, well under 200KB) gets full-markdown with
 ToC -- that's the demo moment.
 
 **Back navigation:** "Back to results" or "Back to browse" button at top,
@@ -165,13 +187,25 @@ in the corpus to standardized metadata:
 | `income_group` | Upper middle income |
 | `lending_category` | IBRD |
 
-~100-150 distinct sovereign issuer names. Generated programmatically from
-World Bank classifications, then hand-corrected for known mismatches
-(Turkey/Turkiye, "PHILLIPINES (REPUBLIC OF THE)", etc.).
+261 distinct issuer names in the corpus (not ~150 as initially estimated).
+Many are the same country with different formatting ("REPUBLIC OF TURKEY"
+vs "TURKIYE (THE REPUBLIC OF)") or are corporate issuers
+("UNICREDIT S.P.A.", "BANK OF CYPRUS") that need `is_sovereign = false`.
 
-This table is joined at query time for filtering. The filter dropdowns
-are populated from the distinct values in this table intersected with
-what's actually in the corpus.
+**Implementation:** Hard-coded Python dict mapping each issuer name to
+`(country_code, country_name)`. No fuzzy matching -- too error-prone
+("Georgia" = country or US state? "Bank of Cyprus" = sovereign?).
+Claude drafts the mapping, Teal verifies. World Bank API or static CSV
+provides the country_code-to-region/income_group/lending_category join.
+
+Existing source-native IDs can help: EDGAR stores `cik`, PDIP stores
+`country`, NSM stores `lei`. These are secondary validation, not primary.
+
+This table is joined at query time via `LEFT JOIN` (not INNER -- docs
+without a mapped issuer must not vanish). `COALESCE` null regions/income
+groups to "Unknown" for filter dropdowns (Streamlit multiselect crashes
+on None values mixed with strings). Filter dropdown values cached with
+`@st.cache_data`.
 
 ## External Links
 
@@ -203,6 +237,35 @@ Copy to `explorer/assets/` for the Streamlit app.
 - Pandas OK in explorer/ (per CLAUDE.md)
 - `st.markdown` with `unsafe_allow_html=True` for custom HTML (links,
   highlighting)
+
+## Null Handling
+
+The corpus has significant null values that must be handled throughout:
+
+| Field | Null count | Handling |
+|-------|-----------|----------|
+| `issuer_name` | 215 | `COALESCE(issuer_name, title, storage_key)` everywhere |
+| `publication_date` | 814 | `NULLS LAST` in sort, show "undated" in UI |
+| `doc_type` | 664 | Show "Unknown" or omit from display |
+| `title` | 71 | Falls through to storage_key via COALESCE chain |
+| `source_page_url` | 4,955 (all LuxSE) | Fall through to `download_url` |
+| `documents.page_count` | 9,729 (all) | Never use; derive from `MAX(page_number)` |
+| `page_text` (no pages) | 4,872 docs | "Not yet available" fallback |
+| `markdown_text` (no md) | 4,867 docs | Page-by-page or "not yet available" |
+
+## MotherDuck FTS Risk
+
+DuckDB's FTS extension creates shadow tables (`fts_main_document_pages`
+etc.) that are local artifacts. These may not survive upload to MotherDuck.
+
+**Mitigation:** After publishing to MotherDuck, connect to MotherDuck and
+run `build_fts_index()` against the remote connection. If this fails,
+the explorer falls back to local DuckDB (which always has the index).
+Test this before the demo.
+
+The `@st.cache_resource(ttl=3600)` connection pattern handles MotherDuck
+cold start (~5-8s for first load after Streamlit Cloud sleep). Open the
+app 5 minutes before the demo to warm it up.
 
 ## Graceful Fallback for Unparsed Documents
 
