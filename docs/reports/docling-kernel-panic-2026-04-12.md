@@ -150,23 +150,39 @@ Python 2 via `maxtasksperchild`.
 transformers) should use `max_tasks_per_child`. Start with 10-25 and tune
 based on observed leak rate.
 
-### 3. Docling has known memory management challenges
+### 3. Docling has known, systemic memory leaks (8+ open GitHub issues)
 
-Docling loads multiple ML models (layout, table structure, OCR) that persist in
-the process. The `DocumentConverter` creates a new converter per call, but the
-underlying PyTorch models remain cached. There is no official API to clear
-model caches between documents.
+This is NOT a bug in our code. Docling has **at least 8 open GitHub issues**
+about memory leaks across multiple subsystems:
 
-The Docling project provides `docling-jobkit` for production batch processing
-with `LocalOrchestrator` (shared models, worker management) and
-`docling-jobkit-multiproc` CLI. These may handle memory better than our custom
-pool. Worth evaluating for future runs.
+- [#2209](https://github.com/docling-project/docling/issues/2209) — `DoclingParseV2DocumentBackend` accumulates 13 GB; `del` + `gc.collect()` don't help
+- [#2788](https://github.com/docling-project/docling/issues/2788) — Memory grows with successive conversions, even simple PDFs
+- [#2779](https://github.com/docling-project/docling/issues/2779) — `convert()` consumes all memory, gets OOM-killed
+- [#2077](https://github.com/docling-project/docling/issues/2077) — docling-parse v4 accumulates 20+ GB on long documents
+- [#1343](https://github.com/docling-project/docling/issues/1343) — EasyOCR has its own independent leak
+- [#1886](https://github.com/docling-project/docling/issues/1886) — Formula enrichment leaks separately
+- [#474](https://github.com/docling-project/docling-serve/issues/474) — docling-serve memory never released
 
-**Relevant Docling settings that affect memory:**
+**There is no official `clear_cache()` API.** The only effective fix is process
+recycling (`max_tasks_per_child`). The Docling team has not shipped a
+comprehensive fix as of April 2026. These issues remain open.
+
+**Relevant Docling settings that reduce memory:**
 - `generate_parsed_pages=False` — don't retain intermediate page data (default)
-- `ocr_batch_size`, `layout_batch_size`, `table_batch_size` — lower = less memory
-- `document_timeout` — per-document timeout at the Docling level
-- `queue_max_size` — limits inter-stage buffering in threaded pipeline
+- `do_ocr=False` — eliminates OCR model (~1-2 GB) if PDFs are programmatic
+- `do_formula_enrichment=False` — avoids formula model leak (#1886)
+- `device="cpu"` — avoids MPS memory release issues (slower but predictable)
+- `ocr_batch_size`, `layout_batch_size` — lower = less peak memory
+- Tesseract instead of EasyOCR — avoids EasyOCR-specific leak (#1343)
+
+**Also consider:** The official `docling-jobkit` provides `LocalOrchestrator`
+and `docling-jobkit-multiproc` CLI for production batch processing. Kubeflow
+pipeline definitions set explicit memory limits (16 GB per pod). Worth
+evaluating for future runs.
+
+**CPython caveat:** `max_tasks_per_child` has known hang bugs when used with
+`.map()` on large iterables ([CPython #115634](https://github.com/python/cpython/issues/115634)).
+Our code uses `submit()` one-at-a-time, which avoids this.
 
 ### 4. Worker recycling has a 3-5% throughput cost — worth it
 
