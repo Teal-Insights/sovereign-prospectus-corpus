@@ -19,13 +19,16 @@ Designed to run unattended for 4-5 hours on a Mac Mini M4 Pro.
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import logging
 import os
 import shutil
 import signal
 import sys
+import threading
 import time
+from collections import deque
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from datetime import UTC, datetime
@@ -293,6 +296,151 @@ def process_one_pdf(args: tuple[str, str]) -> dict:
         }
 
 
+# ── Background memory watchdog ─────────────────────────────────────
+
+
+def _start_memory_watchdog(
+    pool: ProcessPoolExecutor,
+    ceiling_gb: float,
+    heartbeat_path: Path,
+    shutdown_flag: list,
+    completed_ref: list,
+    remaining_ref: list,
+    workers_ref: list,
+    interval: float = 30.0,
+) -> threading.Event:
+    """Background thread: check RSS every 30s, write heartbeat, trigger ceiling shutdown.
+
+    Returns a threading.Event — call .set() to stop the timer chain before
+    pool teardown. This prevents stale timers from reading dead pools.
+    """
+    stop_event = threading.Event()
+
+    def _check() -> None:
+        if stop_event.is_set() or shutdown_flag[0]:
+            return
+        try:
+            mem_gb = get_total_python_rss_gb(pool)
+            heartbeat = {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "workers": workers_ref[0],
+                "memory_gb": round(mem_gb, 1),
+                "completed": completed_ref[0],
+                "remaining": remaining_ref[0],
+            }
+            part = heartbeat_path.with_suffix(".json.part")
+            part.write_text(json.dumps(heartbeat))
+            os.replace(str(part), str(heartbeat_path))
+
+            if mem_gb > ceiling_gb:
+                logging.error(
+                    "BACKGROUND MONITOR: Memory %.1f GB exceeds ceiling %.1f GB. "
+                    "Requesting shutdown.",
+                    mem_gb,
+                    ceiling_gb,
+                )
+                shutdown_flag[0] = True
+                return
+        except Exception:
+            logging.exception("Background memory monitor error")
+
+        if not stop_event.is_set():
+            t = threading.Timer(interval, _check)
+            t.daemon = True
+            t.start()
+
+    t = threading.Timer(interval, _check)
+    t.daemon = True
+    t.start()
+    return stop_event
+
+
+# ── Throttle teardown ──────────────────────────────────────────────
+
+
+def _throttle_teardown(
+    pool: ProcessPoolExecutor,
+    futures: dict,
+    remaining: deque,
+    crash_counts: dict,
+    watchdog_stop: threading.Event | None = None,
+) -> tuple[int, int]:
+    """Execute the throttle teardown sequence. Returns (completed, failed) counts.
+
+    Cancels the background watchdog first to prevent stale timer threads
+    from reading the dead pool or writing stale heartbeats.
+    """
+    import contextlib
+
+    completed_delta = 0
+    failed_delta = 0
+
+    # Step 0: Cancel background watchdog before touching the pool
+    if watchdog_stop is not None:
+        watchdog_stop.set()
+
+    # Step 1: Capture PIDs before shutdown clears them
+    captured_pids = list(pool._processes or {})
+
+    # Step 2: Cancel unstarted futures, re-queue
+    for fut, args in list(futures.items()):
+        if fut.cancel():
+            remaining.appendleft(args)
+            del futures[fut]
+
+    # Step 3: Shutdown pool
+    pool.shutdown(wait=False, cancel_futures=True)
+
+    # Step 4: SIGTERM captured PIDs
+    for pid in captured_pids:
+        with contextlib.suppress(ProcessLookupError, OSError):
+            os.kill(pid, signal.SIGTERM)
+
+    # Step 5: Bounded wait (10s), escalate to SIGKILL
+    deadline = time.monotonic() + 10.0
+    alive = list(captured_pids)
+    while time.monotonic() < deadline and alive:
+        still_alive = []
+        for pid in alive:
+            try:
+                os.kill(pid, 0)
+                still_alive.append(pid)
+            except (ProcessLookupError, OSError):
+                pass
+        alive = still_alive
+        if alive:
+            time.sleep(0.5)
+
+    # Step 6: SIGKILL survivors
+    for pid in alive:
+        with contextlib.suppress(ProcessLookupError, OSError):
+            os.kill(pid, signal.SIGKILL)
+            logging.warning("SIGKILL sent to hung worker PID %d", pid)
+
+    # Step 7: Check output files for in-flight items
+    for _fut, args in list(futures.items()):
+        sk = args[0]
+        jsonl_out = OUTPUT_DIR / f"{sk}.jsonl"
+        md_out = OUTPUT_DIR / f"{sk}.md"
+        if jsonl_out.exists() and md_out.exists():
+            completed_delta += 1
+        else:
+            crash_counts[sk] = crash_counts.get(sk, 0) + 1
+            if crash_counts[sk] <= 2:
+                remaining.appendleft(args)
+            else:
+                failed_delta += 1
+                logging.error("QUARANTINED after %d crashes: %s", crash_counts[sk], sk)
+    futures.clear()
+
+    # Step 8: Clean up orphaned .part files
+    for part_file in OUTPUT_DIR.glob("*.part"):
+        logging.warning("Removing orphaned .part file: %s", part_file.name)
+        part_file.unlink()
+
+    return completed_delta, failed_delta
+
+
 # ── Supervised execution ───────────────────────────────────────────
 
 
@@ -306,11 +454,10 @@ def run_supervised(
 ) -> dict:
     """Process all PDFs with batched submission and automatic pool restart.
 
-    Key design decisions (from Codex/Gemini code reviews):
+    Key design decisions:
     - Submit in small batches (max_workers * 2), NOT the entire queue.
-      This prevents a pool crash from removing thousands of queued items.
-    - Use concurrent.futures.wait() with a timeout to detect hung workers,
-      since as_completed + future.result(timeout) is ineffective.
+    - Use concurrent.futures.wait() with 5s polling to check background shutdown.
+    - Three-tier memory response: info → throttle → ceiling.
     - On BrokenProcessPool, re-check output files to distinguish completed
       items from truly crashed ones.
     """
@@ -318,51 +465,82 @@ def run_supervised(
 
     global shutdown_requested
     total = len(pdf_list)
-    from collections import deque
-
     remaining: deque[tuple[str, str]] = deque((sk, str(p)) for sk, p in pdf_list)
-    crash_counts: dict[str, int] = {}  # Track per-doc crash retries
+    crash_counts: dict[str, int] = {}
     completed = 0
     failed = 0
     skipped = 0
     mps_errors = 0
     pool_restarts = 0
     start_time = time.monotonic()
-    batch_size = max_workers * 2
+    current_max_workers = max_workers
+    memory_info_gb = memory_throttle_gb * 0.67
+    throttle_events = 0
+    peak_memory_gb = 0.0
+    bg_shutdown_flag: list[bool] = [False]
 
-    logging.info("Starting Docling re-parse: %d documents, %d workers", total, max_workers)
+    logging.info("Starting Docling re-parse: %d documents, %d workers", total, current_max_workers)
 
     while remaining and not shutdown_requested:
         pool = None
+        watchdog_stop = None
         try:
+            batch_size = current_max_workers * 2
             pool = ProcessPoolExecutor(
-                max_workers=max_workers,
+                max_workers=current_max_workers,
                 max_tasks_per_child=max_tasks_per_child,
             )
             futures: dict[object, tuple[str, str]] = {}
 
+            # Start background memory watchdog for this pool
+            completed_ref = [completed]
+            remaining_ref = [len(remaining)]
+            workers_ref = [current_max_workers]
+            heartbeat_path = OUTPUT_DIR / "_heartbeat.json"
+            watchdog_stop = _start_memory_watchdog(
+                pool,
+                memory_ceiling_gb,
+                heartbeat_path,
+                bg_shutdown_flag,
+                completed_ref,
+                remaining_ref,
+                workers_ref,
+            )
+
             while (remaining or futures) and not shutdown_requested:
-                # Top up the futures pool to batch_size.
-                # Peek before pop — if submit() raises (pool already
-                # broken), the item stays in remaining.
+                # Check background monitor
+                if bg_shutdown_flag[0]:
+                    logging.error("Background monitor requested shutdown.")
+                    shutdown_requested = True
+                    break
+
+                # Top up the futures pool to batch_size
                 while remaining and len(futures) < batch_size:
                     args = remaining[0]
                     fut = pool.submit(process_one_pdf, args)
-                    remaining.popleft()  # Only pop after successful submit
+                    remaining.popleft()
                     futures[fut] = args
 
                 if not futures:
                     break
 
-                # Wait for at least one future with a global timeout
-                done_set, _pending = wait(
-                    futures.keys(), timeout=timeout, return_when=FIRST_COMPLETED
-                )
+                # Poll with 5s timeout to check background shutdown flag frequently
+                deadline = time.monotonic() + timeout
+                done_set: set = set()
+                while time.monotonic() < deadline:
+                    done_set, _pending = wait(
+                        futures.keys(), timeout=5.0, return_when=FIRST_COMPLETED
+                    )
+                    if done_set or bg_shutdown_flag[0] or shutdown_requested:
+                        break
+
+                if bg_shutdown_flag[0] and not done_set:
+                    logging.error("Background monitor requested shutdown.")
+                    shutdown_requested = True
+                    break
 
                 if not done_set:
-                    # Timeout: no future completed — workers are hung.
-                    # Put queued items back, log running ones as timeout,
-                    # then BREAK to kill the pool via context manager exit.
+                    # True timeout — workers are hung
                     for fut, args in list(futures.items()):
                         sk = args[0]
                         if fut.cancel():
@@ -376,12 +554,18 @@ def run_supervised(
                                     "storage_key": sk,
                                     "page_count": 0,
                                     "elapsed_s": timeout,
+                                    "file_size_mb": 0,
                                     "error": f"Exceeded {timeout}s timeout",
                                 }
                             )
                     futures.clear()
-                    break  # Exit inner loop → force-kill pool below
+                    break
 
+                # Measure memory ONCE for this batch
+                mem_gb = get_total_python_rss_gb(pool)
+                peak_memory_gb = max(peak_memory_gb, mem_gb)
+
+                # Process ALL completed futures first (no break inside this loop)
                 for future in done_set:
                     args = futures.pop(future)
                     storage_key = args[0]
@@ -394,6 +578,7 @@ def run_supervised(
                             "storage_key": storage_key,
                             "page_count": 0,
                             "elapsed_s": 0,
+                            "file_size_mb": 0,
                             "error": f"{type(exc).__name__}: {exc}",
                         }
 
@@ -410,12 +595,13 @@ def run_supervised(
                     done = completed + failed + skipped
                     if result["status"] == "success":
                         logging.info(
-                            "[%d/%d] %s — %d pages — %.1fs — OK",
+                            "[%d/%d] %s — %d pages — %.1fs — %.1f MB — OK",
                             done,
                             total,
                             result["storage_key"],
                             result["page_count"],
                             result["elapsed_s"],
+                            result.get("file_size_mb", 0),
                         )
                     else:
                         logging.warning(
@@ -431,35 +617,82 @@ def run_supervised(
                             "FAILED: %s — %s", result["storage_key"], result.get("error", "")
                         )
 
-                    write_progress(result)
+                    write_progress(result, memory_gb=mem_gb, workers=current_max_workers)
 
-                    # Periodic summary
-                    if done % 50 == 0 and done > 0:
-                        elapsed = time.monotonic() - start_time
-                        rate = done / elapsed if elapsed > 0 else 0
-                        eta = (total - done) / rate if rate > 0 else 0
-                        logging.info(
-                            "Progress: %d/%d (%.1f%%) — %d OK, %d failed, %d skipped — "
-                            "ETA %.0fm — pool restarts: %d",
-                            done,
-                            total,
-                            100 * done / total,
-                            completed,
-                            failed,
-                            skipped,
-                            eta / 60,
-                            pool_restarts,
-                        )
-                        usage = shutil.disk_usage(str(OUTPUT_DIR))
-                        free_gb = usage.free / (1024**3)
-                        if free_gb < 1.0:
-                            logging.error("Low disk space: %.1f GB free. Stopping.", free_gb)
-                            shutdown_requested = True
+                # Update refs for background watchdog
+                completed_ref[0] = completed
+                remaining_ref[0] = len(remaining)
+                workers_ref[0] = current_max_workers
 
-                    if mps_errors >= 3:
-                        logging.warning("%d MPS errors. Setting DOCLING_DEVICE=cpu.", mps_errors)
-                        os.environ["DOCLING_DEVICE"] = "cpu"
-                        mps_errors = -999
+                # Periodic summary
+                done = completed + failed + skipped
+                if done % 50 == 0 and done > 0:
+                    elapsed = time.monotonic() - start_time
+                    rate = done / elapsed if elapsed > 0 else 0
+                    eta = (total - done) / rate if rate > 0 else 0
+                    logging.info(
+                        "Progress: %d/%d (%.1f%%) — %d OK, %d failed, %d skipped — "
+                        "ETA %.0fm — workers: %d — memory: %.1f GB — pool restarts: %d",
+                        done,
+                        total,
+                        100 * done / total,
+                        completed,
+                        failed,
+                        skipped,
+                        eta / 60,
+                        current_max_workers,
+                        mem_gb,
+                        pool_restarts,
+                    )
+                    usage = shutil.disk_usage(str(OUTPUT_DIR))
+                    free_gb = usage.free / (1024**3)
+                    if free_gb < 1.0:
+                        logging.error("Low disk space: %.1f GB free. Stopping.", free_gb)
+                        shutdown_requested = True
+
+                if mps_errors >= 3:
+                    logging.warning("%d MPS errors. Setting DOCLING_DEVICE=cpu.", mps_errors)
+                    os.environ["DOCLING_DEVICE"] = "cpu"
+                    mps_errors = -999
+
+                # Evaluate memory thresholds AFTER processing all completed futures
+                need_throttle = False
+                if mem_gb > memory_ceiling_gb:
+                    logging.error(
+                        "CEILING: Memory %.1f GB > %.1f GB. Graceful shutdown.",
+                        mem_gb,
+                        memory_ceiling_gb,
+                    )
+                    shutdown_requested = True
+                elif mem_gb > memory_throttle_gb:
+                    logging.warning(
+                        "THROTTLE: Memory %.1f GB > %.1f GB. Reducing workers %d -> %d.",
+                        mem_gb,
+                        memory_throttle_gb,
+                        current_max_workers,
+                        max(current_max_workers - 1, 1),
+                    )
+                    if current_max_workers <= 1:
+                        logging.error("Already at 1 worker. Shutting down.")
+                        shutdown_requested = True
+                    else:
+                        need_throttle = True
+                elif mem_gb > memory_info_gb:
+                    logging.info(
+                        "MEMORY INFO: %.1f GB (threshold %.1f GB)", mem_gb, memory_info_gb
+                    )
+
+                if need_throttle:
+                    throttle_events += 1
+                    tc, tf = _throttle_teardown(
+                        pool, futures, remaining, crash_counts, watchdog_stop
+                    )
+                    completed += tc
+                    failed += tf
+                    current_max_workers -= 1
+                    pool = None  # Prevent finally block from double-shutdown
+                    watchdog_stop = None  # Already cancelled by _throttle_teardown
+                    break  # Break inner while → outer loop creates new smaller pool
 
         except BrokenProcessPool:
             pool_restarts += 1
@@ -473,7 +706,6 @@ def run_supervised(
                     completed += 1
                     saved_keys.append(sk)
                 else:
-                    # Track per-doc crash count — quarantine after 2 crashes
                     crash_counts[sk] = crash_counts.get(sk, 0) + 1
                     if crash_counts[sk] <= 2:
                         remaining.appendleft(args)
@@ -498,6 +730,7 @@ def run_supervised(
                         "storage_key": sk,
                         "page_count": 0,
                         "elapsed_s": 0,
+                        "file_size_mb": 0,
                         "error": "BrokenProcessPool",
                     }
                 )
@@ -506,6 +739,9 @@ def run_supervised(
                 break
             continue
         finally:
+            # Cancel background watchdog BEFORE touching the pool
+            if watchdog_stop is not None:
+                watchdog_stop.set()
             # Force-kill pool workers — shutdown(wait=True) hangs on stuck C-extensions
             if pool is not None:
                 pool.shutdown(wait=False, cancel_futures=True)
@@ -523,6 +759,8 @@ def run_supervised(
         "failed": failed,
         "skipped": skipped,
         "pool_restarts": pool_restarts,
+        "throttle_events": throttle_events,
+        "peak_memory_gb": round(peak_memory_gb, 1),
         "elapsed_s": round(elapsed_total, 1),
         "elapsed_human": f"{elapsed_total / 3600:.1f}h",
         "shutdown_requested": shutdown_requested,
@@ -535,9 +773,14 @@ def run_supervised(
     return summary
 
 
-def write_progress(result: dict) -> None:
+def write_progress(result: dict, memory_gb: float = 0.0, workers: int = 0) -> None:
     """Append a progress entry (advisory, not for correctness)."""
-    entry = {**result, "timestamp": datetime.now(UTC).isoformat()}
+    entry = {
+        **result,
+        "memory_gb": round(memory_gb, 1),
+        "workers": workers,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
     line = json.dumps(entry) + "\n"
     with PROGRESS_LOG.open("a") as f:
         f.write(line)
