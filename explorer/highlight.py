@@ -3,6 +3,27 @@
 from __future__ import annotations
 
 import re
+from typing import Literal, overload
+
+
+@overload
+def highlight_text(
+    text: str,
+    query: str,
+    *,
+    max_highlights: int = 100,
+    return_count: Literal[True],
+) -> tuple[str, int]: ...
+
+
+@overload
+def highlight_text(
+    text: str,
+    query: str,
+    *,
+    max_highlights: int = 100,
+    return_count: Literal[False] = ...,
+) -> str: ...
 
 
 def highlight_text(

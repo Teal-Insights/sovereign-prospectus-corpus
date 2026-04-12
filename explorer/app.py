@@ -73,7 +73,12 @@ def cached_corpus_stats(_con):
 
 def ext_link(url: str, text: str) -> str:
     """HTML for an external link that opens in a new tab."""
-    return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{text} \u2197</a>'
+    import html
+
+    return (
+        f'<a href="{html.escape(url)}" target="_blank" rel="noopener noreferrer">'
+        f"{html.escape(text)} \u2197</a>"
+    )
 
 
 # -- Session state navigation --------------------------------------------------
@@ -81,7 +86,14 @@ def ext_link(url: str, text: str) -> str:
 # stale keys that would otherwise cause infinite redirects,
 # wrong back-button labels, or stale page selectors.
 
-_DETAIL_KEYS = {"doc_id", "start_page", "current_page", "page_selector", "doc_search"}
+_DETAIL_KEYS = {
+    "doc_id",
+    "start_page",
+    "current_page",
+    "page_selector",
+    "doc_search",
+    "nav_origin",
+}
 _SEARCH_KEYS = {"search_query", "search_query_submitted"}
 _BROWSE_KEYS = {"browse_page"}
 

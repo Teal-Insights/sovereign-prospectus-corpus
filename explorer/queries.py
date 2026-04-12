@@ -315,7 +315,7 @@ def search_pages_in_document(
     return [r[0] for r in rows]
 
 
-def get_filter_options(con: duckdb.DuckDBPyConnection) -> dict[str, list[str]]:
+def get_filter_options(con: duckdb.DuckDBPyConnection) -> dict[str, list]:
     """Get distinct values for filter dropdowns. Cache this with @st.cache_data."""
     sources = [
         r[0]
@@ -364,4 +364,5 @@ def get_corpus_stats(con: duckdb.DuckDBPyConnection) -> dict[str, int]:
     """).fetchone()
     # docs count should include all docs, issuers should exclude nulls
     total = con.execute("SELECT COUNT(*) FROM documents").fetchone()
+    assert row is not None and total is not None  # COUNT(*) always returns a row
     return {"docs": total[0], "sources": row[1], "issuers": row[2]}
