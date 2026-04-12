@@ -204,6 +204,23 @@ Copy to `explorer/assets/` for the Streamlit app.
 - `st.markdown` with `unsafe_allow_html=True` for custom HTML (links,
   highlighting)
 
+## Graceful Fallback for Unparsed Documents
+
+About half the corpus (mostly EDGAR) is still being parsed overnight. These
+documents have metadata (issuer, source, date, doc type) but no page text or
+markdown yet. The explorer handles this gracefully:
+
+- **Browse table:** Unparsed docs appear normally in the table (they have
+  metadata). No visual distinction needed -- they're real documents.
+- **Search:** BM25 search only hits `document_pages`, so unparsed docs
+  won't appear in search results. That's correct behavior, not a bug.
+- **Document detail view:** When someone clicks into an unparsed document,
+  show the metadata header and provenance link as normal, but instead of
+  document text show:
+  "Full text not yet available -- this document is being processed.
+  In the meantime, you can [view the original filing ↗](source_url)."
+- This naturally resolves once the overnight parse completes and we re-ingest.
+
 ## What This Is Not
 
 - Not clause extraction (that's V1 / future work)
