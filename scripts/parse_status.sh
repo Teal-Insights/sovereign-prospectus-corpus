@@ -8,14 +8,17 @@ PROGRESS="$DIR/data/parsed_docling/_progress.jsonl"
 SUMMARY="$DIR/data/parsed_docling/_summary.json"
 ERRORS="$DIR/data/parsed_docling/_errors.log"
 OUTPUT="$DIR/data/parsed_docling"
+HEARTBEAT="$DIR/data/parsed_docling/_heartbeat.json"
 
 echo "=== Overnight Docling Parse Status ==="
 echo "Time: $(date)"
 echo ""
 
 # Check if process is running
+SUPERVISOR_PID=""
 if pgrep -f "docling_reparse.py" > /dev/null 2>&1; then
-    echo "Status: RUNNING (PID $(pgrep -f docling_reparse.py | head -1))"
+    SUPERVISOR_PID=$(pgrep -f "docling_reparse.py" | head -1)
+    echo "Status: RUNNING (PID $SUPERVISOR_PID)"
 else
     if [ -f "$SUMMARY" ]; then
         echo "Status: COMPLETED"
@@ -24,6 +27,71 @@ else
     fi
 fi
 echo ""
+
+# Memory usage (pure shell — no Python/psutil)
+if [ -n "$SUPERVISOR_PID" ]; then
+    echo "=== Memory ==="
+    TOTAL_KB=0
+
+    # Supervisor process
+    RSS_KB=$(ps -o rss= -p "$SUPERVISOR_PID" 2>/dev/null | tr -d ' ')
+    if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 0 ]; then
+        RSS_GB=$(echo "scale=1; $RSS_KB / 1048576" | bc)
+        echo "  PID $SUPERVISOR_PID: ${RSS_GB} GB  (supervisor)"
+        TOTAL_KB=$((TOTAL_KB + RSS_KB))
+    fi
+
+    # Worker processes (children of supervisor)
+    WORKER_PIDS=$(pgrep -P "$SUPERVISOR_PID" 2>/dev/null)
+    if [ -n "$WORKER_PIDS" ]; then
+        while IFS= read -r pid; do
+            RSS_KB=$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ')
+            if [ -n "$RSS_KB" ] && [ "$RSS_KB" -gt 0 ]; then
+                RSS_GB=$(echo "scale=1; $RSS_KB / 1048576" | bc)
+                echo "  PID $pid: ${RSS_GB} GB  (worker)"
+                TOTAL_KB=$((TOTAL_KB + RSS_KB))
+            fi
+        done <<< "$WORKER_PIDS"
+    fi
+
+    TOTAL_GB=$(echo "scale=1; $TOTAL_KB / 1048576" | bc)
+    SYS_MEM_GB=64
+
+    # Color-code: green <24, yellow 24-36, red >36
+    if [ "$(echo "$TOTAL_GB > 36" | bc)" -eq 1 ]; then
+        COLOR="\033[31m"  # Red
+    elif [ "$(echo "$TOTAL_GB > 24" | bc)" -eq 1 ]; then
+        COLOR="\033[33m"  # Yellow
+    else
+        COLOR="\033[32m"  # Green
+    fi
+    RESET="\033[0m"
+    echo -e "  Total: ${COLOR}${TOTAL_GB} GB${RESET} / ${SYS_MEM_GB} GB"
+
+    # Memory trend from progress log
+    if [ -f "$PROGRESS" ]; then
+        RECENT_MEM=$(tail -1 "$PROGRESS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('memory_gb','?'))" 2>/dev/null || echo "?")
+        OLDER_MEM=$(tail -50 "$PROGRESS" | head -1 | python3 -c "import sys,json; print(json.load(sys.stdin).get('memory_gb','?'))" 2>/dev/null || echo "?")
+        echo "  Trend: ${OLDER_MEM} GB (50 docs ago) -> ${RECENT_MEM} GB (latest)"
+    fi
+    echo ""
+fi
+
+# Heartbeat
+if [ -f "$HEARTBEAT" ]; then
+    echo "=== Heartbeat ==="
+    python3 -c "
+import json
+with open('$HEARTBEAT') as f:
+    h = json.load(f)
+print(f\"  Workers: {h.get('workers', '?')}\")
+print(f\"  Memory: {h.get('memory_gb', '?')} GB\")
+print(f\"  Completed: {h.get('completed', '?')}\")
+print(f\"  Remaining: {h.get('remaining', '?')}\")
+print(f\"  Updated: {h.get('timestamp', '?')}\")
+" 2>/dev/null
+    echo ""
+fi
 
 # Count outputs
 JSONL_COUNT=$(ls "$OUTPUT"/*.jsonl 2>/dev/null | grep -v "^_" | wc -l | tr -d ' ')
@@ -80,6 +148,8 @@ print(f\"  Completed: {s['completed']}\")
 print(f\"  Failed: {s['failed']}\")
 print(f\"  Skipped: {s['skipped']}\")
 print(f\"  Pool restarts: {s['pool_restarts']}\")
+print(f\"  Throttle events: {s.get('throttle_events', 'n/a')}\")
+print(f\"  Peak memory: {s.get('peak_memory_gb', 'n/a')} GB\")
 print(f\"  Elapsed: {s['elapsed_human']}\")
 print(f\"  Finished: {s['finished_at']}\")
 " 2>/dev/null
