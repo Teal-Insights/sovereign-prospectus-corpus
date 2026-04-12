@@ -1108,6 +1108,98 @@ def ingest(manifest_dir: Path, db_path: Path, run_id: str | None) -> None:
     )
 
 
+# ── Build-pages command ────────────────────────────────────────────
+
+
+@cli.command("build-pages")
+@click.option(
+    "--parsed-dir",
+    type=click.Path(path_type=Path),
+    default="data/parsed_docling",
+    help="Directory containing Docling JSONL page outputs.",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(path_type=Path),
+    default="data/db/corpus.duckdb",
+    help="Path to the DuckDB database file.",
+)
+def build_pages(parsed_dir: Path, db_path: Path) -> None:
+    """Load page text from Docling JSONL into document_pages table."""
+    import duckdb
+
+    from corpus.db.pages import build_fts_index
+    from corpus.db.pages import build_pages as _build_pages
+    from corpus.db.schema import create_schema
+
+    with duckdb.connect(str(db_path)) as conn:
+        create_schema(conn)
+        stats = _build_pages(conn, parsed_dir)
+        click.echo(
+            f"Pages: {stats['loaded']} loaded, {stats['skipped']} skipped, "
+            f"{stats['errors']} errors."
+        )
+        # Build FTS index after loading pages
+        click.echo("Building FTS index...")
+        build_fts_index(conn)
+        click.echo("FTS index ready.")
+
+
+# ── Build-markdown command ────────────────────────────────────────
+
+
+@cli.command("build-markdown")
+@click.option(
+    "--parsed-dir",
+    type=click.Path(path_type=Path),
+    default="data/parsed_docling",
+    help="Directory containing Docling markdown outputs.",
+)
+@click.option(
+    "--db-path",
+    type=click.Path(path_type=Path),
+    default="data/db/corpus.duckdb",
+    help="Path to the DuckDB database file.",
+)
+def build_markdown(parsed_dir: Path, db_path: Path) -> None:
+    """Load markdown from Docling .md files into document_markdown table."""
+    import duckdb
+
+    from corpus.db.pages import build_markdown as _build_markdown
+    from corpus.db.schema import create_schema
+
+    with duckdb.connect(str(db_path)) as conn:
+        create_schema(conn)
+        stats = _build_markdown(conn, parsed_dir)
+        click.echo(
+            f"Markdown: {stats['loaded']} loaded, {stats['skipped']} skipped, "
+            f"{stats['errors']} errors."
+        )
+
+
+# ── Populate issuers command ───────────────────────────────────────
+
+
+@cli.command("populate-issuers")
+@click.option(
+    "--db-path",
+    type=click.Path(path_type=Path),
+    default="data/db/corpus.duckdb",
+    help="Path to the DuckDB database file.",
+)
+def populate_issuers(db_path: Path) -> None:
+    """Populate sovereign_issuers lookup table from hard-coded mapping."""
+    import duckdb
+
+    from corpus.db.schema import create_schema
+    from explorer.country_metadata import populate_sovereign_issuers
+
+    with duckdb.connect(str(db_path)) as conn:
+        create_schema(conn)
+        n = populate_sovereign_issuers(conn)
+        click.echo(f"Sovereign issuers: {n} inserted.")
+
+
 # ── Status command ─────────────────────────────────────────────────
 
 
