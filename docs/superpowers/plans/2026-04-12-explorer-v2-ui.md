@@ -16,6 +16,7 @@
 
 | File | Action | Responsibility |
 |------|--------|---------------|
+| `explorer/__init__.py` | Create | Empty init — makes `explorer` importable as a Python package |
 | `explorer/issuer_country_map.py` | Create | Hard-coded dict mapping 261 issuer names to country codes |
 | `explorer/country_metadata.py` | Create | World Bank income group/region/lending category data + `sovereign_issuers` table builder |
 | `explorer/queries.py` | Create | All DuckDB queries: browse, search (CTE+window), detail, filters |
@@ -36,6 +37,16 @@
 - Create: `explorer/issuer_country_map.py`
 - Create: `explorer/country_metadata.py`
 - Create: `tests/test_issuer_mapping.py`
+
+- [ ] **Step 0: Create explorer package init**
+
+Create an empty `explorer/__init__.py` so that `from explorer.queries import ...`
+etc. resolve. Without this, every import in the plan fails with
+`ModuleNotFoundError`.
+
+```bash
+touch explorer/__init__.py
+```
 
 - [ ] **Step 1: Write the DDL**
 
@@ -333,12 +344,15 @@ ISSUER_TO_COUNTRY: dict[str, tuple[str, str, bool]] = {
     "Republic of Uzbekistan": ("UZB", "Uzbekistan", True),
     "Republic of Srpska": ("BIH", "Bosnia and Herzegovina", True),
     "Republic of Cameroon": ("CMR", "Cameroon", True),
+    # --- Keys missed in initial draft (caught by review) ---
+    "State Of Montenegro": ("MNE", "Montenegro", True),  # Case variant: "Of" not "of"
+    "The Govt of the Hong Kong Spl Adm Region of the People\u2019s Republic of China": ("HKG", "Hong Kong", True),  # Curly apostrophe variant
 }
 ```
 
-Note: The mapping has a duplicate key for "State of Montenegro" (lines 148
-and 244 in the issuer list both map to MNE). Python dicts deduplicate
-silently, which is fine -- they map to the same country.
+Note: "State of Montenegro" appears with two capitalizations ("of" and "Of").
+Both must be present as separate keys. Python dicts deduplicate on exact
+string match, so the two variants are distinct keys mapping to MNE.
 
 - [ ] **Step 3: Write the World Bank metadata + table builder**
 
@@ -417,7 +431,7 @@ WORLD_BANK_CLASSIFICATIONS: dict[str, tuple[str, str, str | None]] = {
     "KGZ": ("Europe & Central Asia", "Lower middle income", "IDA"),
     "KOR": ("East Asia & Pacific", "High income", None),
     "KWT": ("Middle East & North Africa", "High income", None),
-    "LBN": ("Middle East & North Africa", "Upper middle income", "IBRD"),
+    "LBN": ("Middle East & North Africa", "Lower middle income", "IBRD"),  # Downgraded by WB in 2022
     "LKA": ("South Asia", "Lower middle income", "IBRD"),
     "LTU": ("Europe & Central Asia", "High income", None),
     "LUX": ("Europe & Central Asia", "High income", None),
@@ -535,6 +549,32 @@ def test_country_codes_are_alpha3():
         if len(code) != 3 or code != code.upper()
     ]
     assert bad == [], f"Invalid country codes:\n" + "\n".join(bad)
+
+
+@pytest.mark.skipif(
+    not Path("data/db/corpus.duckdb").exists(),
+    reason="Local corpus.duckdb not available",
+)
+def test_mapping_covers_all_corpus_issuers():
+    """Every non-null issuer_name in the DB has a mapping entry."""
+    import duckdb
+
+    from explorer.issuer_country_map import ISSUER_TO_COUNTRY
+
+    con = duckdb.connect("data/db/corpus.duckdb", read_only=True)
+    db_issuers = [
+        r[0]
+        for r in con.execute(
+            "SELECT DISTINCT issuer_name FROM documents WHERE issuer_name IS NOT NULL"
+        ).fetchall()
+    ]
+    con.close()
+
+    unmapped = [name for name in db_issuers if name not in ISSUER_TO_COUNTRY]
+    assert unmapped == [], (
+        f"{len(unmapped)} issuers in DB not in mapping:\n"
+        + "\n".join(unmapped[:20])
+    )
 ```
 
 - [ ] **Step 5: Run tests**
@@ -543,14 +583,15 @@ def test_country_codes_are_alpha3():
 uv run pytest tests/test_issuer_mapping.py -v
 ```
 
-Expected: 3 PASSED.
+Expected: 4 PASSED (3 unit + 1 DB coverage check).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add sql/002_sovereign_issuers.sql explorer/issuer_country_map.py \
-  explorer/country_metadata.py tests/test_issuer_mapping.py
-git commit -m "feat: sovereign issuer lookup table with 261 issuer-to-country mappings"
+git add explorer/__init__.py sql/002_sovereign_issuers.sql \
+  explorer/issuer_country_map.py explorer/country_metadata.py \
+  tests/test_issuer_mapping.py
+git commit -m "feat: sovereign issuer lookup table with 263 issuer-to-country mappings"
 ```
 
 ---
@@ -746,10 +787,20 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def con():
+    """Connect to the local DB. Requires sovereign_issuers table to exist.
+
+    Run Task 6 (populate DB) before these tests. All query functions JOIN
+    on sovereign_issuers, so they fail with CatalogError if the table is
+    missing.
+    """
     import duckdb
 
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     conn.execute("INSTALL fts; LOAD fts")
+    # Verify sovereign_issuers table exists
+    tables = [r[0] for r in conn.execute("SHOW TABLES").fetchall()]
+    if "sovereign_issuers" not in tables:
+        pytest.skip("sovereign_issuers table not yet populated — run Task 6 first")
     yield conn
     conn.close()
 
@@ -992,23 +1043,26 @@ def search_documents(
     if filter_clauses:
         extra_where = "AND " + " AND ".join(filter_clauses)
 
-    # Parameter order: query for match_bm25, query for ORDER BY, filter params, limit
-    params = [query, query, *filter_params, limit]
+    # Single query param -- nested CTE avoids evaluating match_bm25 twice
+    params = [query, *filter_params, limit]
 
     return con.execute(
         f"""
-        WITH ranked AS (
+        WITH scored AS (
             SELECT
                 dp.document_id,
                 dp.page_number,
                 dp.page_text,
-                fts_main_document_pages.match_bm25(dp.page_id, ?) AS score,
-                ROW_NUMBER() OVER (
-                    PARTITION BY dp.document_id
-                    ORDER BY fts_main_document_pages.match_bm25(dp.page_id, ?) DESC
-                ) AS rn
+                fts_main_document_pages.match_bm25(dp.page_id, ?) AS score
             FROM document_pages dp
             WHERE score IS NOT NULL
+        ),
+        ranked AS (
+            SELECT *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY document_id ORDER BY score DESC
+                ) AS rn
+            FROM scored
         )
         SELECT
             r.document_id,
@@ -1110,13 +1164,16 @@ def search_pages_in_document(
     con: duckdb.DuckDBPyConnection, document_id: int, query: str
 ) -> list[int]:
     """Find page numbers in a document that contain the query text."""
+    # Escape ILIKE wildcards in the user's query to prevent % and _ from
+    # being interpreted as wildcards (e.g., "10%" would match "10" + anything)
+    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     rows = con.execute(
         """
         SELECT page_number FROM document_pages
-        WHERE document_id = ? AND page_text ILIKE '%' || ? || '%'
+        WHERE document_id = ? AND page_text ILIKE '%' || ? || '%' ESCAPE '\\'
         ORDER BY page_number
         """,
-        [document_id, query],
+        [document_id, escaped],
     ).fetchall()
     return [r[0] for r in rows]
 
@@ -1166,10 +1223,13 @@ def get_corpus_stats(con: duckdb.DuckDBPyConnection) -> dict[str, int]:
         SELECT
             COUNT(*) AS docs,
             COUNT(DISTINCT source) AS sources,
-            COUNT(DISTINCT COALESCE(issuer_name, storage_key)) AS issuers
+            COUNT(DISTINCT issuer_name) AS issuers
         FROM documents
+        WHERE issuer_name IS NOT NULL
     """).fetchone()
-    return {"docs": row[0], "sources": row[1], "issuers": row[2]}
+    # docs count should include all docs, issuers should exclude nulls
+    total = con.execute("SELECT COUNT(*) FROM documents").fetchone()
+    return {"docs": total[0], "sources": row[1], "issuers": row[2]}
 ```
 
 - [ ] **Step 6: Run query tests**
@@ -1290,7 +1350,36 @@ def ext_link(url: str, text: str) -> str:
     )
 
 
-# ── Filters sidebar ──────────────────────────────────────────────
+# ── Session state navigation ─────────────────────────────────────
+# Every view transition MUST go through this function. It clears
+# stale keys that would otherwise cause infinite redirects,
+# wrong back-button labels, or stale page selectors.
+
+_DETAIL_KEYS = {"doc_id", "start_page", "current_page", "page_selector", "doc_search"}
+_SEARCH_KEYS = {"search_query", "search_query_submitted"}
+_BROWSE_KEYS = {"browse_page"}
+
+
+def _navigate_to(view: str, **extra):
+    """Set view and clean up stale session state from other views."""
+    if view == "browse":
+        for k in _SEARCH_KEYS | _DETAIL_KEYS:
+            st.session_state.pop(k, None)
+    elif view == "search":
+        for k in _DETAIL_KEYS:
+            st.session_state.pop(k, None)
+    elif view == "detail":
+        # Clear previous detail state but keep search keys (for back nav)
+        for k in _DETAIL_KEYS:
+            st.session_state.pop(k, None)
+
+    st.session_state["view"] = view
+    for k, v in extra.items():
+        st.session_state[k] = v
+    st.rerun()
+
+
+# ── Filters ───────────────────────────────────────────────────────
 
 
 def render_filters(con) -> dict:
@@ -1299,12 +1388,14 @@ def render_filters(con) -> dict:
 
     include_hi = st.checkbox("Include high-income countries", value=False)
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         selected_sources = st.multiselect("Source", opts["sources"])
     with col2:
         selected_regions = st.multiselect("Region", opts["regions"])
     with col3:
+        selected_income = st.multiselect("Income group", opts["income_groups"])
+    with col4:
         country_labels = {code: name for code, name in opts["countries"]}
         selected_country_names = st.multiselect(
             "Country", sorted(country_labels.values())
@@ -1315,9 +1406,22 @@ def render_filters(con) -> dict:
             if name in selected_country_names
         ]
 
+    # Reset browse pagination when filters change
+    current_filter_sig = (
+        tuple(selected_sources),
+        tuple(selected_regions),
+        tuple(selected_income),
+        tuple(selected_codes),
+        include_hi,
+    )
+    if st.session_state.get("_last_filter_sig") != current_filter_sig:
+        st.session_state["browse_page"] = 0
+        st.session_state["_last_filter_sig"] = current_filter_sig
+
     return {
         "sources": selected_sources or None,
         "include_high_income": include_hi,
+        "income_groups": selected_income or None,
         "regions": selected_regions or None,
         "country_codes": selected_codes or None,
     }
@@ -1353,16 +1457,17 @@ def browse_view(con):
     col2.metric("Sources", stats["sources"])
     col3.metric("Issuers", f"{stats['issuers']:,}")
 
-    # Search bar
-    query = st.text_input(
-        "Search prospectus text",
-        placeholder="e.g., collective action clause, governing law, contingent liabilities",
-        key="search_query",
-    )
-    if query:
-        st.session_state["search_query_submitted"] = query
-        st.session_state["view"] = "search"
-        st.rerun()
+    # Search bar — use a form to prevent the text_input's persisted value
+    # from triggering an infinite redirect back to search when the user
+    # navigates back to browse. The form only submits on Enter/button click.
+    with st.form("search_form", clear_on_submit=True):
+        query = st.text_input(
+            "Search prospectus text",
+            placeholder="e.g., collective action clause, governing law, contingent liabilities",
+        )
+        submitted = st.form_submit_button("Search")
+    if submitted and query:
+        _navigate_to("search", search_query_submitted=query)
 
     # Filters
     filters = render_filters(con)
@@ -1389,9 +1494,11 @@ def browse_view(con):
                     key=f"browse_{row['document_id']}",
                     use_container_width=True,
                 ):
-                    st.session_state["view"] = "detail"
-                    st.session_state["doc_id"] = row["document_id"]
-                    st.rerun()
+                    _navigate_to(
+                        "detail",
+                        doc_id=row["document_id"],
+                        nav_origin="browse",
+                    )
             with col_source:
                 st.caption(row["source"])
             with col_date:
@@ -1477,8 +1584,7 @@ now they can be stubs:
 def search_view(con):
     st.warning("Search view not yet implemented")
     if st.button("← Back"):
-        st.session_state["view"] = "browse"
-        st.rerun()
+        _navigate_to("browse")
 
 
 def detail_view(con):
@@ -1554,8 +1660,7 @@ def search_view(con):
     query = st.session_state.get("search_query_submitted", "")
 
     if st.button("← Back to browse"):
-        st.session_state["view"] = "browse"
-        st.rerun()
+        _navigate_to("browse")
 
     st.subheader(f'Search results for "{query}"')
 
@@ -1576,7 +1681,11 @@ def search_view(con):
         st.warning(f'No results for "{query}". Try different terms or adjust filters.')
         return
 
-    st.markdown(f"**{len(results)} results** (showing top 50)")
+    # Only say "showing top 50" if we actually hit the limit
+    if len(results) >= 50:
+        st.markdown(f"**Showing top 50 results** for _{query}_")
+    else:
+        st.markdown(f"**{len(results)} results** for _{query}_")
 
     for _, row in results.iterrows():
         display = row["display_name"]
@@ -1601,10 +1710,12 @@ def search_view(con):
                 "View full document",
                 key=f"search_{row['document_id']}_{page_num}",
             ):
-                st.session_state["view"] = "detail"
-                st.session_state["doc_id"] = row["document_id"]
-                st.session_state["start_page"] = int(page_num)
-                st.rerun()
+                _navigate_to(
+                    "detail",
+                    doc_id=row["document_id"],
+                    start_page=int(page_num),
+                    nav_origin="search",
+                )
 ```
 
 - [ ] **Step 2: Test search locally**
@@ -1640,8 +1751,7 @@ def detail_view(con):
     """Document detail: metadata, filing link, markdown/page rendering."""
     doc_id = st.session_state.get("doc_id")
     if doc_id is None:
-        st.session_state["view"] = "browse"
-        st.rerun()
+        _navigate_to("browse")
         return
 
     from explorer.queries import (
@@ -1657,16 +1767,14 @@ def detail_view(con):
     if detail is None:
         st.error(f"Document {doc_id} not found.")
         if st.button("← Back"):
-            st.session_state["view"] = "browse"
-            st.rerun()
+            _navigate_to("browse")
         return
 
-    # Back button
-    back_target = "search" if "search_query_submitted" in st.session_state else "browse"
-    back_label = "← Back to search results" if back_target == "search" else "← Back to browse"
+    # Back button — use nav_origin to determine correct target
+    nav_origin = st.session_state.get("nav_origin", "browse")
+    back_label = "← Back to search results" if nav_origin == "search" else "← Back to browse"
     if st.button(back_label):
-        st.session_state["view"] = back_target
-        st.rerun()
+        _navigate_to(nav_origin)
 
     # Header
     st.title(detail["display_name"])
@@ -1794,14 +1902,18 @@ def _render_page_by_page(
         else:
             st.warning(f'"{search_query}" not found in this document.')
 
-    page_num = st.session_state.get("current_page", min(start_page, max_page))
+    # Clamp start_page to valid range (prevents stale state crash)
+    initial_page = max(1, min(start_page, max_page))
+    page_num = st.session_state.get("current_page", initial_page)
+    page_num = max(1, min(page_num, max_page))  # Double-clamp for safety
 
+    # Use a key namespaced by doc_id to prevent stale values across documents
     page_num = st.number_input(
         f"Page (1--{max_page})",
         min_value=1,
         max_value=max_page,
         value=page_num,
-        key="page_selector",
+        key=f"page_selector_{doc_id}",
     )
     st.session_state["current_page"] = page_num
 
@@ -1814,11 +1926,11 @@ def _render_page_by_page(
                 text, search_query, return_count=True
             )
             st.markdown(f"**Page {page_num} of {max_page}** ({count} matches on this page)")
-            st.markdown(f"```\n{text}\n```")
-            # Also show highlighted version
+            # Show highlighted version inline (not hidden in expander)
             if count > 0:
-                with st.expander("Highlighted view"):
-                    st.markdown(highlighted, unsafe_allow_html=True)
+                st.markdown(highlighted, unsafe_allow_html=True)
+            else:
+                st.text(text)
         else:
             st.markdown(f"**Page {page_num} of {max_page}**")
             st.text(text)
@@ -1884,27 +1996,36 @@ And at the end of `create_schema`:
             conn.execute(stripped)
 ```
 
-- [ ] **Step 2: Rebuild DB from scratch with sovereign_issuers**
+- [ ] **Step 2: Add sovereign_issuers table to existing DB (do NOT rebuild)**
 
-```bash
-rm -f data/db/corpus.duckdb
-uv run corpus ingest --run-id explorer-dev-$(date +%Y%m%d)
-uv run corpus build-pages --parsed-dir data/parsed_docling
-uv run corpus build-markdown --parsed-dir data/parsed_docling
-```
-
-Then populate sovereign_issuers:
+The existing DB already has 9,729 docs + 4,857 with pages + FTS index.
+Rebuilding from scratch risks hours of re-ingestion. Instead, add the new
+table to the existing DB:
 
 ```bash
 uv run python -c "
 import duckdb
-from explorer.country_metadata import populate_sovereign_issuers
+from pathlib import Path
+
 con = duckdb.connect('data/db/corpus.duckdb')
+
+# Create the sovereign_issuers table
+ddl = Path('sql/002_sovereign_issuers.sql').read_text()
+for stmt in ddl.split(';'):
+    s = stmt.strip()
+    if s:
+        con.execute(s)
+
+# Populate it
+from explorer.country_metadata import populate_sovereign_issuers
 n = populate_sovereign_issuers(con)
 print(f'Inserted {n} sovereign issuer mappings')
 con.close()
 "
 ```
+
+Expected: `Inserted 263 sovereign issuer mappings` (261 original + 2 missed
+variants caught in review).
 
 - [ ] **Step 3: Run all tests**
 
@@ -1997,6 +2118,101 @@ git commit -m "feat: populate-issuers CLI command"
 
 ---
 
+### Task 8: MotherDuck Publish + Streamlit Cloud Deploy
+
+**Files:** No new files. This wires the local DB to the cloud.
+
+- [ ] **Step 1: Publish local DB to MotherDuck**
+
+```bash
+export MOTHERDUCK_TOKEN=<token>
+uv run python -c "
+import duckdb
+
+# Connect to MotherDuck
+con = duckdb.connect('md:', config={'motherduck_token': '$MOTHERDUCK_TOKEN'})
+
+# Drop and recreate the database from local
+con.execute('DROP DATABASE IF EXISTS sovereign_corpus')
+con.execute('CREATE DATABASE sovereign_corpus')
+con.execute('USE sovereign_corpus')
+
+# Attach local DB and copy all tables
+local = duckdb.connect('data/db/corpus.duckdb', read_only=True)
+tables = [r[0] for r in local.execute('SHOW TABLES').fetchall()]
+for table in tables:
+    print(f'Copying {table}...')
+    df = local.execute(f'SELECT * FROM {table}').fetchdf()
+    con.execute(f'CREATE TABLE IF NOT EXISTS {table} AS SELECT * FROM df')
+    count = con.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
+    print(f'  {count} rows')
+
+local.close()
+print('All tables copied.')
+"
+```
+
+- [ ] **Step 2: Build FTS index on MotherDuck**
+
+```bash
+uv run python -c "
+import duckdb
+
+con = duckdb.connect('md:sovereign_corpus', config={'motherduck_token': '$MOTHERDUCK_TOKEN'})
+con.execute('INSTALL fts; LOAD fts')
+con.execute(\"\"\"
+    PRAGMA create_fts_index(
+        'document_pages', 'page_id', 'page_text',
+        stemmer='english', stopwords='english',
+        ignore='(\\\\.|[^a-z])+',
+        lower=1
+    )
+\"\"\")
+print('FTS index created on MotherDuck')
+
+# Quick test
+result = con.execute(\"\"\"
+    SELECT COUNT(*)
+    FROM document_pages dp
+    WHERE fts_main_document_pages.match_bm25(dp.page_id, 'collective action') IS NOT NULL
+\"\"\").fetchone()
+print(f'FTS test: {result[0]} pages match \"collective action\"')
+con.close()
+"
+```
+
+If FTS creation fails on MotherDuck, the app falls back to local DuckDB
+(the `get_connection()` function tries MotherDuck first, local second).
+
+- [ ] **Step 3: Push branch and update Streamlit Cloud**
+
+```bash
+git push -u origin feature/explorer-v2
+```
+
+Then in Streamlit Cloud dashboard:
+1. Update the app to point to the `feature/explorer-v2` branch
+2. Verify `MOTHERDUCK_TOKEN` is set in Streamlit secrets
+3. Verify Python version is 3.12 in Advanced Settings
+
+- [ ] **Step 4: Test shareable URL**
+
+Open the Streamlit Cloud URL in an incognito browser window. Verify:
+- Page loads (may take 5-8s on cold start)
+- Stats show correct counts
+- Search "collective action" returns results
+- Click into a document, verify markdown renders
+- "View original filing" link works
+
+Also test from phone to verify basic mobile layout.
+
+- [ ] **Step 5: Warm up for demo**
+
+Open the app URL 5 minutes before the demo to ensure it's not cold-starting
+during the presentation.
+
+---
+
 ## Verification Checklist
 
 After all tasks complete, verify against the spec's success criteria:
@@ -2006,9 +2222,14 @@ After all tasks complete, verify against the spec's success criteria:
 3. [ ] Search "contingent liabilities" finds results (Congo when available)
 4. [ ] Click into a document, see rendered markdown with ToC
 5. [ ] "View original filing" opens source website in new tab
-6. [ ] In-document search highlights terms
-7. [ ] Filters by region/income group work -- high-income excluded by default
-8. [ ] About section with SovTech framing and co-design invitation
-9. [ ] `uv run ruff check explorer/ tests/`
-10. [ ] `uv run ruff format --check explorer/ tests/`
-11. [ ] `uv run pytest tests/test_issuer_mapping.py tests/test_highlight.py tests/test_explorer_queries.py -v`
+6. [ ] In-document search highlights terms (inline, not hidden in expander)
+7. [ ] Filters by source, region, income group, country all work
+8. [ ] High-income excluded by default, one click to include
+9. [ ] About section with SovTech framing and co-design invitation
+10. [ ] Session state: browse -> search -> detail -> back -> back works cleanly
+11. [ ] No infinite redirect when returning from search to browse
+12. [ ] Unparsed docs show "not yet available" + provenance link
+13. [ ] Works from shareable Streamlit Cloud URL (MotherDuck backend)
+14. [ ] `uv run ruff check explorer/ tests/`
+15. [ ] `uv run ruff format --check explorer/ tests/`
+16. [ ] `uv run pytest tests/test_issuer_mapping.py tests/test_highlight.py tests/test_explorer_queries.py -v`
