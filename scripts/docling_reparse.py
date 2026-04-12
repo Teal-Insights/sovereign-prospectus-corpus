@@ -107,7 +107,9 @@ def get_total_python_rss_gb(pool: ProcessPoolExecutor) -> float:
     total_gb = total_bytes / (1024**3)
     total_gb += unreadable * FAIL_SAFE_RSS_GB
 
-    if unreadable:
+    if unreadable > 1:
+        # Single unreadable PID is normal during worker recycling (max_tasks_per_child).
+        # Only warn when multiple are unreadable — suggests real trouble.
         logging.warning(
             "Could not read RSS for %d process(es), counting as %.0f GB each",
             unreadable,
@@ -451,7 +453,7 @@ def _throttle_teardown(
     # Step 8: Clean up orphaned .part files
     for part_file in OUTPUT_DIR.glob("*.part"):
         logging.warning("Removing orphaned .part file: %s", part_file.name)
-        part_file.unlink()
+        part_file.unlink(missing_ok=True)
 
     return completed_delta, failed_delta
 
@@ -562,6 +564,15 @@ def run_supervised(
                         sk = args[0]
                         if fut.cancel():
                             remaining.appendleft(args)
+                        elif fut.done():
+                            # Completed between last wait() and now — check output files
+                            jsonl_out = OUTPUT_DIR / f"{sk}.jsonl"
+                            md_out = OUTPUT_DIR / f"{sk}.md"
+                            if jsonl_out.exists() and md_out.exists():
+                                completed += 1
+                                logging.info("Late completion detected: %s", sk)
+                            else:
+                                remaining.appendleft(args)
                         else:
                             skipped += 1
                             logging.warning("TIMEOUT: %s (hung worker, %ds)", sk, timeout)
@@ -713,6 +724,7 @@ def run_supervised(
                     current_max_workers -= 1
                     pool = None  # Prevent finally block from double-shutdown
                     watchdog_stop = None  # Already cancelled by _throttle_teardown
+                    bg_shutdown_flag[0] = False  # Reset for next pool generation
                     break  # Break inner while → outer loop creates new smaller pool
 
         except BrokenProcessPool:
@@ -758,7 +770,7 @@ def run_supervised(
             # Clean up orphaned .part files from crashed workers
             for part_file in OUTPUT_DIR.glob("*.part"):
                 logging.warning("Removing orphaned .part file: %s", part_file.name)
-                part_file.unlink()
+                part_file.unlink(missing_ok=True)
             if pool_restarts > 10:
                 logging.error("Too many pool restarts. Stopping.")
                 break
@@ -867,7 +879,7 @@ def main() -> None:
     # Clean up stale .part files from previous crashed runs
     for part_file in OUTPUT_DIR.glob("*.part"):
         logging.warning("Removing stale .part file: %s", part_file.name)
-        part_file.unlink()
+        part_file.unlink(missing_ok=True)
 
     # Discover and filter
     all_pdfs = discover_pdfs()
