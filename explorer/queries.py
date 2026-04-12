@@ -7,10 +7,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pandas as pd
-
 if TYPE_CHECKING:
     import duckdb
+    import pandas as pd
 
 _DISPLAY_NAME = "COALESCE(d.issuer_name, d.title, d.storage_key)"
 
@@ -248,7 +247,7 @@ def get_document_detail(con: duckdb.DuckDBPyConnection, document_id: int) -> dic
         "region",
         "income_group",
     ]
-    return dict(zip(cols, row))
+    return dict(zip(cols, row, strict=True))
 
 
 def get_markdown(con: duckdb.DuckDBPyConnection, document_id: int) -> str | None:
