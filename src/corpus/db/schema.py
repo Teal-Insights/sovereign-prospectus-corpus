@@ -17,6 +17,18 @@ if TYPE_CHECKING:
     import duckdb
 
 _DDL_FILE = Path(__file__).resolve().parents[3] / "sql" / "001_corpus.sql"
+_DDL_FILE_2 = Path(__file__).resolve().parents[3] / "sql" / "002_sovereign_issuers.sql"
+
+
+def _run_ddl(conn: duckdb.DuckDBPyConnection, path: Path) -> None:
+    """Execute a DDL file, splitting on semicolons and stripping comments."""
+    ddl = path.read_text()
+    lines = [line for line in ddl.splitlines() if not line.strip().startswith("--")]
+    cleaned = "\n".join(lines)
+    for statement in cleaned.split(";"):
+        stripped = statement.strip()
+        if stripped:
+            conn.execute(stripped)
 
 
 def create_schema(conn: duckdb.DuckDBPyConnection) -> None:
@@ -25,11 +37,5 @@ def create_schema(conn: duckdb.DuckDBPyConnection) -> None:
     DuckDB's execute() handles one statement at a time, so we split
     the DDL file on semicolons and run each statement separately.
     """
-    ddl = _DDL_FILE.read_text()
-    # Strip SQL comments, then split on semicolons
-    lines = [line for line in ddl.splitlines() if not line.strip().startswith("--")]
-    cleaned = "\n".join(lines)
-    for statement in cleaned.split(";"):
-        stripped = statement.strip()
-        if stripped:
-            conn.execute(stripped)
+    _run_ddl(conn, _DDL_FILE)
+    _run_ddl(conn, _DDL_FILE_2)
