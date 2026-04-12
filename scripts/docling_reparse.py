@@ -64,6 +64,21 @@ signal.signal(signal.SIGINT, handle_signal)
 FAIL_SAFE_RSS_GB = 8.0  # Conservative estimate for unreadable worker PIDs
 
 
+def _get_pool_pids(pool: ProcessPoolExecutor) -> list[int]:
+    """Safely extract worker PIDs from pool._processes.
+
+    pool._processes is a dict managed by a CPython background thread. Iterating
+    it directly can raise RuntimeError if workers are being recycled. Retry up
+    to 3 times to handle transient dict-size changes.
+    """
+    for _ in range(3):
+        try:
+            return list(pool._processes or {})
+        except RuntimeError:
+            time.sleep(0.01)
+    return []
+
+
 def get_total_python_rss_gb(pool: ProcessPoolExecutor) -> float:
     """Sum RSS of all worker processes + supervisor. Fail-safe: unreadable PIDs count as 8 GB.
 
@@ -77,7 +92,7 @@ def get_total_python_rss_gb(pool: ProcessPoolExecutor) -> float:
     unreadable = 0
 
     # Worker processes
-    for pid in list(pool._processes or {}):
+    for pid in _get_pool_pids(pool):
         try:
             total_bytes += psutil.Process(pid).memory_info().rss
         except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
@@ -380,7 +395,7 @@ def _throttle_teardown(
         watchdog_stop.set()
 
     # Step 1: Capture PIDs before shutdown clears them
-    captured_pids = list(pool._processes or {})
+    captured_pids = _get_pool_pids(pool)
 
     # Step 2: Cancel unstarted futures, re-queue
     for fut, args in list(futures.items()):
@@ -534,13 +549,15 @@ def run_supervised(
                     if done_set or bg_shutdown_flag[0] or shutdown_requested:
                         break
 
-                if bg_shutdown_flag[0] and not done_set:
-                    logging.error("Background monitor requested shutdown.")
+                # Handle shutdown signals and background monitor cleanly
+                if (bg_shutdown_flag[0] or shutdown_requested) and not done_set:
+                    if bg_shutdown_flag[0]:
+                        logging.error("Background monitor requested shutdown.")
                     shutdown_requested = True
                     break
 
                 if not done_set:
-                    # True timeout — workers are hung
+                    # True timeout — workers are hung (not a signal/shutdown)
                     for fut, args in list(futures.items()):
                         sk = args[0]
                         if fut.cancel():
@@ -572,6 +589,10 @@ def run_supervised(
 
                     try:
                         result = future.result()
+                    except BrokenProcessPool:
+                        # Re-add to futures so outer handler can evaluate
+                        futures[future] = args
+                        raise
                     except Exception as exc:
                         result = {
                             "status": "failed",
@@ -734,6 +755,10 @@ def run_supervised(
                         "error": "BrokenProcessPool",
                     }
                 )
+            # Clean up orphaned .part files from crashed workers
+            for part_file in OUTPUT_DIR.glob("*.part"):
+                logging.warning("Removing orphaned .part file: %s", part_file.name)
+                part_file.unlink()
             if pool_restarts > 10:
                 logging.error("Too many pool restarts. Stopping.")
                 break
@@ -744,10 +769,12 @@ def run_supervised(
                 watchdog_stop.set()
             # Force-kill pool workers — shutdown(wait=True) hangs on stuck C-extensions
             if pool is not None:
+                # Capture PIDs BEFORE shutdown clears _processes
+                finally_pids = _get_pool_pids(pool)
                 pool.shutdown(wait=False, cancel_futures=True)
                 import contextlib
 
-                for pid in list(pool._processes or []):
+                for pid in finally_pids:
                     with contextlib.suppress(ProcessLookupError, OSError):
                         os.kill(pid, signal.SIGTERM)
 
@@ -877,7 +904,7 @@ def main() -> None:
         prewarm_pool.shutdown(wait=False, cancel_futures=True)
         import contextlib
 
-        for pid in list(prewarm_pool._processes or {}):
+        for pid in _get_pool_pids(prewarm_pool):
             with contextlib.suppress(ProcessLookupError, OSError):
                 os.kill(pid, signal.SIGTERM)
         sys.exit(1)

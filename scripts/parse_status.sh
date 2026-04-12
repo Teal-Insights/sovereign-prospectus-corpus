@@ -94,8 +94,8 @@ print(f\"  Updated: {h.get('timestamp', '?')}\")
 fi
 
 # Count outputs
-JSONL_COUNT=$(ls "$OUTPUT"/*.jsonl 2>/dev/null | grep -v "^_" | wc -l | tr -d ' ')
-MD_COUNT=$(ls "$OUTPUT"/*.md 2>/dev/null | grep -v "^_" | wc -l | tr -d ' ')
+JSONL_COUNT=$(find "$OUTPUT" -maxdepth 1 -name "*.jsonl" ! -name "_*" 2>/dev/null | wc -l | tr -d ' ')
+MD_COUNT=$(find "$OUTPUT" -maxdepth 1 -name "*.md" ! -name "_*" 2>/dev/null | wc -l | tr -d ' ')
 echo "Output files: $JSONL_COUNT JSONL, $MD_COUNT MD"
 
 # Progress from log
