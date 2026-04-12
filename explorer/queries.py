@@ -212,6 +212,7 @@ def search_documents(
 
 def get_document_detail(con: duckdb.DuckDBPyConnection, document_id: int) -> dict | None:
     """Fetch document metadata for the detail view."""
+    document_id = int(document_id)  # numpy int32 -> Python int
     row = con.execute(
         f"""
         SELECT
@@ -252,6 +253,7 @@ def get_document_detail(con: duckdb.DuckDBPyConnection, document_id: int) -> dic
 
 def get_markdown(con: duckdb.DuckDBPyConnection, document_id: int) -> str | None:
     """Fetch full markdown text for a document. Returns None if not available."""
+    document_id = int(document_id)
     row = con.execute(
         "SELECT markdown_text, char_count FROM document_markdown WHERE document_id = ?",
         [document_id],
@@ -263,6 +265,7 @@ def get_markdown(con: duckdb.DuckDBPyConnection, document_id: int) -> str | None
 
 def get_markdown_size(con: duckdb.DuckDBPyConnection, document_id: int) -> int:
     """Get markdown char_count without loading the full text."""
+    document_id = int(document_id)
     row = con.execute(
         "SELECT char_count FROM document_markdown WHERE document_id = ?",
         [document_id],
@@ -274,6 +277,8 @@ def get_page_text(
     con: duckdb.DuckDBPyConnection, document_id: int, page_number: int
 ) -> str | None:
     """Fetch text for a single page."""
+    document_id = int(document_id)
+    page_number = int(page_number)
     row = con.execute(
         "SELECT page_text FROM document_pages WHERE document_id = ? AND page_number = ?",
         [document_id, page_number],
@@ -283,6 +288,7 @@ def get_page_text(
 
 def get_max_page(con: duckdb.DuckDBPyConnection, document_id: int) -> int:
     """Get highest page number for a document."""
+    document_id = int(document_id)
     row = con.execute(
         "SELECT MAX(page_number) FROM document_pages WHERE document_id = ?",
         [document_id],
@@ -294,6 +300,7 @@ def search_pages_in_document(
     con: duckdb.DuckDBPyConnection, document_id: int, query: str
 ) -> list[int]:
     """Find page numbers in a document that contain the query text."""
+    document_id = int(document_id)
     # Escape ILIKE wildcards in the user's query to prevent % and _ from
     # being interpreted as wildcards (e.g., "10%" would match "10" + anything)
     escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
