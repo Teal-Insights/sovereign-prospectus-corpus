@@ -165,10 +165,15 @@ def process_one_pdf(args: tuple[str, str]) -> dict:
         full_markdown = doc.export_to_markdown()
 
         # Per-page: markdown → plain text for JSONL
+        # Iterate range(1, page_count+1) to guarantee contiguous output
+        # even if doc.pages has gaps (Docling sometimes skips empty pages)
         pages_text: dict[int, str] = {}
-        for page_no in sorted(doc.pages.keys()):
-            page_md = doc.export_to_markdown(page_no=page_no)
-            pages_text[page_no] = strip_markdown(page_md)
+        for page_no in range(1, page_count + 1):
+            if page_no in doc.pages:
+                page_md = doc.export_to_markdown(page_no=page_no)
+                pages_text[page_no] = strip_markdown(page_md)
+            else:
+                pages_text[page_no] = ""
 
         elapsed = time.monotonic() - start
         docling_version = pkg_version("docling")
@@ -375,11 +380,33 @@ def run_supervised(
 
         except BrokenProcessPool:
             pool_restarts += 1
+            # Remove all in-flight tasks from remaining to avoid
+            # resubmitting the crashing PDF in an infinite loop
+            in_flight = set(futures.values())
+            crashed_keys = []
+            for args in in_flight:
+                if args in remaining:
+                    remaining.remove(args)
+                    crashed_keys.append(args[0])
+                    failed += 1
             logging.warning(
-                "Pool crashed (restart #%d). %d documents remaining.",
+                "Pool crashed (restart #%d). Removed %d in-flight tasks: %s. %d remaining.",
                 pool_restarts,
+                len(crashed_keys),
+                crashed_keys[:5],
                 len(remaining),
             )
+            for sk in crashed_keys:
+                logging.error("CRASHED (pool death): %s", sk)
+                write_progress(
+                    {
+                        "status": "pool_crash",
+                        "storage_key": sk,
+                        "page_count": 0,
+                        "elapsed_s": 0,
+                        "error": "BrokenProcessPool",
+                    }
+                )
             if pool_restarts > 10:
                 logging.error("Too many pool restarts. Stopping.")
                 break

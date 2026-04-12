@@ -141,7 +141,9 @@ def discover_luxse(
             query_hits += len(documents)
 
             for doc in documents:
-                doc_id = doc.get("id", "")
+                raw_id = doc.get("id", "")
+                # Sanitize: LuxSE returns numeric IDs but defend against path traversal
+                doc_id = str(raw_id).replace("/", "_").replace("..", "_").replace("\\", "_")
                 if doc_id and doc_id not in seen_ids:
                     seen_ids.add(doc_id)
 
