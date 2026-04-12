@@ -36,13 +36,15 @@ def read_jsonl_header(parsed_dir: Path, storage_key: str) -> dict[str, Any]:
     if not jsonl_path.exists():
         return {}
     try:
-        with jsonl_path.open() as f:
+        with jsonl_path.open(encoding="utf-8") as f:
             first_line = f.readline().strip()
             if not first_line:
                 return {}
             header = json.loads(first_line)
+            if not isinstance(header, dict):
+                return {}
             return {k: v for k, v in header.items() if k in _JSONL_HEADER_FIELDS}
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         log.warning("Failed to read JSONL header for %s", storage_key)
         return {}
 
