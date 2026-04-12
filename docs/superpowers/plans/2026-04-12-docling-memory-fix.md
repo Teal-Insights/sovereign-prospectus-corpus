@@ -89,13 +89,12 @@ import pytest
 
 def test_get_total_python_rss_gb_includes_supervisor():
     """RSS sum must include the supervisor process, not just workers."""
-    # Import the function (module-level import from scripts/)
+    # Import using absolute path to avoid cwd-dependent failures
     import importlib.util
+    from pathlib import Path
 
-    spec = importlib.util.spec_from_file_location(
-        "docling_reparse",
-        "scripts/docling_reparse.py",
-    )
+    script_path = str(Path(__file__).resolve().parent.parent / "scripts" / "docling_reparse.py")
+    spec = importlib.util.spec_from_file_location("docling_reparse", script_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
@@ -121,11 +120,10 @@ def test_get_total_python_rss_gb_includes_supervisor():
 def test_get_total_python_rss_gb_psutil_failure_counts_as_8gb():
     """If psutil can't read a PID, count it as 8 GB (fail-safe)."""
     import importlib.util
+    from pathlib import Path
 
-    spec = importlib.util.spec_from_file_location(
-        "docling_reparse",
-        "scripts/docling_reparse.py",
-    )
+    script_path = str(Path(__file__).resolve().parent.parent / "scripts" / "docling_reparse.py")
+    spec = importlib.util.spec_from_file_location("docling_reparse", script_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
@@ -335,15 +333,27 @@ After the `filter_already_done` call and before the `--limit` check, add:
 Replace the prewarm section (lines 544-559) with:
 
 ```python
-    # Prewarm: the first document runs in the pool (not the supervisor) to avoid
-    # loading Docling models into the parent process (~2 GB persistent leak).
-    # We still validate it succeeds before committing to the full run.
+    # Prewarm: the first document runs in a disposable pool (not the supervisor)
+    # to avoid loading Docling models into the parent process (~2 GB persistent leak).
+    # Use explicit shutdown(wait=False) + SIGTERM on failure, since the context
+    # manager's __exit__ calls shutdown(wait=True) which hangs on stuck workers.
     logging.info("Prewarming on first document (in pool)...")
-    with ProcessPoolExecutor(max_workers=1, max_tasks_per_child=1) as prewarm_pool:
+    prewarm_pool = ProcessPoolExecutor(max_workers=1, max_tasks_per_child=1)
+    try:
         prewarm_future = prewarm_pool.submit(
             process_one_pdf, (remaining[0][0], str(remaining[0][1]))
         )
         prewarm_result = prewarm_future.result(timeout=args.timeout)
+    except (TimeoutError, Exception) as exc:
+        logging.error("Prewarm failed: %s", exc)
+        prewarm_pool.shutdown(wait=False, cancel_futures=True)
+        for pid in list(prewarm_pool._processes or {}):  # noqa: SLF001
+            import contextlib
+            with contextlib.suppress(ProcessLookupError, OSError):
+                os.kill(pid, signal.SIGTERM)
+        sys.exit(1)
+    else:
+        prewarm_pool.shutdown(wait=False)
     if prewarm_result["status"] != "success":
         logging.error("Prewarm failed: %s. Check Docling installation.", prewarm_result["error"])
         sys.exit(1)
@@ -420,28 +430,39 @@ At the start of `run_supervised`, after `batch_size = max_workers * 2` (line 278
 
 - [ ] **Step 2: Add the background memory monitoring thread**
 
-Add a new function before `run_supervised`:
+Add a new function before `run_supervised`. **Key design choice (from council
+review):** return a `threading.Event` stop flag so the caller can cancel the
+timer chain before pool teardown. This prevents stale timers from reading dead
+pools, writing stale heartbeats, or falsely tripping the ceiling after a
+throttle event.
 
 ```python
+import threading
+
+
 def _start_memory_watchdog(
     pool: ProcessPoolExecutor,
     ceiling_gb: float,
     heartbeat_path: Path,
-    shutdown_flag: list,  # mutable container for cross-thread signaling
+    shutdown_flag: list,  # [bool] — mutable container for cross-thread signaling
     completed_ref: list,  # [completed_count]
     remaining_ref: list,  # [remaining_count]
     workers_ref: list,  # [current_worker_count]
     interval: float = 30.0,
-) -> None:
-    """Background thread: check RSS every 30s, write heartbeat, trigger ceiling shutdown."""
-    import threading
+) -> threading.Event:
+    """Background thread: check RSS every 30s, write heartbeat, trigger ceiling shutdown.
+
+    Returns a threading.Event — call .set() to stop the timer chain before
+    pool teardown. This prevents stale timers from reading dead pools.
+    """
+    stop_event = threading.Event()
 
     def _check():
-        if shutdown_flag[0]:
-            return  # Already shutting down
+        if stop_event.is_set() or shutdown_flag[0]:
+            return  # Cancelled or already shutting down — do not reschedule
         try:
             mem_gb = get_total_python_rss_gb(pool)
-            # Write heartbeat
+            # Write heartbeat atomically (.part -> rename)
             heartbeat = {
                 "timestamp": datetime.now(UTC).isoformat(),
                 "workers": workers_ref[0],
@@ -449,7 +470,9 @@ def _start_memory_watchdog(
                 "completed": completed_ref[0],
                 "remaining": remaining_ref[0],
             }
-            heartbeat_path.write_text(json.dumps(heartbeat))
+            part = heartbeat_path.with_suffix(".json.part")
+            part.write_text(json.dumps(heartbeat))
+            os.replace(str(part), str(heartbeat_path))
 
             if mem_gb > ceiling_gb:
                 logging.error(
@@ -459,19 +482,21 @@ def _start_memory_watchdog(
                     ceiling_gb,
                 )
                 shutdown_flag[0] = True
-                return  # Don't schedule another check
+                return  # Don't reschedule
         except Exception:
             logging.exception("Background memory monitor error")
 
-        # Schedule next check
-        t = threading.Timer(interval, _check)
-        t.daemon = True
-        t.start()
+        # Schedule next check (only if not stopped)
+        if not stop_event.is_set():
+            t = threading.Timer(interval, _check)
+            t.daemon = True
+            t.start()
 
     # Start first check
     t = threading.Timer(interval, _check)
     t.daemon = True
     t.start()
+    return stop_event
 ```
 
 - [ ] **Step 3: Add throttle teardown function**
@@ -484,10 +509,19 @@ def _throttle_teardown(
     futures: dict,
     remaining: deque,
     crash_counts: dict,
+    watchdog_stop: threading.Event | None = None,
 ) -> tuple[int, int]:
-    """Execute the 10-step throttle teardown. Returns (completed, failed) counts."""
+    """Execute the 10-step throttle teardown. Returns (completed, failed) counts.
+
+    IMPORTANT: Cancel the background watchdog FIRST (via watchdog_stop) to prevent
+    stale timer threads from reading the dead pool or writing stale heartbeats.
+    """
     completed = 0
     failed = 0
+
+    # Step 0: Cancel background watchdog before touching the pool
+    if watchdog_stop is not None:
+        watchdog_stop.set()
 
     # Step 1: Capture PIDs before shutdown clears them
     captured_pids = list(pool._processes or {})  # noqa: SLF001
@@ -554,71 +588,113 @@ def _throttle_teardown(
 
 - [ ] **Step 4: Wire monitoring into the main loop**
 
-In the `run_supervised` function, after processing completed futures in the
-`for future in done_set:` loop (after `write_progress(result)` around line
-378), add the memory check:
+**CRITICAL (from council review):** The memory check MUST be placed AFTER the
+`for future in done_set:` loop completes, NOT inside it. Placing it inside
+means a throttle `break` would skip processing remaining completed futures,
+losing their progress. Also, the `break` must exit the inner `while` loop (not
+just the `for` loop), and after throttle teardown set `pool = None` to prevent
+the `finally` block from double-shutting-down the pool.
+
+Also: replace the single blocking `wait()` with a polling loop that checks the
+background shutdown flag every 5 seconds, so ceiling shutdown isn't delayed up
+to 10 minutes.
+
+In `run_supervised`, replace the `wait()` call and the `for future in done_set`
+processing section with:
 
 ```python
-                    # Memory monitoring — check after every document completion
-                    mem_gb = get_total_python_rss_gb(pool)
-                    peak_memory_gb = max(peak_memory_gb, mem_gb)
+                # Poll with 5s timeout to check background shutdown flag frequently
+                deadline = time.monotonic() + timeout
+                done_set = set()
+                while time.monotonic() < deadline:
+                    done_set, _pending = wait(
+                        futures.keys(), timeout=5.0, return_when=FIRST_COMPLETED
+                    )
+                    if done_set or bg_shutdown_flag[0] or shutdown_requested:
+                        break
 
-                    if mem_gb > memory_ceiling_gb:
-                        logging.error(
-                            "CEILING: Memory %.1f GB > %.1f GB. Graceful shutdown.",
-                            mem_gb,
-                            memory_ceiling_gb,
-                        )
-                        shutdown_requested = True
-                    elif mem_gb > memory_throttle_gb:
-                        logging.warning(
-                            "THROTTLE: Memory %.1f GB > %.1f GB. Reducing workers %d -> %d.",
-                            mem_gb,
-                            memory_throttle_gb,
-                            current_max_workers,
-                            max(current_max_workers - 1, 1),
-                        )
-                        if current_max_workers <= 1:
-                            logging.error("Already at 1 worker. Shutting down.")
-                            shutdown_requested = True
-                        else:
-                            throttle_events += 1
-                            tc, tf = _throttle_teardown(pool, futures, remaining, crash_counts)
-                            completed += tc
-                            failed += tf
-                            current_max_workers -= 1
-                            break  # Break inner loop to create new smaller pool
-                    elif mem_gb > memory_info_gb:
-                        logging.info("MEMORY INFO: %.1f GB (threshold %.1f GB)", mem_gb, memory_info_gb)
-```
-
-- [ ] **Step 5: Check background shutdown flag**
-
-At the top of the inner `while` loop (line 288), add a check:
-
-```python
-            while (remaining or futures) and not shutdown_requested:
-                # Check background monitor
-                if bg_shutdown_flag[0] if isinstance(bg_shutdown_flag, list) else bg_shutdown_flag:
-                    logging.error("Background monitor requested shutdown.")
-                    shutdown_requested = True
-                    break
-```
-
-Wait — `bg_shutdown_flag` should be a mutable list for cross-thread signaling. Update the state variables (Step 1) to use:
-
-```python
-    bg_shutdown_flag = [False]  # Mutable container for cross-thread signaling
-```
-
-And the check becomes:
-
-```python
                 if bg_shutdown_flag[0]:
                     logging.error("Background monitor requested shutdown.")
                     shutdown_requested = True
-                    break
+                    # Still process any completed futures below before exiting
+
+                if not done_set and not bg_shutdown_flag[0]:
+                    # True timeout — no future completed in `timeout` seconds
+                    # ... existing timeout handling (unchanged) ...
+
+                # Measure memory ONCE for this batch
+                mem_gb = get_total_python_rss_gb(pool)
+                peak_memory_gb = max(peak_memory_gb, mem_gb)
+
+                # Process ALL completed futures first (no break inside this loop)
+                for future in done_set:
+                    args = futures.pop(future)
+                    storage_key = args[0]
+
+                    try:
+                        result = future.result()
+                    except Exception as exc:
+                        result = {
+                            "status": "failed",
+                            "storage_key": storage_key,
+                            "page_count": 0,
+                            "elapsed_s": 0,
+                            "file_size_mb": 0,
+                            "error": f"{type(exc).__name__}: {exc}",
+                        }
+
+                    # ... existing result tracking + logging (unchanged) ...
+
+                    write_progress(result, memory_gb=mem_gb, workers=current_max_workers)
+
+                # Update refs for background watchdog
+                completed_ref[0] = completed
+                remaining_ref[0] = len(remaining)
+                workers_ref[0] = current_max_workers
+
+                # NOW evaluate thresholds (after all futures processed)
+                need_throttle = False
+                if mem_gb > memory_ceiling_gb:
+                    logging.error(
+                        "CEILING: Memory %.1f GB > %.1f GB. Graceful shutdown.",
+                        mem_gb, memory_ceiling_gb,
+                    )
+                    shutdown_requested = True
+                elif mem_gb > memory_throttle_gb:
+                    logging.warning(
+                        "THROTTLE: Memory %.1f GB > %.1f GB. Reducing workers %d -> %d.",
+                        mem_gb, memory_throttle_gb,
+                        current_max_workers, max(current_max_workers - 1, 1),
+                    )
+                    if current_max_workers <= 1:
+                        logging.error("Already at 1 worker. Shutting down.")
+                        shutdown_requested = True
+                    else:
+                        need_throttle = True
+                elif mem_gb > memory_info_gb:
+                    logging.info(
+                        "MEMORY INFO: %.1f GB (threshold %.1f GB)", mem_gb, memory_info_gb
+                    )
+
+                if need_throttle:
+                    throttle_events += 1
+                    tc, tf = _throttle_teardown(
+                        pool, futures, remaining, crash_counts, watchdog_stop
+                    )
+                    completed += tc
+                    failed += tf
+                    current_max_workers -= 1
+                    pool = None  # Prevent finally block from double-shutdown
+                    break  # Break inner while loop → outer loop creates new smaller pool
 ```
+
+- [ ] **Step 5: Background shutdown flag is already handled in Step 4**
+
+The polling loop in Step 4 already checks `bg_shutdown_flag[0]` every 5 seconds
+and sets `shutdown_requested = True` when triggered. No separate step needed.
+
+Note: `bg_shutdown_flag` is defined as `[False]` (mutable list) in Step 1. This
+is the ONLY definition — do not use a plain boolean.
 
 - [ ] **Step 6: Start background monitor when pool is created**
 
@@ -629,7 +705,7 @@ After `pool = ProcessPoolExecutor(...)` (line 285), add:
             remaining_ref = [len(remaining)]
             workers_ref = [current_max_workers]
             heartbeat_path = OUTPUT_DIR / "_heartbeat.json"
-            _start_memory_watchdog(
+            watchdog_stop = _start_memory_watchdog(
                 pool,
                 memory_ceiling_gb,
                 heartbeat_path,
@@ -640,13 +716,23 @@ After `pool = ProcessPoolExecutor(...)` (line 285), add:
             )
 ```
 
-And update refs inside the inner loop after each document completes:
+The `watchdog_stop` event is passed to `_throttle_teardown` in Step 4 and
+must be `.set()` in the `finally` block before pool cleanup:
 
 ```python
-                    completed_ref[0] = completed
-                    remaining_ref[0] = len(remaining)
-                    workers_ref[0] = current_max_workers
+        finally:
+            # Cancel background watchdog BEFORE touching the pool
+            if watchdog_stop is not None:
+                watchdog_stop.set()
+            if pool is not None:
+                pool.shutdown(wait=False, cancel_futures=True)
+                import contextlib
+                for pid in list(pool._processes or []):
+                    with contextlib.suppress(ProcessLookupError, OSError):
+                        os.kill(pid, signal.SIGTERM)
 ```
+
+Ref updates are already handled in Step 4 after the `for` loop.
 
 - [ ] **Step 7: Update pool creation in outer loop to use `current_max_workers`**
 
@@ -694,22 +780,40 @@ For calls where memory isn't available (prewarm, error paths), pass 0.
 
 - [ ] **Step 9: Add `file_size_mb` to progress entries**
 
-In the `process_one_pdf` function, add file size to the return dict:
+In the `process_one_pdf` function, calculate file size BEFORE the try block
+(so it's available in both success and error paths):
 
 ```python
-        file_size_mb = pdf_path.stat().st_size / (1024 * 1024)
+    storage_key, pdf_path_str = args
+    pdf_path = Path(pdf_path_str)
+    start = time.monotonic()
+    file_size_mb = round(pdf_path.stat().st_size / (1024 * 1024), 1)
+
+    try:
+        # ... existing code ...
 
         return {
             "status": "success",
             "storage_key": storage_key,
             "page_count": page_count,
             "elapsed_s": round(elapsed, 1),
-            "file_size_mb": round(file_size_mb, 1),
+            "file_size_mb": file_size_mb,
             "error": None,
         }
-```
 
-Also add to the error return path.
+    except Exception as exc:
+        elapsed = time.monotonic() - start
+        is_mps_error = "MPS" in str(exc) or "Metal" in str(exc)
+
+        return {
+            "status": "mps_error" if is_mps_error else "failed",
+            "storage_key": storage_key,
+            "page_count": 0,
+            "elapsed_s": round(elapsed, 1),
+            "file_size_mb": file_size_mb,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+```
 
 - [ ] **Step 10: Update summary JSON with new fields**
 
@@ -851,7 +955,10 @@ git commit -m "feat: add per-worker memory reporting and trend to parse_status.s
 
 - [ ] **Step 1: Add heartbeat-based stall detection**
 
-Replace the stall detection section (lines 23-34) with:
+Replace the ENTIRE process-running block (lines 21-50) with heartbeat-based
+observability. **Per the spec, the watchdog is observability-only — remove the
+auto-kill/restart logic** to prevent the watchdog from killing a healthy
+throttled-down supervisor:
 
 ```bash
     # Process running — check if it's making progress
@@ -993,14 +1100,25 @@ for "THROTTLE" messages with decreasing worker counts.
 
 - [ ] **Step 4: Soak test with real large documents**
 
+**NOTE:** `--limit 50` with smallest-first sorting will process the 50 smallest
+docs, which is NOT representative for memory testing. Instead, run without
+`--limit` but set a low timeout to cap wall-clock time, and monitor memory
+manually. Alternatively, temporarily disable sorting for this test.
+
 ```bash
-uv run python scripts/docling_reparse.py --workers 4 --limit 50 --timeout 900
+# Run 20 minutes of real parsing (no limit), watch memory
+timeout 1200 uv run python scripts/docling_reparse.py --workers 4 --timeout 900
 ```
 
-Expected: processes ~50 documents (mix of sizes from the remaining queue),
-memory stays bounded, no throttle events with default thresholds. Check
-`data/parsed_docling/_progress.jsonl` — `memory_gb` values should stay under
-24 GB. Check `data/parsed_docling/_heartbeat.json` is being updated.
+In a separate terminal, monitor memory:
+```bash
+watch -n 30 bash scripts/parse_status.sh
+```
+
+Expected: memory stays bounded (under 24 GB with default thresholds), workers
+get recycled after 10 docs each, heartbeat file updates every 30s. Check
+`data/parsed_docling/_progress.jsonl` — `memory_gb` values should trend flat
+(not monotonically increasing).
 
 - [ ] **Step 5: Verify status script reads new data**
 
