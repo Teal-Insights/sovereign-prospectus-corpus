@@ -56,6 +56,49 @@ signal.signal(signal.SIGTERM, handle_signal)
 signal.signal(signal.SIGINT, handle_signal)
 
 
+# ── Memory monitoring ─────────────────────────────────────────────
+
+FAIL_SAFE_RSS_GB = 8.0  # Conservative estimate for unreadable worker PIDs
+
+
+def get_total_python_rss_gb(pool: ProcessPoolExecutor) -> float:
+    """Sum RSS of all worker processes + supervisor. Fail-safe: unreadable PIDs count as 8 GB.
+
+    Uses pool._processes (private CPython API, dict[int, Process] keyed by PID).
+    The existing code already accesses this attribute (line 458). Acknowledged as
+    a pragmatic choice — will break if CPython changes the internal structure.
+    """
+    import psutil
+
+    total_bytes = 0
+    unreadable = 0
+
+    # Worker processes
+    for pid in list(pool._processes or {}):
+        try:
+            total_bytes += psutil.Process(pid).memory_info().rss
+        except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
+            unreadable += 1
+
+    # Supervisor process
+    try:
+        total_bytes += psutil.Process(os.getpid()).memory_info().rss
+    except Exception:
+        unreadable += 1
+
+    total_gb = total_bytes / (1024**3)
+    total_gb += unreadable * FAIL_SAFE_RSS_GB
+
+    if unreadable:
+        logging.warning(
+            "Could not read RSS for %d process(es), counting as %.0f GB each",
+            unreadable,
+            FAIL_SAFE_RSS_GB,
+        )
+
+    return total_gb
+
+
 # ── Logging setup ──────────────────────────────────────────────────
 
 
