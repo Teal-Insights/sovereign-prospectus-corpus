@@ -38,14 +38,34 @@
 - Create: `explorer/country_metadata.py`
 - Create: `tests/test_issuer_mapping.py`
 
-- [ ] **Step 0: Create explorer package init**
+- [ ] **Step 0: Make explorer an importable package**
 
-Create an empty `explorer/__init__.py` so that `from explorer.queries import ...`
-etc. resolve. Without this, every import in the plan fails with
-`ModuleNotFoundError`.
+Three things needed for `from explorer.queries import ...` to resolve in all
+contexts (Streamlit, pytest, CLI entry points):
+
+1. Create `explorer/__init__.py` (makes it a Python package)
+2. Add `"explorer"` to the packages list in `pyproject.toml` (so `uv run`
+   installs it and CLI entry points can import it)
+3. Delete the stale `explorer/foo.py` (blocks `ruff format --check`)
 
 ```bash
 touch explorer/__init__.py
+rm -f explorer/foo.py
+```
+
+Then edit `pyproject.toml` line 57:
+
+```toml
+# Before:
+packages = ["src/corpus"]
+# After:
+packages = ["src/corpus", "explorer"]
+```
+
+Run `uv sync` to re-install with the new package:
+
+```bash
+uv sync --all-extras
 ```
 
 - [ ] **Step 1: Write the DDL**
@@ -517,6 +537,10 @@ Create `tests/test_issuer_mapping.py`:
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 
 def test_all_issuers_mapped():
     """Every issuer_name in the mapping resolves to a known WB country."""
@@ -528,7 +552,7 @@ def test_all_issuers_mapped():
         if code not in WORLD_BANK_CLASSIFICATIONS:
             unmapped.append(f"{issuer} -> {code}")
 
-    assert unmapped == [], f"Issuers with unmapped country codes:\n" + "\n".join(unmapped)
+    assert not unmapped, "Issuers with unmapped country codes:\n" + "\n".join(unmapped)
 
 
 def test_no_empty_country_names():
@@ -536,7 +560,7 @@ def test_no_empty_country_names():
     from explorer.issuer_country_map import ISSUER_TO_COUNTRY
 
     empty = [k for k, (_, name, _) in ISSUER_TO_COUNTRY.items() if not name]
-    assert empty == [], f"Issuers with empty country names: {empty}"
+    assert not empty, "Issuers with empty country names: " + str(empty)
 
 
 def test_country_codes_are_alpha3():
@@ -548,7 +572,7 @@ def test_country_codes_are_alpha3():
         for k, (code, _, _) in ISSUER_TO_COUNTRY.items()
         if len(code) != 3 or code != code.upper()
     ]
-    assert bad == [], f"Invalid country codes:\n" + "\n".join(bad)
+    assert not bad, "Invalid country codes:\n" + "\n".join(bad)
 
 
 @pytest.mark.skipif(
@@ -571,8 +595,8 @@ def test_mapping_covers_all_corpus_issuers():
     con.close()
 
     unmapped = [name for name in db_issuers if name not in ISSUER_TO_COUNTRY]
-    assert unmapped == [], (
-        f"{len(unmapped)} issuers in DB not in mapping:\n"
+    assert not unmapped, (
+        str(len(unmapped)) + " issuers in DB not in mapping:\n"
         + "\n".join(unmapped[:20])
     )
 ```
@@ -588,7 +612,8 @@ Expected: 4 PASSED (3 unit + 1 DB coverage check).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add explorer/__init__.py sql/002_sovereign_issuers.sql \
+git rm explorer/foo.py
+git add explorer/__init__.py pyproject.toml sql/002_sovereign_issuers.sql \
   explorer/issuer_country_map.py explorer/country_metadata.py \
   tests/test_issuer_mapping.py
 git commit -m "feat: sovereign issuer lookup table with 263 issuer-to-country mappings"
@@ -1486,7 +1511,7 @@ def browse_view(con):
 
     if not df.empty:
         # Make display_name clickable
-        for idx, row in df.iterrows():
+        for _idx, row in df.iterrows():
             col_name, col_source, col_date, col_type = st.columns([3, 1, 1, 1])
             with col_name:
                 if st.button(
@@ -1557,6 +1582,24 @@ def browse_view(con):
     )
 
 
+# ── Stubs (replaced in Tasks 4 and 5) ────────────────────────────
+# These MUST be defined before main() to avoid NameError on first rerun.
+
+
+def search_view(con):
+    """Stub — replaced in Task 4."""
+    st.warning("Search view not yet implemented")
+    if st.button("← Back"):
+        _navigate_to("browse")
+
+
+def detail_view(con):
+    """Stub — replaced in Task 5."""
+    st.warning("Detail view not yet implemented")
+    if st.button("← Back"):
+        _navigate_to("browse")
+
+
 # ── Main ──────────────────────────────────────────────────────────
 
 
@@ -1575,23 +1618,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
-
-Note: `search_view` and `detail_view` are defined in the next two tasks. For
-now they can be stubs:
-
-```python
-def search_view(con):
-    st.warning("Search view not yet implemented")
-    if st.button("← Back"):
-        _navigate_to("browse")
-
-
-def detail_view(con):
-    st.warning("Detail view not yet implemented")
-    if st.button("← Back"):
-        st.session_state["view"] = "browse"
-        st.rerun()
 ```
 
 - [ ] **Step 3: Build the sovereign_issuers table into the local DB**
@@ -1701,9 +1727,7 @@ def search_view(con):
             # Highlight the query in the snippet
             from explorer.highlight import highlight_text
 
-            highlighted, count = highlight_text(
-                snippet, query, return_count=True
-            )
+            highlighted = highlight_text(snippet, query)
             st.markdown(highlighted, unsafe_allow_html=True)
 
             if st.button(
@@ -1756,11 +1780,8 @@ def detail_view(con):
 
     from explorer.queries import (
         get_document_detail,
-        get_markdown,
         get_markdown_size,
         get_max_page,
-        get_page_text,
-        search_pages_in_document,
     )
 
     detail = get_document_detail(con, doc_id)
@@ -2122,10 +2143,16 @@ git commit -m "feat: populate-issuers CLI command"
 
 **Files:** No new files. This wires the local DB to the cloud.
 
+**NOTE:** Task 8 requires the `MOTHERDUCK_TOKEN` environment variable to be
+set. This is a secret that the human operator must provide. If running
+autonomously, skip Task 8 and flag it for manual execution. The explorer
+works locally without MotherDuck.
+
 - [ ] **Step 1: Publish local DB to MotherDuck**
 
+Requires `MOTHERDUCK_TOKEN` to be set in the shell environment.
+
 ```bash
-export MOTHERDUCK_TOKEN=<token>
 uv run python -c "
 import duckdb
 
@@ -2181,8 +2208,12 @@ con.close()
 "
 ```
 
-If FTS creation fails on MotherDuck, the app falls back to local DuckDB
-(the `get_connection()` function tries MotherDuck first, local second).
+**Important:** If FTS creation fails on MotherDuck, the search feature will
+not work on Streamlit Cloud. The `get_connection()` function does NOT fall
+back to local DuckDB when a MotherDuck token is present -- it returns the
+remote connection unconditionally. On Streamlit Cloud, no local DB exists.
+Therefore, FTS must work on MotherDuck for the cloud demo. Test this step
+carefully.
 
 - [ ] **Step 3: Push branch and update Streamlit Cloud**
 
