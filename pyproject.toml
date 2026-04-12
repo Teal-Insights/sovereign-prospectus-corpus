@@ -54,7 +54,7 @@ reportMissingTypeStubs = false
 markers = ["network: tests requiring network access"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/corpus"]
+packages = ["src/corpus", "explorer"]
 
 [build-system]
 requires = ["hatchling"]
