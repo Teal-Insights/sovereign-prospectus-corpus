@@ -38,19 +38,18 @@ def _missing_db_error():
 
 @st.cache_resource(ttl=3600)
 def get_connection():
-    token = st.secrets.get("MOTHERDUCK_TOKEN", None)
+    try:
+        token = st.secrets.get("MOTHERDUCK_TOKEN", None)
+    except Exception:
+        token = None
     if token:
-        con = duckdb.connect(
+        return duckdb.connect(
             "md:sovereign_corpus",
             read_only=True,
             config={"motherduck_token": token},
         )
-        con.execute("INSTALL fts; LOAD fts")
-        return con
     if LOCAL_DB_PATH.exists():
-        con = duckdb.connect(str(LOCAL_DB_PATH), read_only=True)
-        con.execute("INSTALL fts; LOAD fts")
-        return con
+        return duckdb.connect(str(LOCAL_DB_PATH), read_only=True)
     _missing_db_error()
 
 
@@ -100,16 +99,21 @@ _BROWSE_KEYS = {"browse_page"}
 
 def _navigate_to(view: str, **extra):
     """Set view and clean up stale session state from other views."""
+    keys_to_clear: set[str] = set()
     if view == "browse":
-        for k in _SEARCH_KEYS | _DETAIL_KEYS:
-            st.session_state.pop(k, None)
+        keys_to_clear = _SEARCH_KEYS | _DETAIL_KEYS
     elif view == "search":
-        for k in _DETAIL_KEYS:
-            st.session_state.pop(k, None)
+        keys_to_clear = set(_DETAIL_KEYS)
     elif view == "detail":
         # Clear previous detail state but keep search keys (for back nav)
-        for k in _DETAIL_KEYS:
-            st.session_state.pop(k, None)
+        keys_to_clear = set(_DETAIL_KEYS)
+
+    for k in keys_to_clear:
+        st.session_state.pop(k, None)
+    # Also clean up dynamic page_selector_{doc_id} keys
+    for k in list(st.session_state.keys()):
+        if k.startswith("page_selector_"):
+            del st.session_state[k]
 
     st.session_state["view"] = view
     for k, v in extra.items():
@@ -216,41 +220,44 @@ def browse_view(con):
     total = count_documents(con, **filters)
     df = browse_documents(con, limit=limit, offset=offset, **filters)
 
+    if df.empty:
+        st.info("No documents match these filters.")
+        return
+
     st.markdown(f"**{total:,} documents** (showing {offset + 1}--{offset + len(df)})")
 
-    if not df.empty:
-        # Make display_name clickable
-        for _idx, row in df.iterrows():
-            col_name, col_source, col_date, col_type = st.columns([3, 1, 1, 1])
-            with col_name:
-                if st.button(
-                    row["display_name"],
-                    key=f"browse_{row['document_id']}",
-                    use_container_width=True,
-                ):
-                    _navigate_to(
-                        "detail",
-                        doc_id=row["document_id"],
-                        nav_origin="browse",
-                    )
-            with col_source:
-                st.caption(row["source"])
-            with col_date:
-                date = row["publication_date"]
-                st.caption(str(date) if pd.notna(date) else "undated")
-            with col_type:
-                st.caption(row["doc_type"] if pd.notna(row["doc_type"]) else "")
+    # Make display_name clickable
+    for _idx, row in df.iterrows():
+        col_name, col_source, col_date, col_type = st.columns([3, 1, 1, 1])
+        with col_name:
+            if st.button(
+                row["display_name"],
+                key=f"browse_{row['document_id']}",
+                use_container_width=True,
+            ):
+                _navigate_to(
+                    "detail",
+                    doc_id=row["document_id"],
+                    nav_origin="browse",
+                )
+        with col_source:
+            st.caption(row["source"])
+        with col_date:
+            date = row["publication_date"]
+            st.caption(str(date) if pd.notna(date) else "undated")
+        with col_type:
+            st.caption(row["doc_type"] if pd.notna(row["doc_type"]) else "")
 
-        # Pagination
-        pcol1, _pcol2, pcol3 = st.columns([1, 2, 1])
-        with pcol1:
-            if page > 0 and st.button("\u2190 Previous"):
-                st.session_state["browse_page"] = page - 1
-                st.rerun()
-        with pcol3:
-            if offset + limit < total and st.button("Next \u2192"):
-                st.session_state["browse_page"] = page + 1
-                st.rerun()
+    # Pagination
+    pcol1, _pcol2, pcol3 = st.columns([1, 2, 1])
+    with pcol1:
+        if page > 0 and st.button("\u2190 Previous"):
+            st.session_state["browse_page"] = page - 1
+            st.rerun()
+    with pcol3:
+        if offset + limit < total and st.button("Next \u2192"):
+            st.session_state["browse_page"] = page + 1
+            st.rerun()
 
     # About section
     st.markdown("---")
@@ -315,7 +322,14 @@ def search_view(con):
     from explorer.queries import search_documents
 
     with st.spinner("Searching..."):
-        results = search_documents(con, query, limit=50, **filters)
+        try:
+            results = search_documents(con, query, limit=50, **filters)
+        except Exception:
+            st.warning(
+                "Full-text search index is not available. "
+                "Browse mode still works -- use the back button to browse documents."
+            )
+            return
 
     if results.empty:
         st.warning(f'No results for "{query}". Try different terms or adjust filters.')
@@ -323,9 +337,9 @@ def search_view(con):
 
     # Only say "showing top 50" if we actually hit the limit
     if len(results) >= 50:
-        st.markdown(f"**Showing top 50 results** for _{query}_")
+        st.markdown(f"**Showing top 50 results** for `{query}`")
     else:
-        st.markdown(f"**{len(results)} results** for _{query}_")
+        st.markdown(f"**{len(results)} results** for `{query}`")
 
     for _, row in results.iterrows():
         display = row["display_name"]
