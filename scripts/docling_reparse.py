@@ -597,8 +597,10 @@ def main() -> None:
     logging.info("Discovered %d PDFs", len(all_pdfs))
 
     remaining = filter_already_done(all_pdfs)
+    # Sort smallest-first: large docs (worst leakers) hit freshly recycled workers
+    remaining.sort(key=lambda item: item[1].stat().st_size)
     logging.info(
-        "After resume filter: %d remaining (%d already done)",
+        "After resume filter: %d remaining (%d already done), sorted smallest-first",
         len(remaining),
         len(all_pdfs) - len(remaining),
     )
@@ -611,9 +613,26 @@ def main() -> None:
         logging.info("Nothing to process. Exiting.")
         return
 
-    # Prewarm: test one document first to catch bootstrap failures
-    logging.info("Prewarming on first document...")
-    prewarm_result = process_one_pdf((remaining[0][0], str(remaining[0][1])))
+    # Prewarm: first document runs in a disposable pool (not the supervisor)
+    # to avoid loading Docling models into the parent process (~2 GB leak).
+    logging.info("Prewarming on first document (in pool)...")
+    prewarm_pool = ProcessPoolExecutor(max_workers=1, max_tasks_per_child=1)
+    try:
+        prewarm_future = prewarm_pool.submit(
+            process_one_pdf, (remaining[0][0], str(remaining[0][1]))
+        )
+        prewarm_result = prewarm_future.result(timeout=args.timeout)
+    except (TimeoutError, Exception) as exc:
+        logging.error("Prewarm failed: %s", exc)
+        prewarm_pool.shutdown(wait=False, cancel_futures=True)
+        import contextlib
+
+        for pid in list(prewarm_pool._processes or {}):
+            with contextlib.suppress(ProcessLookupError, OSError):
+                os.kill(pid, signal.SIGTERM)
+        sys.exit(1)
+    else:
+        prewarm_pool.shutdown(wait=False)
     if prewarm_result["status"] != "success":
         logging.error("Prewarm failed: %s. Check Docling installation.", prewarm_result["error"])
         sys.exit(1)
