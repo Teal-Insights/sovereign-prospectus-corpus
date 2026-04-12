@@ -188,9 +188,11 @@ def process_one_pdf(args: tuple[str, str]) -> dict:
     Returns:
         dict with status, storage_key, page_count, elapsed_s, error
     """
+
     storage_key, pdf_path_str = args
     pdf_path = Path(pdf_path_str)
     start = time.monotonic()
+    file_size_mb = round(pdf_path.stat().st_size / (1024 * 1024), 1)
 
     try:
         from importlib.metadata import version as pkg_version
@@ -265,11 +267,15 @@ def process_one_pdf(args: tuple[str, str]) -> dict:
 
         os.replace(str(jsonl_part), str(jsonl_path))
 
+        # Break reference cycles to slow heap fragmentation (~10ms)
+        gc.collect()
+
         return {
             "status": "success",
             "storage_key": storage_key,
             "page_count": page_count,
             "elapsed_s": round(elapsed, 1),
+            "file_size_mb": file_size_mb,
             "error": None,
         }
 
@@ -282,6 +288,7 @@ def process_one_pdf(args: tuple[str, str]) -> dict:
             "storage_key": storage_key,
             "page_count": 0,
             "elapsed_s": round(elapsed, 1),
+            "file_size_mb": file_size_mb,
             "error": f"{type(exc).__name__}: {exc}",
         }
 
