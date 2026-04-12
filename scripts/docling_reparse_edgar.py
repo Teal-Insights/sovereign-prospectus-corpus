@@ -371,11 +371,21 @@ def main() -> None:
 
     docling_version = pkg_version("docling")
 
-    # Smoke test: first 5 files
-    logging.info("Smoke testing first %d files...", min(5, len(remaining)))
+    # Smoke test: ensure both .htm and .txt are covered
+    htm_files = [(k, p) for k, p in remaining if p.suffix.lower() in (".htm", ".html")]
+    txt_files = [(k, p) for k, p in remaining if p.suffix.lower() == ".txt"]
+    smoke_batch = (htm_files[:3] + txt_files[:2]) if htm_files else remaining[:5]
+    smoke_keys = {k for k, _ in smoke_batch}
+
+    logging.info(
+        "Smoke testing %d files (%d htm, %d txt)...",
+        len(smoke_batch),
+        sum(1 for _, p in smoke_batch if p.suffix.lower() in (".htm", ".html")),
+        sum(1 for _, p in smoke_batch if p.suffix.lower() == ".txt"),
+    )
     smoke_failures = 0
-    smoke_count = min(5, len(remaining))
-    for sk, path in remaining[:smoke_count]:
+    smoke_count = len(smoke_batch)
+    for sk, path in smoke_batch:
         result = process_one_edgar(sk, path, converter, docling_version)
         if result["status"] != "success":
             logging.error("Smoke test FAILED: %s — %s", sk, result["error"])
@@ -396,11 +406,11 @@ def main() -> None:
         sys.exit(1)
 
     # Process remaining (skip smoke-tested files)
-    remaining = remaining[smoke_count:]
+    remaining = [(k, p) for k, p in remaining if k not in smoke_keys]
     completed = smoke_count - smoke_failures
     failed = smoke_failures
     start_time = time.monotonic()
-    total = len(all_files)
+    total = smoke_count + len(remaining)  # Only files we're actually processing
 
     for _i, (storage_key, path) in enumerate(remaining):
         result = process_one_edgar(storage_key, path, converter, docling_version)
@@ -449,7 +459,9 @@ def main() -> None:
         "finished_at": datetime.now(UTC).isoformat(),
     }
     summary_path = OUTPUT_DIR / "_edgar_summary.json"
-    summary_path.write_text(json.dumps(summary, indent=2))
+    summary_part = summary_path.with_suffix(".json.part")
+    summary_part.write_text(json.dumps(summary, indent=2))
+    os.replace(str(summary_part), str(summary_path))
     logging.info("Done. %s", json.dumps(summary, indent=2))
 
 

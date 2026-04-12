@@ -67,6 +67,10 @@ SHUTDOWN=$(python3 -c "import json; print(json.load(open('$PARSED/_summary.json'
 FAILED=$(python3 -c "import json; print(json.load(open('$PARSED/_summary.json')).get('failed',0))" 2>/dev/null)
 TOTAL=$(python3 -c "import json; print(json.load(open('$PARSED/_summary.json')).get('total',0))" 2>/dev/null)
 COMPLETED=$(python3 -c "import json; print(json.load(open('$PARSED/_summary.json')).get('completed',0))" 2>/dev/null)
+# Default to 0 if python3 returned empty (corrupt JSON, etc.)
+FAILED=${FAILED:-0}
+TOTAL=${TOTAL:-0}
+COMPLETED=${COMPLETED:-0}
 
 log_stage "pdf_complete" "checked" ",\"completed\":$COMPLETED,\"failed\":$FAILED"
 
