@@ -293,6 +293,9 @@ def run_supervised(
     pdf_list: list[tuple[str, Path]],
     max_workers: int,
     timeout: int,
+    max_tasks_per_child: int = 10,
+    memory_throttle_gb: float = 36.0,
+    memory_ceiling_gb: float = 48.0,
 ) -> dict:
     """Process all PDFs with batched submission and automatic pool restart.
 
@@ -325,7 +328,10 @@ def run_supervised(
     while remaining and not shutdown_requested:
         pool = None
         try:
-            pool = ProcessPoolExecutor(max_workers=max_workers)
+            pool = ProcessPoolExecutor(
+                max_workers=max_workers,
+                max_tasks_per_child=max_tasks_per_child,
+            )
             futures: dict[object, tuple[str, str]] = {}
 
             while (remaining or futures) and not shutdown_requested:
@@ -539,6 +545,24 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=4, help="Number of worker processes")
     parser.add_argument("--timeout", type=int, default=600, help="Per-document timeout in seconds")
     parser.add_argument("--limit", type=int, default=None, help="Max documents to process")
+    parser.add_argument(
+        "--max-tasks-per-child",
+        type=int,
+        default=10,
+        help="Documents per worker before recycle (default: 10)",
+    )
+    parser.add_argument(
+        "--memory-throttle",
+        type=float,
+        default=36.0,
+        help="GB threshold to reduce workers (default: 36)",
+    )
+    parser.add_argument(
+        "--memory-ceiling",
+        type=float,
+        default=48.0,
+        help="GB threshold for graceful shutdown (default: 48)",
+    )
     args = parser.parse_args()
 
     setup_logging()
@@ -550,6 +574,9 @@ def main() -> None:
     logging.info("  DOCLING_NUM_THREADS=%s", os.environ.get("DOCLING_NUM_THREADS", "not set"))
     logging.info("  Workers: %d", args.workers)
     logging.info("  Timeout: %ds", args.timeout)
+    logging.info("  Max tasks per child: %d", args.max_tasks_per_child)
+    logging.info("  Memory throttle: %.0f GB", args.memory_throttle)
+    logging.info("  Memory ceiling: %.0f GB", args.memory_ceiling)
     logging.info("  Output: %s", OUTPUT_DIR)
 
     # Pre-flight checks
@@ -602,7 +629,14 @@ def main() -> None:
     remaining = remaining[1:]
 
     # Run supervised
-    run_supervised(remaining, args.workers, args.timeout)
+    run_supervised(
+        remaining,
+        args.workers,
+        args.timeout,
+        max_tasks_per_child=args.max_tasks_per_child,
+        memory_throttle_gb=args.memory_throttle,
+        memory_ceiling_gb=args.memory_ceiling,
+    )
 
 
 if __name__ == "__main__":
