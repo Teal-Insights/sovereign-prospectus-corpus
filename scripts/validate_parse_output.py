@@ -100,14 +100,21 @@ def validate() -> bool:
             if page_mismatch <= 5:
                 print(f"  {jsonl_path.name}: expected {expected_pages} pages, got {actual_pages}")
 
-        # Check for empty pages
+        # Check page contiguity and empty pages
+        page_numbers = []
         for line in lines[1:]:
             try:
                 page = json.loads(line)
                 if page.get("char_count", 0) == 0:
                     empty_pages += 1
+                page_numbers.append(page.get("page", -1))
             except json.JSONDecodeError:
                 pass
+        expected_seq = list(range(expected_pages))
+        if page_numbers and page_numbers != expected_seq:
+            page_mismatch += 1
+            if page_mismatch <= 5:
+                print(f"  {jsonl_path.name}: non-contiguous pages {page_numbers[:5]}...")
 
     print(f"\nHeader validation: {bad_headers} bad headers out of {len(jsonl_files)}")
     print(f"Page count mismatches: {page_mismatch}")
@@ -140,6 +147,24 @@ def validate() -> bool:
                 print(f"  {line[:120]}")
     else:
         print("\nNo errors log found (good — no errors)")
+
+    # Compare output count to expected input PDFs
+    input_dirs = [
+        PROJECT_ROOT / "data" / "original",
+        PROJECT_ROOT / "data" / "pdfs" / "pdip",
+    ]
+    input_pdf_count = 0
+    for d in input_dirs:
+        if d.exists():
+            input_pdf_count += len(list(d.rglob("*.pdf")))
+    if input_pdf_count > 0:
+        coverage = len(jsonl_files) / input_pdf_count * 100
+        print(
+            f"\nInput PDFs: {input_pdf_count}, Output JSONL: {len(jsonl_files)} ({coverage:.0f}% coverage)"
+        )
+        if coverage < 90:
+            print(f"WARNING: Only {coverage:.0f}% of input PDFs were parsed!")
+            ok = False
 
     # Check for stale .part files
     part_files = list(OUTPUT_DIR.glob("*.part"))

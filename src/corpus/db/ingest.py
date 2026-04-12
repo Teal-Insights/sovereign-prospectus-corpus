@@ -178,9 +178,12 @@ def _insert_document(
         needs_backfill = any(record.get(f) is None for f in _JSONL_HEADER_FIELDS)
         if needs_backfill:
             header = read_jsonl_header(parsed_dir, storage_key)
-            for field in _JSONL_HEADER_FIELDS:
-                if record.get(field) is None and field in header:
-                    record[field] = header[field]
+            if header:
+                for field in _JSONL_HEADER_FIELDS:
+                    if record.get(field) is None and field in header:
+                        record[field] = header[field]
+            else:
+                log.debug("No JSONL header found for %s — parse_tool will be NULL", storage_key)
 
     # Separate known columns from extra metadata
     doc_values: dict[str, Any] = {}

@@ -49,7 +49,14 @@ def publish_to_motherduck(
     # Connect to local DB first, then attach MotherDuck
     conn = duckdb.connect(str(local_db_path))
     try:
-        conn.execute(f"ATTACH 'md:{remote_db}' AS remote")
+        try:
+            conn.execute(f"ATTACH 'md:{remote_db}' AS remote")
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to attach MotherDuck database '{remote_db}'. "
+                f"Check MOTHERDUCK_TOKEN is valid and network is available. "
+                f"Error: {exc}"
+            ) from exc
 
         for table in _TABLES_TO_PUBLISH:
             # Check if local table exists and has rows
@@ -84,6 +91,7 @@ def publish_to_motherduck(
                 "PRAGMA create_fts_index('document_pages', 'page_id', 'page_text', overwrite=1)"
             )
             log.info("FTS index created on MotherDuck")
+            conn.execute("USE main")  # Reset to local DB
 
     finally:
         conn.close()

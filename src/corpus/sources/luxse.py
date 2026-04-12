@@ -103,7 +103,12 @@ def query_luxse_documents(
             total_hits = result.get("totalHits", 0)
             return documents, total_hits
 
-    # All retries failed — return empty to allow pagination to continue
+    # All retries failed — log and return empty to allow pagination to continue
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "GraphQL query failed after retries: term=%r page=%d", search_term, page
+    )
     return [], 0
 
 
@@ -222,7 +227,7 @@ def download_luxse_document(
     resp = client.get(download_url)
 
     # Rate limit: 429, or 302 → 200 HTML page at /download-limit-reached
-    if resp.status_code == 429 or "download-limit-reached" in resp.url:
+    if resp.status_code == 429 or "download-limit-reached" in resp.url.lower():
         return None, "rate_limited"
 
     if resp.status_code != 200:

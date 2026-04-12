@@ -50,7 +50,11 @@ def main() -> None:
         check=False,
     )
     if result.returncode != 0:
-        print(f"WARNING: EDGAR re-parse exited with code {result.returncode}")
+        print(f"ERROR: EDGAR re-parse failed (exit code {result.returncode}).")
+        print(
+            "Fix the issue and re-run: uv run corpus parse run --source edgar --run-id edgar-reparse"
+        )
+        sys.exit(1)
     else:
         print("EDGAR re-parse complete")
 

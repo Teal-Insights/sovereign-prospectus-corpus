@@ -372,6 +372,7 @@ def luxse(
         timeout=int(cfg.get("timeout", 60)),
     )
 
+    log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / f"luxse_{run_id}.jsonl"
     logger = CorpusLogger(log_file, run_id=run_id)
 

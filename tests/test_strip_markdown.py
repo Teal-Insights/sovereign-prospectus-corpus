@@ -67,6 +67,18 @@ def test_strips_markdown_links():
     assert "]" not in result
 
 
+def test_strips_inline_code():
+    text = "See `SECTION 5.01` for details about `Events of Default`"
+    result = strip_markdown(text)
+    assert "SECTION 5.01" in result
+    assert "Events of Default" in result
+    assert "`" not in result
+
+
+def test_strips_bold_italic_combined():
+    assert strip_markdown("This is ***bold italic*** text") == "This is bold italic text"
+
+
 def test_image_placeholders_removed():
     assert (
         strip_markdown("Text before\n<!-- image -->\nText after").strip()

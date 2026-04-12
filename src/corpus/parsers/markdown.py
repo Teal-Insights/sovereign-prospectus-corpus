@@ -30,6 +30,9 @@ def strip_markdown(text: str) -> str:
     text = re.sub(r"\*{2}(.+?)\*{2}", r"\1", text)
     text = re.sub(r"\*(.+?)\*", r"\1", text)
 
+    # Inline code: `text` → text
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+
     # Markdown links: [text](url) → text
     text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
 
