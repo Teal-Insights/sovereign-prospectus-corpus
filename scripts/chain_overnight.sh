@@ -116,7 +116,11 @@ log_stage "validation" "finished"
 CHAIN_END=$(date -u +%Y-%m-%dT%H:%M:%S+00:00)
 TOTAL_JSONL=$(find "$PARSED" -maxdepth 1 -name "*.jsonl" ! -name "_*" | wc -l | tr -d ' ')
 TOTAL_MD=$(find "$PARSED" -maxdepth 1 -name "*.md" ! -name "_*" | wc -l | tr -d ' ')
-echo "{\"status\":\"complete\",\"started\":\"$CHAIN_START\",\"finished\":\"$CHAIN_END\",\"total_jsonl\":$TOTAL_JSONL,\"total_md\":$TOTAL_MD,\"timestamp\":\"$CHAIN_END\"}" > "$CHAIN_COMPLETE"
+PDF_STATUS="ok"
+if [ "$SHUTDOWN" = "True" ]; then
+    PDF_STATUS="shutdown"
+fi
+echo "{\"status\":\"complete\",\"pdf_status\":\"$PDF_STATUS\",\"edgar_exit\":$EDGAR_EXIT,\"started\":\"$CHAIN_START\",\"finished\":\"$CHAIN_END\",\"total_jsonl\":$TOTAL_JSONL,\"total_md\":$TOTAL_MD,\"timestamp\":\"$CHAIN_END\"}" > "$CHAIN_COMPLETE"
 
 echo "Chain complete at $(date). $TOTAL_JSONL JSONL, $TOTAL_MD MD files."
 log_stage "chain_complete" "done" ",\"total_jsonl\":$TOTAL_JSONL,\"total_md\":$TOTAL_MD"
