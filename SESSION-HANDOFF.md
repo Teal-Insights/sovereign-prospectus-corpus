@@ -23,7 +23,10 @@ uv run python scripts/validate_parse_output.py
 # 2. Promote parsed dir (backup PyMuPDF, promote Docling, re-parse EDGAR)
 uv run python scripts/promote_parsed_dir.py
 
-# 3. Rebuild DB (reads JSONL headers for parse_tool/page_count)
+# 3. DELETE old DB and rebuild from scratch (existing DB has 4,769 rows
+#    with NULL parse_tool — ingest skips existing rows, so backfill won't
+#    work without a fresh start)
+rm -f data/db/corpus.duckdb
 uv run corpus ingest --run-id rebuild-$(date +%Y%m%d)
 
 # 4. Build pages + FTS index

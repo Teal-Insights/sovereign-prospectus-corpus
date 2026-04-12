@@ -120,6 +120,9 @@ def validate() -> bool:
 
     if bad_headers > 0:
         ok = False
+    if page_mismatch > 0:
+        print(f"WARNING: {page_mismatch} files have page count mismatches!")
+        ok = False
 
     # Check errors log
     if ERRORS_LOG.exists():
