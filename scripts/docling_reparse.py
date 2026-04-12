@@ -268,6 +268,7 @@ def run_supervised(
     from collections import deque
 
     remaining: deque[tuple[str, str]] = deque((sk, str(p)) for sk, p in pdf_list)
+    crash_counts: dict[str, int] = {}  # Track per-doc crash retries
     completed = 0
     failed = 0
     skipped = 0
@@ -279,155 +280,151 @@ def run_supervised(
     logging.info("Starting Docling re-parse: %d documents, %d workers", total, max_workers)
 
     while remaining and not shutdown_requested:
+        pool = None
         try:
-            with ProcessPoolExecutor(max_workers=max_workers) as pool:
-                # Submit in batches to limit blast radius on pool crash
-                futures: dict[object, tuple[str, str]] = {}
+            pool = ProcessPoolExecutor(max_workers=max_workers)
+            futures: dict[object, tuple[str, str]] = {}
 
-                while (remaining or futures) and not shutdown_requested:
-                    # Top up the futures pool to batch_size.
-                    # Peek before pop — if submit() raises (pool already
-                    # broken), the item stays in remaining.
-                    while remaining and len(futures) < batch_size:
-                        args = remaining[0]
-                        fut = pool.submit(process_one_pdf, args)
-                        remaining.popleft()  # Only pop after successful submit
-                        futures[fut] = args
+            while (remaining or futures) and not shutdown_requested:
+                # Top up the futures pool to batch_size.
+                # Peek before pop — if submit() raises (pool already
+                # broken), the item stays in remaining.
+                while remaining and len(futures) < batch_size:
+                    args = remaining[0]
+                    fut = pool.submit(process_one_pdf, args)
+                    remaining.popleft()  # Only pop after successful submit
+                    futures[fut] = args
 
-                    if not futures:
-                        break
+                if not futures:
+                    break
 
-                    # Wait for at least one future with a global timeout
-                    done_set, _pending = wait(
-                        futures.keys(), timeout=timeout, return_when=FIRST_COMPLETED
-                    )
+                # Wait for at least one future with a global timeout
+                done_set, _pending = wait(
+                    futures.keys(), timeout=timeout, return_when=FIRST_COMPLETED
+                )
 
-                    if not done_set:
-                        # Timeout: no future completed — workers are hung.
-                        # Put queued items back, log running ones as timeout,
-                        # then BREAK to kill the pool via context manager exit.
-                        for fut, args in list(futures.items()):
-                            sk = args[0]
-                            if fut.cancel():
-                                remaining.appendleft(args)
-                            else:
-                                skipped += 1
-                                logging.warning("TIMEOUT: %s (hung worker, %ds)", sk, timeout)
-                                write_progress(
-                                    {
-                                        "status": "timeout",
-                                        "storage_key": sk,
-                                        "page_count": 0,
-                                        "elapsed_s": timeout,
-                                        "error": f"Exceeded {timeout}s timeout",
-                                    }
-                                )
-                        futures.clear()
-                        break  # Exit inner loop → pool.__exit__ kills workers
-
-                    for future in done_set:
-                        args = futures.pop(future)
-                        storage_key = args[0]
-
-                        try:
-                            result = future.result()
-                        except Exception as exc:
-                            result = {
-                                "status": "failed",
-                                "storage_key": storage_key,
-                                "page_count": 0,
-                                "elapsed_s": 0,
-                                "error": f"{type(exc).__name__}: {exc}",
-                            }
-
-                        # Track results
-                        if result["status"] == "success":
-                            completed += 1
-                        elif result["status"] == "mps_error":
-                            mps_errors += 1
-                            failed += 1
+                if not done_set:
+                    # Timeout: no future completed — workers are hung.
+                    # Put queued items back, log running ones as timeout,
+                    # then BREAK to kill the pool via context manager exit.
+                    for fut, args in list(futures.items()):
+                        sk = args[0]
+                        if fut.cancel():
+                            remaining.appendleft(args)
                         else:
-                            failed += 1
+                            skipped += 1
+                            logging.warning("TIMEOUT: %s (hung worker, %ds)", sk, timeout)
+                            write_progress(
+                                {
+                                    "status": "timeout",
+                                    "storage_key": sk,
+                                    "page_count": 0,
+                                    "elapsed_s": timeout,
+                                    "error": f"Exceeded {timeout}s timeout",
+                                }
+                            )
+                    futures.clear()
+                    break  # Exit inner loop → force-kill pool below
 
-                        # Log progress
-                        done = completed + failed + skipped
-                        if result["status"] == "success":
-                            logging.info(
-                                "[%d/%d] %s — %d pages — %.1fs — OK",
-                                done,
-                                total,
-                                result["storage_key"],
-                                result["page_count"],
-                                result["elapsed_s"],
-                            )
-                        else:
-                            logging.warning(
-                                "[%d/%d] %s — %s — %.1fs — %s",
-                                done,
-                                total,
-                                result["storage_key"],
-                                result["status"],
-                                result["elapsed_s"],
-                                result.get("error", ""),
-                            )
-                            logging.error(
-                                "FAILED: %s — %s", result["storage_key"], result.get("error", "")
-                            )
+                for future in done_set:
+                    args = futures.pop(future)
+                    storage_key = args[0]
 
-                        write_progress(result)
+                    try:
+                        result = future.result()
+                    except Exception as exc:
+                        result = {
+                            "status": "failed",
+                            "storage_key": storage_key,
+                            "page_count": 0,
+                            "elapsed_s": 0,
+                            "error": f"{type(exc).__name__}: {exc}",
+                        }
 
-                        # Periodic summary
-                        if done % 50 == 0 and done > 0:
-                            elapsed = time.monotonic() - start_time
-                            rate = done / elapsed if elapsed > 0 else 0
-                            eta = (total - done) / rate if rate > 0 else 0
-                            logging.info(
-                                "Progress: %d/%d (%.1f%%) — %d OK, %d failed, %d skipped — "
-                                "ETA %.0fm — pool restarts: %d",
-                                done,
-                                total,
-                                100 * done / total,
-                                completed,
-                                failed,
-                                skipped,
-                                eta / 60,
-                                pool_restarts,
-                            )
-                            usage = shutil.disk_usage(str(OUTPUT_DIR))
-                            free_gb = usage.free / (1024**3)
-                            if free_gb < 1.0:
-                                logging.error("Low disk space: %.1f GB free. Stopping.", free_gb)
-                                shutdown_requested = True
+                    # Track results
+                    if result["status"] == "success":
+                        completed += 1
+                    elif result["status"] == "mps_error":
+                        mps_errors += 1
+                        failed += 1
+                    else:
+                        failed += 1
 
-                        if mps_errors >= 3:
-                            logging.warning(
-                                "%d MPS errors. Setting DOCLING_DEVICE=cpu.", mps_errors
-                            )
-                            os.environ["DOCLING_DEVICE"] = "cpu"
-                            mps_errors = -999
+                    # Log progress
+                    done = completed + failed + skipped
+                    if result["status"] == "success":
+                        logging.info(
+                            "[%d/%d] %s — %d pages — %.1fs — OK",
+                            done,
+                            total,
+                            result["storage_key"],
+                            result["page_count"],
+                            result["elapsed_s"],
+                        )
+                    else:
+                        logging.warning(
+                            "[%d/%d] %s — %s — %.1fs — %s",
+                            done,
+                            total,
+                            result["storage_key"],
+                            result["status"],
+                            result["elapsed_s"],
+                            result.get("error", ""),
+                        )
+                        logging.error(
+                            "FAILED: %s — %s", result["storage_key"], result.get("error", "")
+                        )
+
+                    write_progress(result)
+
+                    # Periodic summary
+                    if done % 50 == 0 and done > 0:
+                        elapsed = time.monotonic() - start_time
+                        rate = done / elapsed if elapsed > 0 else 0
+                        eta = (total - done) / rate if rate > 0 else 0
+                        logging.info(
+                            "Progress: %d/%d (%.1f%%) — %d OK, %d failed, %d skipped — "
+                            "ETA %.0fm — pool restarts: %d",
+                            done,
+                            total,
+                            100 * done / total,
+                            completed,
+                            failed,
+                            skipped,
+                            eta / 60,
+                            pool_restarts,
+                        )
+                        usage = shutil.disk_usage(str(OUTPUT_DIR))
+                        free_gb = usage.free / (1024**3)
+                        if free_gb < 1.0:
+                            logging.error("Low disk space: %.1f GB free. Stopping.", free_gb)
+                            shutdown_requested = True
+
+                    if mps_errors >= 3:
+                        logging.warning("%d MPS errors. Setting DOCLING_DEVICE=cpu.", mps_errors)
+                        os.environ["DOCLING_DEVICE"] = "cpu"
+                        mps_errors = -999
 
         except BrokenProcessPool:
             pool_restarts += 1
-            # Only the small batch was in-flight. Re-check which actually
-            # completed (have output files) vs truly crashed.
             crashed_keys = []
             saved_keys = []
-            retry_args = []
             for args in futures.values():
                 sk = args[0]
                 jsonl_out = OUTPUT_DIR / f"{sk}.jsonl"
                 md_out = OUTPUT_DIR / f"{sk}.md"
                 if jsonl_out.exists() and md_out.exists():
-                    completed += 1  # Actually finished before crash
+                    completed += 1
                     saved_keys.append(sk)
                 else:
+                    # Track per-doc crash count — quarantine after 2 crashes
+                    crash_counts[sk] = crash_counts.get(sk, 0) + 1
+                    if crash_counts[sk] <= 2:
+                        remaining.appendleft(args)
+                    else:
+                        failed += 1
+                        logging.error("QUARANTINED after %d crashes: %s", crash_counts[sk], sk)
                     crashed_keys.append(sk)
-                    retry_args.append(args)
-            # Put non-completed items back for retry in the next pool.
-            # If the crash-causing PDF is among them, it will crash again
-            # and be removed on the next restart (bounded by pool_restarts).
-            for args in retry_args:
-                remaining.appendleft(args)
             futures.clear()
             logging.warning(
                 "Pool crashed (restart #%d). %d in batch, %d saved, %d crashed: %s. %d remaining.",
@@ -439,7 +436,6 @@ def run_supervised(
                 len(remaining),
             )
             for sk in crashed_keys:
-                logging.error("CRASHED (pool death): %s", sk)
                 write_progress(
                     {
                         "status": "pool_crash",
@@ -453,6 +449,15 @@ def run_supervised(
                 logging.error("Too many pool restarts. Stopping.")
                 break
             continue
+        finally:
+            # Force-kill pool workers — shutdown(wait=True) hangs on stuck C-extensions
+            if pool is not None:
+                pool.shutdown(wait=False, cancel_futures=True)
+                import contextlib
+
+                for pid in list(pool._processes or []):
+                    with contextlib.suppress(ProcessLookupError, OSError):
+                        os.kill(pid, signal.SIGTERM)
 
     elapsed_total = time.monotonic() - start_time
 

@@ -295,7 +295,7 @@ def run_luxse_download(
                 status="error",
                 error_message=str(exc),
             )
-            result, dl_status = None, "error"
+            result, dl_status = None, "failed_exception"
         else:
             elapsed_ms = int((time.monotonic() - _start) * 1000)
 
@@ -315,7 +315,7 @@ def run_luxse_download(
             continue
         elif dl_status.startswith("skipped"):
             stats["skipped"] += 1
-        elif dl_status != "error":
+        else:
             stats["failed"] += 1
             logger.log(
                 document_id=doc_id,

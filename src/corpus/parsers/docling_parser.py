@@ -33,10 +33,15 @@ class DoclingParser:
         full_markdown = doc.export_to_markdown()
 
         # Per-page plain text for JSONL / grep / FTS
+        # Iterate range(1, page_count+1) to guarantee contiguous output,
+        # matching docling_reparse.py — fills gaps with empty strings.
         pages: list[str] = []
-        for page_no in sorted(doc.pages.keys()):
-            page_md = doc.export_to_markdown(page_no=page_no)
-            pages.append(strip_markdown(page_md))
+        for page_no in range(1, page_count + 1):
+            if page_no in doc.pages:
+                page_md = doc.export_to_markdown(page_no=page_no)
+                pages.append(strip_markdown(page_md))
+            else:
+                pages.append("")
 
         text = "\n\n".join(pages)
 
