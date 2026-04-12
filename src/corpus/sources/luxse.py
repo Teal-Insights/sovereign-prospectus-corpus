@@ -220,13 +220,13 @@ def download_luxse_document(
         return None, "skipped_no_url"
 
     resp = client.get(download_url)
+
+    # Rate limit: 429, or 302 → 200 HTML page at /download-limit-reached
+    if resp.status_code == 429 or "download-limit-reached" in resp.url:
+        return None, "rate_limited"
+
     if resp.status_code != 200:
         return None, "failed_http"
-
-    # dl.luxse.com returns 302 → 200 HTML page when rate-limited.
-    # Detect via final URL or content — don't count as a failure.
-    if "download-limit-reached" in resp.url:
-        return None, "rate_limited"
 
     content = resp.content
     if not content.startswith(PDF_HEADER):

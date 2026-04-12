@@ -285,10 +285,13 @@ def run_supervised(
                 futures: dict[object, tuple[str, str]] = {}
 
                 while (remaining or futures) and not shutdown_requested:
-                    # Top up the futures pool to batch_size
+                    # Top up the futures pool to batch_size.
+                    # Peek before pop — if submit() raises (pool already
+                    # broken), the item stays in remaining.
                     while remaining and len(futures) < batch_size:
-                        args = remaining.popleft()
+                        args = remaining[0]
                         fut = pool.submit(process_one_pdf, args)
+                        remaining.popleft()  # Only pop after successful submit
                         futures[fut] = args
 
                     if not futures:
@@ -409,6 +412,7 @@ def run_supervised(
             # completed (have output files) vs truly crashed.
             crashed_keys = []
             saved_keys = []
+            retry_args = []
             for args in futures.values():
                 sk = args[0]
                 jsonl_out = OUTPUT_DIR / f"{sk}.jsonl"
@@ -418,8 +422,12 @@ def run_supervised(
                     saved_keys.append(sk)
                 else:
                     crashed_keys.append(sk)
-                    failed += 1
-            # Don't put crashed items back in remaining — they caused the crash
+                    retry_args.append(args)
+            # Put non-completed items back for retry in the next pool.
+            # If the crash-causing PDF is among them, it will crash again
+            # and be removed on the next restart (bounded by pool_restarts).
+            for args in retry_args:
+                remaining.appendleft(args)
             futures.clear()
             logging.warning(
                 "Pool crashed (restart #%d). %d in batch, %d saved, %d crashed: %s. %d remaining.",

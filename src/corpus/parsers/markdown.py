@@ -24,8 +24,11 @@ def strip_markdown(text: str) -> str:
     # Headers: "## Title" → "Title"
     text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
 
-    # Bold/italic: **text** or *text* → text
-    text = re.sub(r"\*{1,2}(.+?)\*{1,2}", r"\1", text)
+    # Bold+italic (***text***), bold (**text**), italic (*text*) → text
+    # Process triple first, then double, then single to avoid leftover markers
+    text = re.sub(r"\*{3}(.+?)\*{3}", r"\1", text)
+    text = re.sub(r"\*{2}(.+?)\*{2}", r"\1", text)
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
 
     # Markdown links: [text](url) → text
     text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
