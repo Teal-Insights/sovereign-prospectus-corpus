@@ -190,8 +190,14 @@ app_ui = ui.page_navbar(
     header=ui.tags.style(f"""
         :root {{ --teal: {_TEAL}; --teal-light: {_TEAL_LIGHT}; --teal-dark: {_TEAL_DARK}; }}
         .navbar {{ border-bottom: 3px solid {_TEAL}; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }}
-        .navbar-brand {{ font-size: 1.2rem; font-weight: 600; color: {_TEAL_DARK} !important; }}
-        .nav-link {{ color: {_TEAL_DARK} !important; }}
+        .navbar-brand {{ font-size: 1.2rem; font-weight: 600; color: #1a202c !important; }}
+        .nav-link {{ color: #1a202c !important; }}
+        .back-btn {{ display: inline-flex; align-items: center; gap: 0.4rem;
+                     padding: 0.5rem 1rem; font-size: 0.95rem;
+                     color: {_TEAL_DARK}; background: {_TEAL_LIGHT};
+                     border: 1px solid {_TEAL}; border-radius: 6px;
+                     cursor: pointer; margin-bottom: 1rem; }}
+        .back-btn:hover {{ background: {_TEAL}; color: white; }}
 
         .main-header {{ display: flex; align-items: center; gap: 1rem;
                         margin-bottom: 1.5rem; padding: 0.5rem 0;
@@ -413,7 +419,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         detail = get_document_detail(_con, doc_id)
         if detail is None:
             return ui.div(
-                ui.input_action_button("back_missing", "\u2190 Back to browse"),
+                ui.input_action_button("back_missing", "\u2190 Back to browse", class_="back-btn"),
                 ui.p("Document not found."),
             )
 
@@ -430,7 +436,7 @@ def server(input: Inputs, output: Outputs, session: Session):
             filing_html = ext_link(detail["filing_url"], "View original filing")
 
         return ui.div(
-            ui.input_action_button("back_btn", "\u2190 Back to browse"),
+            ui.input_action_button("back_btn", "\u2190 Back to browse", class_="back-btn"),
             ui.h1(detail["display_name"]),
             ui.markdown(" | ".join(meta_parts)),
             ui.HTML(filing_html) if filing_html else ui.div(),
