@@ -99,7 +99,9 @@ def _render_about_expander():
             "An open-source corpus of sovereign bond prospectuses collected from "
             "the FCA National Storage Mechanism, SEC EDGAR, "
             "the Sovereign Debt Forum's #PublicDebtIsPublic Dataset, and the "
-            "Luxembourg Stock Exchange. Built by Teal Insights with support from "
+            "Luxembourg Stock Exchange. Built by "
+            + ext_link("https://tealinsights.com", "Teal Insights")
+            + " with support from "
             + ext_link("https://naturefinance.net", "NatureFinance")
             + ". "
             + ext_link(_GITHUB_URL, "GitHub")
@@ -123,6 +125,7 @@ def _render_about_expander():
         st.markdown("**What's next?**")
         st.markdown(
             "- Automated updates as new prospectuses are filed\n"
+            "- Filtering by document type (base prospectus, supplement, final terms, etc.)\n"
             "- Automated clause identification with expert validation "
             "(" + ext_link(_PROTOTYPE_URL, "learn more") + ")\n"
             "- Part of a growing open-source SovTech ecosystem alongside "
@@ -309,18 +312,16 @@ def browse_view(con):
     st.markdown(f"**{total:,} documents** (showing {offset + 1}--{offset + len(df)})")
 
     # Column headers
-    hdr_name, hdr_source, hdr_date, hdr_type = st.columns([3, 1, 1, 1])
+    hdr_name, hdr_source, hdr_date = st.columns([3, 1, 1])
     with hdr_name:
         st.markdown("**Issuer**")
     with hdr_source:
         st.markdown("**Source**")
     with hdr_date:
         st.markdown("**Date**")
-    with hdr_type:
-        st.markdown("**Type**")
 
     for _idx, row in df.iterrows():
-        col_name, col_source, col_date, col_type = st.columns([3, 1, 1, 1])
+        col_name, col_source, col_date = st.columns([3, 1, 1])
         with col_name:
             if st.button(
                 row["display_name"],
@@ -338,8 +339,6 @@ def browse_view(con):
             date = row["publication_date"]
             date_str = str(date)[:10] if pd.notna(date) else "undated"
             st.caption(date_str)
-        with col_type:
-            st.caption(row["doc_type"] if pd.notna(row["doc_type"]) else "")
 
     # Pagination
     pcol1, _pcol2, pcol3 = st.columns([1, 2, 1])
