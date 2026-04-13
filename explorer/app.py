@@ -72,24 +72,17 @@ def cached_corpus_stats(_con):
     return get_corpus_stats(_con)
 
 
-# -- External link helper ------------------------------------------------------
+# -- Shared display helpers (imported from explorer.display) --------------------
 
-
-def ext_link(url: str, text: str) -> str:
-    """HTML for an external link that opens in a new tab."""
-    import html
-
-    return (
-        f'<a href="{html.escape(url)}" target="_blank" rel="noopener noreferrer">'
-        f"{html.escape(text)} \u2197</a>"
-    )
-
+from explorer.display import (  # noqa: E402
+    GITHUB_URL,
+    PROTOTYPE_URL,
+    QCRAFT_URL,
+    ext_link,
+    source_display,
+)
 
 # -- About expander ------------------------------------------------------------
-
-_GITHUB_URL = "https://github.com/Teal-Insights/sovereign-prospectus-corpus"
-_QCRAFT_URL = "https://teal-insights.github.io/QCraft-App/"
-_PROTOTYPE_URL = "https://teal-insights.github.io/sovereign-prospectus-corpus/"
 
 
 def _render_about_expander():
@@ -104,16 +97,16 @@ def _render_about_expander():
             + " with support from "
             + ext_link("https://naturefinance.net", "NatureFinance")
             + ". "
-            + ext_link(_GITHUB_URL, "GitHub")
+            + ext_link(GITHUB_URL, "GitHub")
             + " | "
-            + ext_link(_GITHUB_URL + "/blob/main/LICENSE", "MIT License")
+            + ext_link(GITHUB_URL + "/blob/main/LICENSE", "MIT License")
             + ".",
             unsafe_allow_html=True,
         )
         st.markdown(
             "This is an early-stage beta with plenty of rough edges. "
             "It grew out of community feedback on a "
-            + ext_link(_PROTOTYPE_URL, "prototype proposal")
+            + ext_link(PROTOTYPE_URL, "prototype proposal")
             + " for scaling clause identification in sovereign bond contracts. "
             "That feedback pointed to an immediate pain point: just finding and "
             "navigating prospectuses across multiple sources is hard. "
@@ -127,10 +120,10 @@ def _render_about_expander():
             "- Automated updates as new prospectuses are filed\n"
             "- Filtering by document type (base prospectus, supplement, final terms, etc.)\n"
             "- Automated clause identification with expert validation "
-            "(" + ext_link(_PROTOTYPE_URL, "learn more") + ")\n"
+            "(" + ext_link(PROTOTYPE_URL, "learn more") + ")\n"
             "- Part of a growing open-source SovTech ecosystem alongside "
             "tools like the "
-            + ext_link(_QCRAFT_URL, "Q-CRAFT Explorer")
+            + ext_link(QCRAFT_URL, "Q-CRAFT Explorer")
             + " -- open-source tools that elevate the sovereign debt "
             "conversation by eliminating analytical toil",
             unsafe_allow_html=True,
@@ -153,7 +146,7 @@ def _render_about_expander():
         st.markdown(
             ext_link("mailto:lte@tealinsights.com", "Get in touch")
             + " or open an issue on "
-            + ext_link(_GITHUB_URL + "/issues", "GitHub")
+            + ext_link(GITHUB_URL + "/issues", "GitHub")
             + ".",
             unsafe_allow_html=True,
         )
@@ -203,19 +196,6 @@ def _navigate_to(view: str, **extra):
 # -- Filters -------------------------------------------------------------------
 
 
-_SOURCE_DISPLAY_NAMES = {
-    "edgar": "SEC EDGAR",
-    "nsm": "FCA NSM",
-    "luxse": "Luxembourg Stock Exchange",
-    "pdip": "#PublicDebtIsPublic",
-}
-
-
-def _source_display(source: str) -> str:
-    """Convert internal source key to human-readable name."""
-    return _SOURCE_DISPLAY_NAMES.get(source, source)
-
-
 def render_filters(con) -> dict:
     """Render filter widgets and return current filter state."""
     opts = cached_filter_options(con)
@@ -234,7 +214,7 @@ def render_filters(con) -> dict:
     with col3:
         selected_income = st.multiselect("Income group", opts["income_groups"])
     with col4:
-        source_display_to_key = {_source_display(s): s for s in opts["sources"]}
+        source_display_to_key = {source_display(s): s for s in opts["sources"]}
         selected_display_sources = st.multiselect("Source", list(source_display_to_key.keys()))
         selected_sources = [source_display_to_key[d] for d in selected_display_sources]
 
@@ -336,7 +316,7 @@ def browse_view(con):
                     nav_origin="browse",
                 )
         with col_source:
-            st.caption(_source_display(row["source"]))
+            st.caption(source_display(row["source"]))
         with col_date:
             date = row["publication_date"]
             date_str = str(date)[:10] if pd.notna(date) else "undated"
@@ -399,7 +379,7 @@ def search_view(con):
 
     for _, row in results.iterrows():
         display = row["display_name"]
-        source = _source_display(row["source"])
+        source = source_display(row["source"])
         date = row["publication_date"]
         date_str = str(date)[:10] if pd.notna(date) else "undated"
         page_num = row["page_number"]
@@ -455,7 +435,7 @@ def detail_view(con):
     st.title(detail["display_name"])
 
     # Metadata row
-    meta_parts = [f"**Source:** {_source_display(detail['source'])}"]
+    meta_parts = [f"**Source:** {source_display(detail['source'])}"]
     if detail["publication_date"]:
         meta_parts.append(f"**Date:** {detail['publication_date']}")
     else:
