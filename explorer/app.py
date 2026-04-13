@@ -8,7 +8,12 @@ Open-source SovTech infrastructure by Teal Insights.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+# Ensure the repo root is on sys.path so `from explorer.queries import ...`
+# works on Streamlit Cloud, where the project isn't installed as a package.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import duckdb
 import pandas as pd
