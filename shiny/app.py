@@ -185,12 +185,13 @@ app_ui = ui.page_navbar(
         ui.span("Sovereign Prospectus Database"),
         class_="d-flex align-items-center",
     ),
-    bg=_TEAL_DARK,
-    inverse=True,
+    bg="white",
+    inverse=False,
     header=ui.tags.style(f"""
         :root {{ --teal: {_TEAL}; --teal-light: {_TEAL_LIGHT}; --teal-dark: {_TEAL_DARK}; }}
-        .navbar {{ border-bottom: 3px solid {_TEAL}; }}
-        .navbar-brand {{ font-size: 1.2rem; font-weight: 600; }}
+        .navbar {{ border-bottom: 3px solid {_TEAL}; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }}
+        .navbar-brand {{ font-size: 1.2rem; font-weight: 600; color: {_TEAL_DARK} !important; }}
+        .nav-link {{ color: {_TEAL_DARK} !important; }}
 
         .main-header {{ display: flex; align-items: center; gap: 1rem;
                         margin-bottom: 1.5rem; padding: 0.5rem 0;
@@ -200,6 +201,10 @@ app_ui = ui.page_navbar(
         .main-header h2 {{ margin: 0; font-size: 1.4rem; color: {_TEAL_DARK}; }}
         .main-header .subtitle {{ color: #666; font-style: italic;
                                    margin: 0.25rem 0 0 0; font-size: 0.95rem; }}
+        .supported-by {{ display: flex; flex-direction: column; align-items: center;
+                         gap: 0.25rem; }}
+        .supported-label {{ font-size: 0.75rem; color: #888; text-transform: uppercase;
+                            letter-spacing: 0.05em; }}
 
         .bslib-value-box {{ border: 1px solid #e2e8f0; border-radius: 8px; }}
         .bslib-value-box .value-box-title {{ color: {_TEAL_DARK}; font-weight: 600; }}
@@ -251,16 +256,19 @@ def server(input: Inputs, output: Outputs, session: Session):
     # ── Browse view ──────────────────────────────────────────────
     def _build_browse_ui():
         return ui.div(
-            # Subtitle with NatureFinance logo
+            # Subtitle with logos
             ui.HTML(
                 '<div class="main-header">'
                 '<div class="title-block">'
                 "<h2>Browse 9,700+ sovereign bond prospectuses</h2>"
                 '<p class="subtitle">Open-source SovTech infrastructure for '
-                "sovereign debt research. Built by Teal Insights with support from "
-                "NatureFinance's Innovative Finance Lab.</p>"
+                "sovereign debt research.</p>"
                 "</div>"
-                '<img src="naturefinance-logo.png" alt="NatureFinance">'
+                '<div class="supported-by">'
+                '<span class="supported-label">Supported by</span>'
+                '<img src="naturefinance-logo.png" alt="NatureFinance" '
+                'style="max-height: 45px;">'
+                "</div>"
                 "</div>"
             ),
             # Stats
