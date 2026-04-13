@@ -167,25 +167,56 @@ def _about_content():
 
 # ── UI ───────────────────────────────────────────────────────────────
 
-app_ui = ui.page_fluid(
-    ui.tags.title("Sovereign Bond Prospectus Explorer"),
-    ui.tags.style("""
-        .main-header { display: flex; align-items: center; gap: 1rem;
-                       margin-bottom: 1rem; padding: 0.5rem 0; }
-        .main-header img { max-height: 60px; }
-        .main-header .title-block { flex: 1; }
-        .main-header h1 { margin: 0; font-size: 1.8rem; }
-        .main-header .subtitle { color: #666; font-style: italic;
-                                  margin: 0.25rem 0 0 0; }
-        .bslib-value-box .value-box-value { font-size: 2rem; font-weight: 700; }
-        .doc-table-container { margin-top: 1rem; }
-        .detail-meta { color: #555; margin-bottom: 0.5rem; }
-        .detail-body { margin-top: 1rem; line-height: 1.6; }
-        pre { white-space: pre-wrap; word-wrap: break-word;
-              background: #f8f9fa; padding: 1rem; border-radius: 4px;
-              font-size: 0.9rem; line-height: 1.5; }
+_TEAL = "#2c7a7b"
+_TEAL_LIGHT = "#e6fffa"
+_TEAL_DARK = "#234e52"
+
+app_ui = ui.page_navbar(
+    ui.nav_panel(
+        "Explorer",
+        ui.div(
+            ui.output_ui("main_view"),
+            class_="container-fluid pt-3",
+        ),
+    ),
+    title=ui.div(
+        ui.img(src="teal-insights-logo.png", height="36px", class_="me-2"),
+        ui.span("Sovereign Bond Prospectus Explorer"),
+        class_="d-flex align-items-center",
+    ),
+    bg=_TEAL_DARK,
+    inverse=True,
+    header=ui.tags.style(f"""
+        :root {{ --teal: {_TEAL}; --teal-light: {_TEAL_LIGHT}; --teal-dark: {_TEAL_DARK}; }}
+        .navbar {{ border-bottom: 3px solid {_TEAL}; }}
+        .navbar-brand {{ font-size: 1.2rem; font-weight: 600; }}
+
+        .main-header {{ display: flex; align-items: center; gap: 1rem;
+                        margin-bottom: 1.5rem; padding: 0.5rem 0;
+                        border-bottom: 1px solid #e2e8f0; }}
+        .main-header img {{ max-height: 50px; }}
+        .main-header .title-block {{ flex: 1; }}
+        .main-header h2 {{ margin: 0; font-size: 1.4rem; color: {_TEAL_DARK}; }}
+        .main-header .subtitle {{ color: #666; font-style: italic;
+                                   margin: 0.25rem 0 0 0; font-size: 0.95rem; }}
+
+        .bslib-value-box {{ border: 1px solid #e2e8f0; border-radius: 8px; }}
+        .bslib-value-box .value-box-title {{ color: {_TEAL_DARK}; font-weight: 600; }}
+        .bslib-value-box .value-box-value {{ font-size: 2rem; font-weight: 700;
+                                             color: {_TEAL}; }}
+
+        .accordion-button:not(.collapsed) {{ background-color: {_TEAL_LIGHT};
+                                              color: {_TEAL_DARK}; }}
+        .btn-primary, .btn-default {{ background-color: {_TEAL}; border-color: {_TEAL}; }}
+        .btn-primary:hover {{ background-color: {_TEAL_DARK}; border-color: {_TEAL_DARK}; }}
+
+        pre {{ white-space: pre-wrap; word-wrap: break-word;
+               background: #f7fafc; padding: 1rem; border-radius: 6px;
+               border: 1px solid #e2e8f0;
+               font-size: 0.9rem; line-height: 1.6; }}
+        .detail-meta {{ color: #4a5568; }}
+        mark {{ background-color: #fefcbf; padding: 1px 2px; border-radius: 2px; }}
     """),
-    ui.output_ui("main_view"),
 )
 
 
@@ -208,15 +239,13 @@ def server(input: Inputs, output: Outputs, session: Session):
     # ── Browse view ──────────────────────────────────────────────
     def _build_browse_ui():
         return ui.div(
-            # Header with logos
+            # Subtitle with NatureFinance logo
             ui.HTML(
                 '<div class="main-header">'
-                '<img src="teal-insights-logo.png" alt="Teal Insights">'
                 '<div class="title-block">'
-                "<h1>Sovereign Bond Prospectus Explorer</h1>"
-                '<p class="subtitle">Browse 9,700+ sovereign bond prospectuses '
-                "from 4 public sources. Open-source SovTech infrastructure "
-                "for sovereign debt research.</p>"
+                "<h2>Browse 9,700+ sovereign bond prospectuses</h2>"
+                '<p class="subtitle">Open-source SovTech infrastructure for '
+                "sovereign debt research. Built with support from NatureFinance.</p>"
                 "</div>"
                 '<img src="naturefinance-logo.png" alt="NatureFinance">'
                 "</div>"
