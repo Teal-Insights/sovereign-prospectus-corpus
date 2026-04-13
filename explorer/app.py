@@ -85,6 +85,77 @@ def ext_link(url: str, text: str) -> str:
     )
 
 
+# -- About expander ------------------------------------------------------------
+
+_GITHUB_URL = "https://github.com/Teal-Insights/sovereign-prospectus-corpus"
+_QCRAFT_URL = "https://teal-insights.github.io/QCraft-App/"
+_PROTOTYPE_URL = "https://teal-insights.github.io/sovereign-prospectus-corpus/"
+
+
+def _render_about_expander():
+    """Collapsible About section at the top of the browse view."""
+    with st.expander("About this project"):
+        st.markdown(
+            "An open-source corpus of sovereign bond prospectuses collected from "
+            "the FCA National Storage Mechanism, SEC EDGAR, "
+            "the Sovereign Debt Forum's #PublicDebtIsPublic Dataset, and the "
+            "Luxembourg Stock Exchange. Built by Teal Insights with support from "
+            + ext_link("https://naturefinance.net", "NatureFinance")
+            + ". "
+            + ext_link(_GITHUB_URL, "GitHub")
+            + " | "
+            + ext_link(_GITHUB_URL + "/blob/main/LICENSE", "MIT License")
+            + ".",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "This is an early-stage beta with plenty of rough edges. "
+            "It grew out of community feedback on a "
+            + ext_link(_PROTOTYPE_URL, "prototype proposal")
+            + " for scaling clause identification in sovereign bond contracts. "
+            "That feedback pointed to an immediate pain point: just finding and "
+            "navigating prospectuses across multiple sources is hard. "
+            "This explorer is a first down payment on what could become something "
+            "much more powerful, with your input.",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("**What's next?**")
+        st.markdown(
+            "- Automated updates as new prospectuses are filed\n"
+            "- Automated clause identification with expert validation "
+            "(" + ext_link(_PROTOTYPE_URL, "learn more") + ")\n"
+            "- Part of a growing open-source SovTech ecosystem alongside "
+            "tools like the "
+            + ext_link(_QCRAFT_URL, "Q-CRAFT Explorer")
+            + " -- open-source tools that elevate the sovereign debt "
+            "conversation by eliminating analytical toil",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("**Help shape this tool**")
+        st.markdown(
+            "We're building this with the people who use sovereign debt data. "
+            "If you have 2 minutes, we'd love to hear from you:"
+        )
+        st.markdown(
+            "1. What are your biggest pain points in working with sovereign "
+            "bond prospectuses?\n"
+            "2. Are you a sovereign debt lawyer who might be interested in "
+            '"lawyer-in-the-loop" validation to help automatically identify '
+            "key clauses?\n"
+            "3. Would you be willing to have a short conversation about how "
+            "this tool could be more useful for your work?"
+        )
+        st.markdown(
+            ext_link("mailto:lte@tealinsights.com", "Get in touch")
+            + " or open an issue on "
+            + ext_link(_GITHUB_URL + "/issues", "GitHub")
+            + ".",
+            unsafe_allow_html=True,
+        )
+
+
 # -- Session state navigation --------------------------------------------------
 # Every view transition MUST go through this function. It clears
 # stale keys that would otherwise cause infinite redirects,
@@ -129,6 +200,19 @@ def _navigate_to(view: str, **extra):
 # -- Filters -------------------------------------------------------------------
 
 
+_SOURCE_DISPLAY_NAMES = {
+    "edgar": "SEC EDGAR",
+    "nsm": "FCA NSM",
+    "luxse": "Luxembourg Stock Exchange",
+    "pdip": "#PublicDebtIsPublic",
+}
+
+
+def _source_display(source: str) -> str:
+    """Convert internal source key to human-readable name."""
+    return _SOURCE_DISPLAY_NAMES.get(source, source)
+
+
 def render_filters(con) -> dict:
     """Render filter widgets and return current filter state."""
     opts = cached_filter_options(con)
@@ -137,17 +221,19 @@ def render_filters(con) -> dict:
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        selected_sources = st.multiselect("Source", opts["sources"])
-    with col2:
-        selected_regions = st.multiselect("Region", opts["regions"])
-    with col3:
-        selected_income = st.multiselect("Income group", opts["income_groups"])
-    with col4:
         country_labels = {code: name for code, name in opts["countries"]}
         selected_country_names = st.multiselect("Country", sorted(country_labels.values()))
         selected_codes = [
             code for code, name in country_labels.items() if name in selected_country_names
         ]
+    with col2:
+        selected_regions = st.multiselect("Region", opts["regions"])
+    with col3:
+        selected_income = st.multiselect("Income group", opts["income_groups"])
+    with col4:
+        source_display_to_key = {_source_display(s): s for s in opts["sources"]}
+        selected_display_sources = st.multiselect("Source", list(source_display_to_key.keys()))
+        selected_sources = [source_display_to_key[d] for d in selected_display_sources]
 
     # Reset browse pagination when filters change
     current_filter_sig = (
@@ -174,7 +260,7 @@ def render_filters(con) -> dict:
 
 
 def browse_view(con):
-    """Landing page: logos, stats, search, filters, document table."""
+    """Landing page: logos, stats, about expander, filters, document table."""
     # Header with logos
     logo_col1, title_col, logo_col2 = st.columns([1, 4, 1])
     with logo_col1:
@@ -188,7 +274,7 @@ def browse_view(con):
     with title_col:
         st.title("Sovereign Bond Prospectus Explorer")
         st.markdown(
-            "_Search and browse 9,700+ sovereign bond prospectuses from "
+            "_Browse 9,700+ sovereign bond prospectuses from "
             "4 public sources. Open-source SovTech infrastructure for "
             "sovereign debt research._"
         )
@@ -200,17 +286,8 @@ def browse_view(con):
     col2.metric("Sources", stats["sources"])
     col3.metric("Issuers", f"{stats['issuers']:,}")
 
-    # Search bar -- use a form to prevent the text_input's persisted value
-    # from triggering an infinite redirect back to search when the user
-    # navigates back to browse. The form only submits on Enter/button click.
-    with st.form("search_form", clear_on_submit=True):
-        query = st.text_input(
-            "Search prospectus text",
-            placeholder="e.g., collective action clause, governing law, contingent liabilities",
-        )
-        submitted = st.form_submit_button("Search")
-    if submitted and query:
-        _navigate_to("search", search_query_submitted=query)
+    # About expander -- visible at top, collapsed by default
+    _render_about_expander()
 
     # Filters
     filters = render_filters(con)
@@ -231,7 +308,17 @@ def browse_view(con):
 
     st.markdown(f"**{total:,} documents** (showing {offset + 1}--{offset + len(df)})")
 
-    # Make display_name clickable
+    # Column headers
+    hdr_name, hdr_source, hdr_date, hdr_type = st.columns([3, 1, 1, 1])
+    with hdr_name:
+        st.markdown("**Issuer**")
+    with hdr_source:
+        st.markdown("**Source**")
+    with hdr_date:
+        st.markdown("**Date**")
+    with hdr_type:
+        st.markdown("**Type**")
+
     for _idx, row in df.iterrows():
         col_name, col_source, col_date, col_type = st.columns([3, 1, 1, 1])
         with col_name:
@@ -246,10 +333,11 @@ def browse_view(con):
                     nav_origin="browse",
                 )
         with col_source:
-            st.caption(row["source"])
+            st.caption(_source_display(row["source"]))
         with col_date:
             date = row["publication_date"]
-            st.caption(str(date) if pd.notna(date) else "undated")
+            date_str = str(date)[:10] if pd.notna(date) else "undated"
+            st.caption(date_str)
         with col_type:
             st.caption(row["doc_type"] if pd.notna(row["doc_type"]) else "")
 
@@ -263,44 +351,6 @@ def browse_view(con):
         if offset + limit < total and st.button("Next \u2192"):
             st.session_state["browse_page"] = page + 1
             st.rerun()
-
-    # About section
-    st.markdown("---")
-    st.markdown(
-        "**What is this?** An open-source, searchable corpus of sovereign bond "
-        "prospectuses collected from the FCA National Storage Mechanism, SEC EDGAR, "
-        "the Sovereign Debt Forum's #PublicDebtIsPublic Dataset, and the Luxembourg "
-        "Stock Exchange. Built by "
-        + ext_link("https://tealinsights.com", "Teal Insights")
-        + " with support from "
-        + ext_link("https://naturefinance.net", "NatureFinance")
-        + ', as part of an emerging "SovTech" approach -- open-source '
-        "infrastructure for sovereign debt markets.",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "This explorer grew out of community feedback on a "
-        + ext_link(
-            "https://teal-insights.github.io/sovereign-prospectus-corpus/",
-            "prototype proposal",
-        )
-        + " for scaling up clause identification in sovereign bond contracts. "
-        "That feedback pointed to lower-hanging fruit that solves real pain points "
-        "immediately: make it easy to find and navigate the prospectuses themselves.",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "**Why?** The contract terms that govern how nations borrow, restructure, "
-        "and default are buried in dense prospectuses scattered across multiple "
-        "websites. This explorer brings them together in one searchable place."
-    )
-    st.markdown(
-        "**This is public infrastructure being built in the open.** "
-        "We're building this with the people who use this data. "
-        "What would make this useful for your work? "
-        + ext_link("mailto:teal@tealinsights.com", "Get in touch"),
-        unsafe_allow_html=True,
-    )
 
 
 # -- Stubs (replaced in Tasks 4 and 5) ----------------------------------------
@@ -348,9 +398,9 @@ def search_view(con):
 
     for _, row in results.iterrows():
         display = row["display_name"]
-        source = row["source"]
+        source = _source_display(row["source"])
         date = row["publication_date"]
-        date_str = str(date) if pd.notna(date) else "undated"
+        date_str = str(date)[:10] if pd.notna(date) else "undated"
         page_num = row["page_number"]
 
         with st.expander(f"**{display}** -- {source} -- p.{page_num} -- {date_str}"):
@@ -404,7 +454,7 @@ def detail_view(con):
     st.title(detail["display_name"])
 
     # Metadata row
-    meta_parts = [f"**Source:** {detail['source']}"]
+    meta_parts = [f"**Source:** {_source_display(detail['source'])}"]
     if detail["publication_date"]:
         meta_parts.append(f"**Date:** {detail['publication_date']}")
     else:
