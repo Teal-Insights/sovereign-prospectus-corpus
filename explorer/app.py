@@ -309,7 +309,9 @@ def browse_view(con):
         st.info("No documents match these filters.")
         return
 
-    st.markdown(f"**{total:,} documents** (showing {offset + 1}--{offset + len(df)})")
+    st.markdown(
+        f"**{total:,} documents**, newest first (showing {offset + 1}--{offset + len(df)})"
+    )
 
     # Column headers
     hdr_name, hdr_source, hdr_date = st.columns([3, 1, 1])
