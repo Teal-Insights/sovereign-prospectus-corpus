@@ -187,8 +187,19 @@ app_ui = ui.page_navbar(
     ),
     bg="white",
     inverse=False,
-    header=ui.tags.style(f"""
+    header=ui.TagList(
+        ui.tags.link(
+            rel="stylesheet",
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap",
+        ),
+        ui.tags.style(f"""
         :root {{ --teal: {_TEAL}; --teal-light: {_TEAL_LIGHT}; --teal-dark: {_TEAL_DARK}; }}
+        body {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 0.95rem; color: #2d3748; }}
+        h1, h2, h3 {{ font-family: 'Playfair Display', Georgia, serif;
+                       color: {_TEAL_DARK}; }}
+        h1 {{ font-size: 1.8rem; font-weight: 700; }}
+        h2 {{ font-size: 1.4rem; font-weight: 600; }}
         .navbar {{ border-bottom: 3px solid {_TEAL}; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }}
         .navbar-brand {{ font-size: 1.2rem; font-weight: 600; color: #1a202c !important; }}
         .nav-link {{ color: #1a202c !important; }}
@@ -240,6 +251,7 @@ app_ui = ui.page_navbar(
         .detail-meta {{ color: #4a5568; }}
         mark {{ background-color: #fefcbf; padding: 1px 2px; border-radius: 2px; }}
     """),
+    ),
 )
 
 
