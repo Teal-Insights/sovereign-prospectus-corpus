@@ -205,8 +205,19 @@ app_ui = ui.page_navbar(
         .bslib-value-box .value-box-value {{ font-size: 2rem; font-weight: 700;
                                              color: {_TEAL}; }}
 
+        .accordion {{ border: 1px solid {_TEAL}; border-radius: 8px;
+                      overflow: hidden; margin-bottom: 1rem; }}
+        .accordion-item {{ border: none; }}
+        .accordion-button {{ font-weight: 600; color: {_TEAL_DARK};
+                             background-color: {_TEAL_LIGHT};
+                             padding: 0.75rem 1.25rem; }}
         .accordion-button:not(.collapsed) {{ background-color: {_TEAL_LIGHT};
-                                              color: {_TEAL_DARK}; }}
+                                              color: {_TEAL_DARK};
+                                              box-shadow: none; }}
+        .accordion-button::after {{ /* disclosure triangle */
+            transition: transform 0.2s ease; }}
+        .accordion-body {{ background: white; padding: 1.25rem; }}
+
         .btn-primary, .btn-default {{ background-color: {_TEAL}; border-color: {_TEAL}; }}
         .btn-primary:hover {{ background-color: {_TEAL_DARK}; border-color: {_TEAL_DARK}; }}
 
@@ -568,4 +579,5 @@ def server(input: Inputs, output: Outputs, session: Session):
 
 # ── App ──────────────────────────────────────────────────────────────
 
-app = App(app_ui, server)
+_www_dir = Path(__file__).resolve().parent / "www"
+app = App(app_ui, server, static_assets=_www_dir)
