@@ -1,4 +1,4 @@
-"""Sovereign Bond Prospectus Explorer -- Shiny for Python.
+"""Sovereign Prospectus Database -- Shiny for Python.
 
 Shiny port of the Streamlit explorer. Reuses the query layer from
 explorer/ and deploys to Posit Connect Cloud.
@@ -116,6 +116,7 @@ def _about_content():
         ui.h5("What's next?"),
         ui.tags.ul(
             ui.tags.li("Automated updates as new prospectuses are filed"),
+            ui.tags.li("New data sources"),
             ui.tags.li(
                 "Filtering by document type (base prospectus, supplement, final terms, etc.)"
             ),
@@ -181,7 +182,7 @@ app_ui = ui.page_navbar(
     ),
     title=ui.div(
         ui.img(src="teal-insights-logo.png", height="36px", class_="me-2"),
-        ui.span("Sovereign Bond Prospectus Explorer"),
+        ui.span("Sovereign Prospectus Database"),
         class_="d-flex align-items-center",
     ),
     bg=_TEAL_DARK,
@@ -256,7 +257,8 @@ def server(input: Inputs, output: Outputs, session: Session):
                 '<div class="title-block">'
                 "<h2>Browse 9,700+ sovereign bond prospectuses</h2>"
                 '<p class="subtitle">Open-source SovTech infrastructure for '
-                "sovereign debt research. Built with support from NatureFinance.</p>"
+                "sovereign debt research. Built by Teal Insights with support from "
+                "NatureFinance's Innovative Finance Lab.</p>"
                 "</div>"
                 '<img src="naturefinance-logo.png" alt="NatureFinance">'
                 "</div>"
