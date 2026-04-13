@@ -349,8 +349,10 @@ def search_view(con):
         page_num = row["page_number"]
 
         with st.expander(f"**{display}** -- {source} -- p.{page_num} -- {date_str}"):
+            import html as html_mod
+
             snippet = extract_snippet(row["page_text"] or "", query)
-            highlighted = highlight_text(snippet, query)
+            highlighted = highlight_text(html_mod.escape(snippet), query)
             st.markdown(highlighted, unsafe_allow_html=True)
 
             if st.button(
@@ -531,9 +533,12 @@ def _render_page_by_page(con, doc_id: int, max_page: int, start_page: int, searc
     text = get_page_text(con, doc_id, page_num)
     if text:
         if search_query:
+            import html as html_mod
+
             from explorer.highlight import highlight_text
 
-            highlighted, count = highlight_text(text, search_query, return_count=True)
+            escaped_text = html_mod.escape(text)
+            highlighted, count = highlight_text(escaped_text, search_query, return_count=True)
             st.markdown(f"**Page {page_num} of {max_page}** ({count} matches on this page)")
             if count > 0:
                 st.markdown(highlighted, unsafe_allow_html=True)
