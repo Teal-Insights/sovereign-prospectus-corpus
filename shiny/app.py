@@ -94,7 +94,7 @@ def _about_content():
             "from the FCA National Storage Mechanism, SEC EDGAR, "
             "the Sovereign Debt Forum's #PublicDebtIsPublic Dataset, and the "
             "Luxembourg Stock Exchange. Built by "
-            + ext_link("https://tealinsights.com", "Teal Insights")
+            + ext_link("https://tealemery.com", "Teal Insights")
             + " with support from "
             + ext_link("https://naturefinance.net", "NatureFinance")
             + ". "
@@ -169,6 +169,22 @@ def _about_content():
 
 app_ui = ui.page_fluid(
     ui.tags.title("Sovereign Bond Prospectus Explorer"),
+    ui.tags.style("""
+        .main-header { display: flex; align-items: center; gap: 1rem;
+                       margin-bottom: 1rem; padding: 0.5rem 0; }
+        .main-header img { max-height: 60px; }
+        .main-header .title-block { flex: 1; }
+        .main-header h1 { margin: 0; font-size: 1.8rem; }
+        .main-header .subtitle { color: #666; font-style: italic;
+                                  margin: 0.25rem 0 0 0; }
+        .bslib-value-box .value-box-value { font-size: 2rem; font-weight: 700; }
+        .doc-table-container { margin-top: 1rem; }
+        .detail-meta { color: #555; margin-bottom: 0.5rem; }
+        .detail-body { margin-top: 1rem; line-height: 1.6; }
+        pre { white-space: pre-wrap; word-wrap: break-word;
+              background: #f8f9fa; padding: 1rem; border-radius: 4px;
+              font-size: 0.9rem; line-height: 1.5; }
+    """),
     ui.output_ui("main_view"),
 )
 
@@ -192,14 +208,18 @@ def server(input: Inputs, output: Outputs, session: Session):
     # ── Browse view ──────────────────────────────────────────────
     def _build_browse_ui():
         return ui.div(
-            # Header
-            ui.h1("Sovereign Bond Prospectus Explorer"),
-            ui.p(
-                ui.em(
-                    "Browse 9,700+ sovereign bond prospectuses from "
-                    "4 public sources. Open-source SovTech infrastructure "
-                    "for sovereign debt research."
-                )
+            # Header with logos
+            ui.HTML(
+                '<div class="main-header">'
+                '<img src="teal-insights-logo.png" alt="Teal Insights">'
+                '<div class="title-block">'
+                "<h1>Sovereign Bond Prospectus Explorer</h1>"
+                '<p class="subtitle">Browse 9,700+ sovereign bond prospectuses '
+                "from 4 public sources. Open-source SovTech infrastructure "
+                "for sovereign debt research.</p>"
+                "</div>"
+                '<img src="naturefinance-logo.png" alt="NatureFinance">'
+                "</div>"
             ),
             # Stats
             ui.layout_columns(

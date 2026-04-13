@@ -93,7 +93,7 @@ def _render_about_expander():
             "the FCA National Storage Mechanism, SEC EDGAR, "
             "the Sovereign Debt Forum's #PublicDebtIsPublic Dataset, and the "
             "Luxembourg Stock Exchange. Built by "
-            + ext_link("https://tealinsights.com", "Teal Insights")
+            + ext_link("https://tealemery.com", "Teal Insights")
             + " with support from "
             + ext_link("https://naturefinance.net", "NatureFinance")
             + ". "
