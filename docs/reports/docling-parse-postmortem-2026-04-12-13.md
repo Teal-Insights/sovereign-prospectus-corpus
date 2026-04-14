@@ -239,7 +239,32 @@ be the default pattern for all future runs.
 
 ### For cloud processing
 
-(See separate cloud options research — appended when available)
+**Recommended: Docker on a spot VM ($2-5 per full corpus run).**
+
+| Approach | Wall Time | Cost | Memory Safety |
+|----------|-----------|------|---------------|
+| Mac Mini M4 Pro (current) | 42 hrs | $0.50 electricity | psutil only (no kernel limits) |
+| AWS c7g.4xlarge spot (CPU) | ~27 hrs | ~$4.60 | **cgroups (real limits)** |
+| AWS g6.4xlarge spot (L4 GPU) | ~4.5 hrs | ~$1.80 | **cgroups (real limits)** |
+| Modal serverless (CPU) | ~27 hrs | ~$102 | Container isolation |
+| LlamaParse API (fast) | ~2-4 hrs | ~$625 | Managed |
+
+**Why cloud is better for repeat runs:**
+1. Linux cgroups **actually enforce** memory limits. `docker run --memory=8g` means a leaking worker gets OOM-killed by the kernel — no panic, container restarts.
+2. Your existing `docling_reparse.py` works unchanged inside Docker.
+3. GPU (NVIDIA L4) gives 6x speedup: 4.5 hours instead of 27.
+4. Spot instances are nearly free at this scale.
+
+**Recipe for colleagues:**
+1. Build Docker image with Docling + your parse scripts
+2. Push PDFs to S3
+3. Launch spot instance, pull image, mount S3
+4. `docker run --memory=8g` per worker container
+5. Push results to S3, terminate instance
+
+**Skip cloud APIs** (LlamaParse at $625/run, Reducto at $7,500/run) — self-hosted Docling is 100-1000x cheaper at this volume.
+
+Full cloud research: ask Claude to reference the April 14 cloud Docling research.
 
 ---
 
