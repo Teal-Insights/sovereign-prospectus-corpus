@@ -255,7 +255,7 @@ def get_markdown(con: duckdb.DuckDBPyConnection, document_id: int) -> str | None
     """Fetch full markdown text for a document. Returns None if not available."""
     document_id = int(document_id)
     row = con.execute(
-        "SELECT markdown_text, char_count FROM document_markdown WHERE document_id = ?",
+        "SELECT markdown_text FROM document_markdown WHERE document_id = ?",
         [document_id],
     ).fetchone()
     if row is None:
@@ -264,10 +264,10 @@ def get_markdown(con: duckdb.DuckDBPyConnection, document_id: int) -> str | None
 
 
 def get_markdown_size(con: duckdb.DuckDBPyConnection, document_id: int) -> int:
-    """Get markdown char_count without loading the full text."""
+    """Get markdown size without loading the full text."""
     document_id = int(document_id)
     row = con.execute(
-        "SELECT char_count FROM document_markdown WHERE document_id = ?",
+        "SELECT LENGTH(markdown_text) FROM document_markdown WHERE document_id = ?",
         [document_id],
     ).fetchone()
     return row[0] if row else 0
