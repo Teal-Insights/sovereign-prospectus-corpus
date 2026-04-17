@@ -55,7 +55,8 @@ if [ -n "$SUPERVISOR_PID" ]; then
     fi
 
     TOTAL_GB=$(echo "scale=1; $TOTAL_KB / 1048576" | bc)
-    SYS_MEM_GB=64
+    SYS_MEM_GB=$(sysctl -n hw.memsize 2>/dev/null | awk '{printf "%.0f", $1/1024/1024/1024}')
+    SYS_MEM_GB=${SYS_MEM_GB:-64}
 
     # Color-code: green <24, yellow 24-36, red >36
     if [ "$(echo "$TOTAL_GB > 36" | bc)" -eq 1 ]; then

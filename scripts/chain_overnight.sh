@@ -120,7 +120,15 @@ PDF_STATUS="ok"
 if [ "$SHUTDOWN" = "True" ]; then
     PDF_STATUS="shutdown"
 fi
-echo "{\"status\":\"complete\",\"pdf_status\":\"$PDF_STATUS\",\"edgar_exit\":$EDGAR_EXIT,\"started\":\"$CHAIN_START\",\"finished\":\"$CHAIN_END\",\"total_jsonl\":$TOTAL_JSONL,\"total_md\":$TOTAL_MD,\"timestamp\":\"$CHAIN_END\"}" > "$CHAIN_COMPLETE"
+EDGAR_EXIT=${EDGAR_EXIT:-1}
+
+# Determine overall status — don't say "complete" if things failed
+if [ "$EDGAR_EXIT" -ne 0 ] || [ "$PDF_STATUS" = "shutdown" ]; then
+    OVERALL_STATUS="complete_with_warnings"
+else
+    OVERALL_STATUS="complete"
+fi
+echo "{\"status\":\"$OVERALL_STATUS\",\"pdf_status\":\"$PDF_STATUS\",\"edgar_exit\":$EDGAR_EXIT,\"started\":\"$CHAIN_START\",\"finished\":\"$CHAIN_END\",\"total_jsonl\":$TOTAL_JSONL,\"total_md\":$TOTAL_MD,\"timestamp\":\"$CHAIN_END\"}" > "$CHAIN_COMPLETE"
 
 echo "Chain complete at $(date). $TOTAL_JSONL JSONL, $TOTAL_MD MD files."
 log_stage "chain_complete" "done" ",\"total_jsonl\":$TOTAL_JSONL,\"total_md\":$TOTAL_MD"

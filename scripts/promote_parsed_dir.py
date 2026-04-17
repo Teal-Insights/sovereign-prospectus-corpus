@@ -24,6 +24,11 @@ BACKUP_DIR = PROJECT_ROOT / "data" / "parsed.pymupdf.bak"
 
 
 def main() -> None:
+    # Pre-flight: verify Docling outputs exist BEFORE touching anything
+    if not DOCLING_DIR.exists():
+        print(f"ERROR: {DOCLING_DIR} does not exist. Run the overnight parse first.")
+        sys.exit(1)
+
     # Step 1: Backup old parsed dir
     if PARSED_DIR.exists():
         if BACKUP_DIR.exists():
@@ -33,11 +38,6 @@ def main() -> None:
         PARSED_DIR.rename(BACKUP_DIR)
     else:
         print(f"No existing {PARSED_DIR} to back up")
-
-    # Step 2: Promote Docling outputs
-    if not DOCLING_DIR.exists():
-        print(f"ERROR: {DOCLING_DIR} does not exist. Run the overnight parse first.")
-        sys.exit(1)
 
     print(f"Promoting {DOCLING_DIR} → {PARSED_DIR}")
     DOCLING_DIR.rename(PARSED_DIR)

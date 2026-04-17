@@ -71,6 +71,8 @@ def _get_pool_pids(pool: ProcessPoolExecutor) -> list[int]:
     it directly can raise RuntimeError if workers are being recycled. Retry up
     to 3 times to handle transient dict-size changes.
     """
+    if not hasattr(pool, "_processes"):
+        return []
     for _ in range(3):
         try:
             return list(pool._processes or {})
