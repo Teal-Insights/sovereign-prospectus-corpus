@@ -13,6 +13,8 @@ SCRIPT_PATH = str(Path(__file__).resolve().parent.parent / "scripts" / "docling_
 def _load_module():
     """Load docling_reparse as a module without __main__ side effects."""
     spec = importlib.util.spec_from_file_location("docling_reparse", SCRIPT_PATH)
+    assert spec is not None, f"Could not find module spec for {SCRIPT_PATH}"
+    assert spec.loader is not None, "Module spec has no loader"
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
