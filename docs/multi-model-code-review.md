@@ -6,7 +6,7 @@ reviews across 3 AI models caught critical bugs in a 7-hour overnight pipeline.
 
 ## The pattern
 
-Use the three best AI coding models — Claude Opus, GPT-5.4, and Gemini 2.5
+Use the three best AI coding models — Claude Opus, GPT-5.4, and Gemini 3.1
 Pro — as independent reviewers at key gates in the development workflow.
 Each model has different strengths and blind spots. The combination catches
 what any single model misses.
@@ -115,7 +115,7 @@ prompt (GitHub issue #7825). Use `codex exec` with piped diff instead.
 
 | Setting | Value |
 |---------|-------|
-| Model | `gemini-3.1-pro-preview` (Gemini 2.5 Pro) |
+| Model | `gemini-3.1-pro-preview` (Gemini 3.1 Pro) |
 | Thinking | Built-in (no separate flag) |
 | Config | `~/.gemini/settings.json` |
 
