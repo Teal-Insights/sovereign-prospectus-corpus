@@ -49,9 +49,11 @@ def test_parse_result_metadata() -> None:
     assert isinstance(result.parse_version, str)
 
 
-def test_get_parser_default_returns_pymupdf() -> None:
+def test_get_parser_default_returns_docling() -> None:
+    from corpus.parsers.docling_parser import DoclingParser
+
     parser = get_parser()
-    assert isinstance(parser, PyMuPDFParser)
+    assert isinstance(parser, DoclingParser)
 
 
 def test_get_parser_explicit_pymupdf() -> None:

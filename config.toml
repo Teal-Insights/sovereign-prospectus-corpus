@@ -2,7 +2,7 @@
 # Contact info for API User-Agent headers comes from .env (see .env.example)
 
 [parser]
-default = "pymupdf"  # Switch to "docling" after Monday
+default = "docling"
 
 [nsm]
 delay_api = 1.0
@@ -29,6 +29,14 @@ max_retries = 3
 timeout = 60
 
 [pdip.circuit_breaker]
+total_failures_abort = 10
+
+[luxse]
+delay = 1.0
+max_retries = 3
+timeout = 60
+
+[luxse.circuit_breaker]
 total_failures_abort = 10
 
 [pdip_annotations]

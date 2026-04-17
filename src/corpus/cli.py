@@ -320,6 +320,95 @@ def pdip(
         raise SystemExit(1)
 
 
+@download.command()
+@click.option("--run-id", default=None, help="Pipeline run identifier.")
+@click.option(
+    "--discovery-file",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/luxse_discovery.jsonl",
+    help="Path to discovery JSONL from 'corpus discover luxse'.",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default="data/original",
+    help="Directory for downloaded PDFs.",
+)
+@click.option(
+    "--manifest-dir",
+    type=click.Path(path_type=Path),
+    default="data/manifests",
+    help="Directory for manifest JSONL files.",
+)
+@click.option(
+    "--log-dir",
+    type=click.Path(path_type=Path),
+    default="data/telemetry",
+    help="Directory for structured log files.",
+)
+def luxse(
+    run_id: str | None,
+    discovery_file: Path,
+    output_dir: Path,
+    manifest_dir: Path,
+    log_dir: Path,
+) -> None:
+    """Download documents from Luxembourg Stock Exchange (reads discovery file)."""
+    import uuid
+
+    from corpus.io.http import CorpusHTTPClient
+    from corpus.logging import CorpusLogger
+    from corpus.sources.luxse import run_luxse_download
+
+    cfg = _load_config().get("luxse", {})
+    cb_cfg = cfg.get("circuit_breaker", {})
+
+    if run_id is None:
+        run_id = f"luxse-{uuid.uuid4().hex[:12]}"
+
+    client = CorpusHTTPClient(
+        max_retries=int(cfg.get("max_retries", 3)),
+        backoff_factor=float(cfg.get("backoff_factor", 0.5)),
+        timeout=int(cfg.get("timeout", 60)),
+    )
+
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"luxse_{run_id}.jsonl"
+    logger = CorpusLogger(log_file, run_id=run_id)
+
+    click.echo(f"Starting LuxSE download from {discovery_file} (run_id={run_id})...")
+    stats = run_luxse_download(
+        client=client,
+        discovery_file=discovery_file,
+        output_dir=output_dir,
+        manifest_dir=manifest_dir,
+        logger=logger,
+        run_id=run_id,
+        delay=float(cfg.get("delay", 1.0)),
+        total_failures_abort=int(cb_cfg.get("total_failures_abort", 10)),
+    )
+
+    from corpus.reporting import write_run_report
+
+    report_path = write_run_report(
+        source="luxse",
+        run_id=run_id,
+        stats=stats,
+        telemetry_dir=log_dir,
+    )
+
+    click.echo(
+        f"LuxSE download complete: {stats['downloaded']} downloaded, "
+        f"{stats['skipped']} skipped, {stats['failed']} failed "
+        f"(of {stats['total_in_discovery']} in discovery)."
+    )
+    if stats["aborted"]:
+        click.echo("ERROR: Download aborted due to too many failures.", err=True)
+    click.echo(f"Report: {report_path}")
+    if stats["aborted"]:
+        raise SystemExit(1)
+
+
 # ── Discover group ─────────────────────────────────────────────────
 
 
@@ -473,6 +562,49 @@ def discover_pdip_cmd(run_id: str | None, output: Path) -> None:
     click.echo(f"Output: {output}")
 
 
+@discover.command("luxse")
+@click.option("--run-id", default=None, help="Pipeline run identifier.")
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    default="data/luxse_discovery.jsonl",
+    help="Output path for discovery JSONL.",
+)
+def discover_luxse_cmd(run_id: str | None, output: Path) -> None:
+    """Discover sovereign filings from Luxembourg Stock Exchange (metadata only)."""
+    import uuid
+
+    from corpus.io.http import CorpusHTTPClient
+    from corpus.sources.luxse import discover_luxse
+
+    cfg = _load_config().get("luxse", {})
+
+    if run_id is None:
+        run_id = f"discover-luxse-{uuid.uuid4().hex[:8]}"
+
+    client = CorpusHTTPClient(
+        max_retries=int(cfg.get("max_retries", 3)),
+        backoff_factor=float(cfg.get("backoff_factor", 0.5)),
+        timeout=int(cfg.get("timeout", 60)),
+    )
+
+    click.echo(f"Discovering LuxSE sovereign documents (run_id={run_id})...")
+
+    stats = discover_luxse(
+        client=client,
+        output_path=output,
+        delay=float(cfg.get("delay", 1.0)),
+    )
+
+    click.echo(
+        f"Discovery complete: {stats['unique_filings']} unique filings "
+        f"from {stats['total_hits_raw']} raw hits."
+    )
+    click.echo(f"Output: {output}")
+    for pq in stats["per_query"]:
+        click.echo(f"  {pq['label']}: {pq['hits']} hits, {pq['new']} new")
+
+
 # ── Scrape group ───────────────────────────────────────────────────
 
 
@@ -605,7 +737,7 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
 
     from corpus.logging import CorpusLogger
     from corpus.parsers.html_parser import HTMLParser
-    from corpus.parsers.pymupdf_parser import PyMuPDFParser
+    from corpus.parsers.registry import get_parser
     from corpus.parsers.text_parser import PlainTextParser
 
     config = _load_config()
@@ -616,7 +748,7 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
     logger = CorpusLogger(log_path, run_id=run_id)
 
     parsers = {
-        ".pdf": PyMuPDFParser(),
+        ".pdf": get_parser(),
         ".txt": PlainTextParser(),
         ".htm": HTMLParser(),
         ".html": HTMLParser(),
@@ -1089,7 +1221,13 @@ def extract_pdip(run_id: str) -> None:
     help="Path to the DuckDB database file.",
 )
 @click.option("--run-id", default=None, help="Pipeline run identifier.")
-def ingest(manifest_dir: Path, db_path: Path, run_id: str | None) -> None:
+@click.option(
+    "--parsed-dir",
+    type=click.Path(path_type=Path),
+    default="data/parsed",
+    help="Directory containing parsed JSONL files (for parse_tool/page_count backfill).",
+)
+def ingest(manifest_dir: Path, db_path: Path, run_id: str | None, parsed_dir: Path) -> None:
     """Load JSONL manifests into DuckDB (serial, single-writer)."""
     import duckdb
 
@@ -1098,14 +1236,104 @@ def ingest(manifest_dir: Path, db_path: Path, run_id: str | None) -> None:
     manifest_dir.mkdir(parents=True, exist_ok=True)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
+    _parsed = parsed_dir if parsed_dir.exists() else None
+
     with duckdb.connect(str(db_path)) as conn:
         create_schema(conn)
-        stats = ingest_manifests(conn, manifest_dir, run_id=run_id)
+        stats = ingest_manifests(conn, manifest_dir, run_id=run_id, parsed_dir=_parsed)
 
     click.echo(
         f"Ingest complete: {stats['documents_inserted']} inserted, "
         f"{stats['documents_skipped']} skipped."
     )
+
+
+@cli.command("build-pages")
+@click.option(
+    "--db-path",
+    type=click.Path(path_type=Path),
+    default="data/db/corpus.duckdb",
+    help="Path to the DuckDB database file.",
+)
+@click.option(
+    "--parsed-dir",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/parsed",
+    help="Directory containing parsed JSONL files.",
+)
+def build_pages_cmd(db_path: Path, parsed_dir: Path) -> None:
+    """Build document_pages table and FTS index from parsed JSONL files."""
+    import duckdb
+
+    from corpus.db.pages import build_pages, create_fts_index
+    from corpus.db.schema import create_schema
+
+    with duckdb.connect(str(db_path)) as conn:
+        create_schema(conn)
+        click.echo("Building document_pages...")
+        stats = build_pages(conn, parsed_dir)
+        click.echo(
+            f"Pages: {stats['pages_inserted']} inserted, "
+            f"{stats['files_processed']} files processed, "
+            f"{stats['files_skipped']} skipped."
+        )
+
+        click.echo("Creating FTS index...")
+        create_fts_index(conn)
+        click.echo("FTS index ready.")
+
+
+@cli.command("build-markdown")
+@click.option(
+    "--db-path",
+    type=click.Path(path_type=Path),
+    default="data/db/corpus.duckdb",
+    help="Path to the DuckDB database file.",
+)
+@click.option(
+    "--parsed-dir",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/parsed",
+    help="Directory containing .md sidecar files.",
+)
+def build_markdown_cmd(db_path: Path, parsed_dir: Path) -> None:
+    """Load .md files into document_markdown table for the Streamlit detail panel."""
+    import duckdb
+
+    from corpus.db.markdown import build_markdown
+    from corpus.db.schema import create_schema
+
+    with duckdb.connect(str(db_path)) as conn:
+        create_schema(conn)
+        stats = build_markdown(conn, parsed_dir)
+        click.echo(
+            f"Markdown: {stats['inserted']} inserted, "
+            f"{stats['skipped']} skipped, "
+            f"{stats['no_document']} no matching document."
+        )
+
+
+@cli.command("publish-motherduck")
+@click.option(
+    "--db-path",
+    type=click.Path(exists=True, path_type=Path),
+    default="data/db/corpus.duckdb",
+    help="Path to the local DuckDB database file.",
+)
+@click.option(
+    "--remote-db",
+    default="sovereign_corpus",
+    help="MotherDuck database name.",
+)
+def publish_motherduck_cmd(db_path: Path, remote_db: str) -> None:
+    """Publish local DuckDB tables to MotherDuck cloud."""
+    from corpus.db.publish import publish_to_motherduck
+
+    click.echo(f"Publishing to MotherDuck ({remote_db})...")
+    stats = publish_to_motherduck(db_path, remote_db=remote_db)
+    click.echo(f"Published {stats['tables_published']} tables:")
+    for table, rows in stats["table_rows"].items():
+        click.echo(f"  {table}: {rows:,} rows")
 
 
 # ── Status command ─────────────────────────────────────────────────

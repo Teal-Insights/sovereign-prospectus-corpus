@@ -85,6 +85,24 @@ CREATE TABLE IF NOT EXISTS pdip_clauses (
     created_at      TIMESTAMP DEFAULT current_timestamp
 );
 
+-- Markdown text for Streamlit detail panel (separate from documents to keep it lightweight)
+CREATE TABLE IF NOT EXISTS document_markdown (
+    document_id     INTEGER PRIMARY KEY REFERENCES documents(document_id),
+    markdown_text   VARCHAR NOT NULL,
+    created_at      TIMESTAMP DEFAULT current_timestamp
+);
+
+-- Per-page text for full-text search
+CREATE SEQUENCE IF NOT EXISTS document_pages_seq START 1;
+CREATE TABLE IF NOT EXISTS document_pages (
+    page_id         INTEGER PRIMARY KEY DEFAULT nextval('document_pages_seq'),
+    document_id     INTEGER NOT NULL REFERENCES documents(document_id),
+    page_number     INTEGER NOT NULL,  -- 1-indexed for display
+    page_text       VARCHAR NOT NULL,
+    char_count      INTEGER NOT NULL,
+    UNIQUE(document_id, page_number)
+);
+
 CREATE TABLE IF NOT EXISTS source_events (
     event_id    INTEGER PRIMARY KEY DEFAULT nextval('source_events_seq'),
     source      VARCHAR NOT NULL,
