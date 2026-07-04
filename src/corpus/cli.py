@@ -864,6 +864,15 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
                     out.write(_json.dumps(page_record) + "\n")
             part_path.rename(output_path)
 
+            # Markdown sidecar for build-markdown (Docling provides it;
+            # other parsers don't, and their docs use page text instead)
+            markdown = result.metadata.get("markdown", "")
+            if markdown.strip():
+                md_path = text_dir / f"{storage_key}.md"
+                md_part = md_path.with_suffix(".md.part")
+                md_part.write_text(markdown)
+                md_part.rename(md_path)
+
             logger.log(
                 document_id=storage_key,
                 step="parse",
