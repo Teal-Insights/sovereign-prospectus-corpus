@@ -296,5 +296,69 @@
         "notRestoredReasons": "null"
       }
     ]
+  },
+  {
+    "ranAt": "2026-07-04T23:17:17.618Z",
+    "label": "s3-full-9774",
+    "records": [
+      {
+        "label": "s3-full-9774",
+        "scenario": "cold",
+        "bundleName": "eh",
+        "workerMs": 0.9000005722045898,
+        "instantiateMs": 401.8999996185303,
+        "manifestMs": 3.59999942779541,
+        "parquetFetchMs": 62.69999980926514,
+        "registerMs": 712.3999996185303,
+        "firstQueryMs": 79.69999980926514,
+        "secondQueryMs": 71.19999980926514,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 1332.8999996185303,
+        "wasmFetchMs": null,
+        "network": {
+          "transferredBytes": 2832096,
+          "wasm": {
+            "url": "",
+            "transferredBytes": 0
+          },
+          "requests": 12
+        }
+      },
+      {
+        "label": "s3-full-9774",
+        "scenario": "warm",
+        "bundleName": "eh",
+        "workerMs": 0.19999980926513672,
+        "instantiateMs": 370.5,
+        "manifestMs": 1.5999994277954102,
+        "parquetFetchMs": 62.69999980926514,
+        "registerMs": 181,
+        "firstQueryMs": 69.69999980926514,
+        "secondQueryMs": 69.09999942779541,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 758.5,
+        "wasmFetchMs": null
+      },
+      {
+        "label": "s3-full-9774",
+        "scenario": "doc",
+        "slug": "edgar-0000903423-02-000767",
+        "fetchMs": 20.199999809265137,
+        "parseMs": 0.7000007629394531,
+        "renderMs": 0.10000038146972656,
+        "stringLength": 728629
+      },
+      {
+        "label": "s3-full-9774",
+        "scenario": "worst",
+        "slug": "luxse-100387641",
+        "gateEngaged": true,
+        "wallMsFromNav": 545,
+        "fetchMs": 380.5,
+        "parseMs": 41.10000038146973,
+        "renderMs": 8.899999618530273,
+        "stringLength": 29028574
+      }
+    ]
   }
 ]

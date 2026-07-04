@@ -120,3 +120,33 @@ null is not a restore signal. Caught by the council PR gate.
 - `wasmFetchMs` is null in all records (worker-side fetch invisible to
   page-level CDP and resource timing); closing it needs CDP worker
   auto-attach, filed as a follow-up issue.
+
+## S3 measurement record (2026-07-04, TEA-903, Apple Silicon Mac, system Chrome headless)
+
+Full snapshot (9,774 docs; label s3-full-9774 in results.json):
+
+- Build: 9,775 pages in 4.24 s (S2 baseline ~4.7 s; the added build-time
+  aggregations are noise, as predicted).
+- Browse: cold 1,333 ms to first rows (instantiate 402 ms, register 712 ms,
+  queries 80+71 ms), warm 759 ms. On the S2 baselines (cold ~1.4-1.5 s,
+  warm ~0.8 s) despite the richer filter model and status-counts query.
+- Doc (729 KB Peru 424B5): fetch 20 ms, parse 0.7 ms, render 0.1 ms.
+- Worst case (29 MB luxse-100387641): gate -> SEGMENTED render now;
+  fetch 381 ms, parse 41 ms, first-segment render 8.9 ms; 61 segments,
+  ~485 ms from gate click to rendered text. In-doc search turnaround on
+  the 28.6M-char string ~280 ms including debounce; the 20,000-match
+  compute cap engages on common terms with honest "20,000+" copy and
+  per-section count suppression.
+- Lighthouse (same invocation as S2: lighthouse CLI, system Chrome
+  headless, served precompressed dist, default mobile simulation):
+  - Browse bare URL: performance 100, accessibility 100, FCP 1,278 ms,
+    LCP 1,680 ms, TBT 0, CLS 0. Gates were >= 90 / >= 95 / <= 0.02.
+  - Browse parameterized (?country=ARG&country=KEN&income=Low%20income
+    &hi=1&page=2, chips restored post-load): performance 100,
+    accessibility 100, CLS 0.004 (the recorded honesty number for
+    parameter-heavy shared links).
+  - Doc page (729 KB): performance 98, accessibility 100, CLS 0.
+- Extremes: no-TOC 1M-char doc segments via fixed cuts (3 segments);
+  pages-sourced docs carry the page-boundaries note; undated PDIP docs
+  render "undated"; the 2,001-row TOC (2,000 entries + front matter)
+  reveals its filter input and narrows correctly.
