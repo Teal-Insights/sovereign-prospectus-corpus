@@ -1,0 +1,85 @@
+[
+  {
+    "ranAt": "2026-07-04T20:19:33.951Z",
+    "label": "sample-100",
+    "records": [
+      {
+        "label": "sample-100",
+        "scenario": "cold",
+        "bundleName": "eh",
+        "workerMs": 2.6000003814697266,
+        "instantiateMs": 413.69999980926514,
+        "manifestMs": 3.799999237060547,
+        "parquetFetchMs": 2.299999237060547,
+        "registerMs": 906.4000005722046,
+        "firstQueryMs": 24.399999618530273,
+        "secondQueryMs": 25,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 1488.5999994277954,
+        "wasmFetchMs": null,
+        "network": {
+          "transferredBytes": 111140,
+          "wasm": {
+            "url": "",
+            "transferredBytes": 0
+          },
+          "requests": 10
+        }
+      },
+      {
+        "label": "sample-100",
+        "scenario": "heap",
+        "usedJSHeapSizeBytes": 10000000
+      },
+      {
+        "label": "sample-100",
+        "scenario": "warm",
+        "bundleName": "eh",
+        "workerMs": 0.3000001907348633,
+        "instantiateMs": 387.30000019073486,
+        "manifestMs": 1.4000005722045898,
+        "parquetFetchMs": 2.3999996185302734,
+        "registerMs": 185,
+        "firstQueryMs": 23.5,
+        "secondQueryMs": 23.300000190734863,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 718.1999998092651,
+        "wasmFetchMs": null
+      },
+      {
+        "label": "sample-100",
+        "scenario": "throttled",
+        "cpu": "4x",
+        "network": "~8Mbps/40ms",
+        "bundleName": "eh",
+        "workerMs": 2.59999942779541,
+        "instantiateMs": 6275.400000572205,
+        "manifestMs": 53.89999961853027,
+        "parquetFetchMs": 59.69999980926514,
+        "registerMs": 1175.5,
+        "firstQueryMs": 28.300000190734863,
+        "secondQueryMs": 27.399999618530273,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 7752.60000038147,
+        "wasmFetchMs": null,
+        "transferred": {
+          "transferredBytes": 55570,
+          "wasm": {
+            "url": "",
+            "transferredBytes": 0
+          },
+          "requests": 5
+        }
+      },
+      {
+        "label": "sample-100",
+        "scenario": "doc",
+        "slug": "edgar-0001193125-25-081786",
+        "fetchMs": 2.8000001907348633,
+        "parseMs": 0.09999942779541016,
+        "renderMs": 0,
+        "bytes": 45451
+      }
+    ]
+  }
+]
