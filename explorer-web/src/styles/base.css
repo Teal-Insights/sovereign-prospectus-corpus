@@ -1,0 +1,108 @@
+/* Element defaults. Consumes tokens only; no literal values. */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: var(--ew-font-body);
+  font-size: var(--ew-font-size-base);
+  line-height: var(--ew-line-height);
+  color: var(--ew-color-text);
+  background: var(--ew-color-bg);
+}
+main {
+  max-width: var(--ew-max-width);
+  margin: 0 auto;
+  padding: var(--ew-space-3);
+}
+h1 {
+  font-size: var(--ew-font-size-h1);
+  margin: var(--ew-space-3) 0;
+}
+h2 {
+  font-size: var(--ew-font-size-h2);
+  margin: var(--ew-space-3) 0 var(--ew-space-2);
+}
+a {
+  color: var(--ew-color-link);
+}
+.ew-header {
+  padding: var(--ew-space-2) var(--ew-space-3);
+  border-bottom: 1px solid var(--ew-color-border);
+  background: var(--ew-color-surface);
+}
+.ew-header a {
+  font-weight: 600;
+  text-decoration: none;
+}
+.ew-footer {
+  max-width: var(--ew-max-width);
+  margin: var(--ew-space-5) auto var(--ew-space-3);
+  padding: var(--ew-space-2) var(--ew-space-3);
+  border-top: 1px solid var(--ew-color-border);
+  color: var(--ew-color-text-muted);
+  font-size: var(--ew-font-size-small);
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  text-align: left;
+  padding: var(--ew-space-1) var(--ew-space-2);
+  border-bottom: 1px solid var(--ew-color-border);
+  vertical-align: top;
+}
+th {
+  color: var(--ew-color-text-muted);
+  font-size: var(--ew-font-size-small);
+}
+button,
+select {
+  font: inherit;
+  padding: var(--ew-space-1) var(--ew-space-2);
+  border: 1px solid var(--ew-color-border);
+  border-radius: var(--ew-radius);
+  background: var(--ew-color-surface);
+  color: var(--ew-color-text);
+}
+button {
+  cursor: pointer;
+}
+.ew-badge {
+  display: inline-block;
+  padding: 0 var(--ew-space-1);
+  border-radius: var(--ew-radius);
+  font-size: var(--ew-font-size-small);
+  white-space: nowrap;
+}
+.ew-badge--sovereign {
+  background: var(--ew-color-badge-sovereign-bg);
+  color: var(--ew-color-badge-sovereign-text);
+}
+.ew-badge--nonsovereign {
+  background: var(--ew-color-badge-nonsovereign-bg);
+  color: var(--ew-color-badge-nonsovereign-text);
+}
+.ew-badge--unverified {
+  background: var(--ew-color-badge-unverified-bg);
+  color: var(--ew-color-badge-unverified-text);
+}
+.ew-error {
+  padding: var(--ew-space-2) var(--ew-space-3);
+  border-radius: var(--ew-radius);
+  background: var(--ew-color-error-bg);
+  color: var(--ew-color-error-text);
+}
+.ew-notice {
+  padding: var(--ew-space-2) var(--ew-space-3);
+  border-radius: var(--ew-radius);
+  background: var(--ew-color-notice-bg);
+  color: var(--ew-color-notice-text);
+  font-size: var(--ew-font-size-small);
+}
+.ew-muted {
+  color: var(--ew-color-text-muted);
+  font-size: var(--ew-font-size-small);
+}

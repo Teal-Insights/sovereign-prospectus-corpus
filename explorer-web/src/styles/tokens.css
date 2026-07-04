@@ -1,0 +1,45 @@
+/* Neutral theme tokens. Every style value used anywhere in explorer-web is
+   defined here as a custom property. Re-theming (S4 private wrapper) means
+   swapping this file; no Teal Insights brand or fonts in the open repo. */
+:root {
+  /* Color */
+  --ew-color-bg: #ffffff;
+  --ew-color-surface: #f5f6f8;
+  --ew-color-text: #1a2129;
+  --ew-color-text-muted: #5a6572;
+  --ew-color-accent: #2f5f7f;
+  --ew-color-accent-contrast: #ffffff;
+  --ew-color-border: #d7dce2;
+  --ew-color-link: #2f5f7f;
+  --ew-color-badge-sovereign-bg: #e3efe6;
+  --ew-color-badge-sovereign-text: #1e5631;
+  --ew-color-badge-nonsovereign-bg: #f3e6e6;
+  --ew-color-badge-nonsovereign-text: #7a2e2e;
+  --ew-color-badge-unverified-bg: #eeeae0;
+  --ew-color-badge-unverified-text: #6b5d2e;
+  --ew-color-error-bg: #fbeaea;
+  --ew-color-error-text: #8c2f2f;
+  --ew-color-notice-bg: #fdf6e3;
+  --ew-color-notice-text: #6b5d2e;
+
+  /* Type */
+  --ew-font-body: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ew-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ew-font-size-base: 1rem;
+  --ew-font-size-small: 0.875rem;
+  --ew-font-size-h1: 1.5rem;
+  --ew-font-size-h2: 1.25rem;
+  --ew-line-height: 1.55;
+
+  /* Space and shape */
+  --ew-space-1: 0.25rem;
+  --ew-space-2: 0.5rem;
+  --ew-space-3: 1rem;
+  --ew-space-4: 1.5rem;
+  --ew-space-5: 2.5rem;
+  --ew-radius: 4px;
+  --ew-max-width: 72rem;
+
+  /* Layout reservations (Lighthouse: avoid CLS while data loads) */
+  --ew-table-min-height: 32rem;
+}
