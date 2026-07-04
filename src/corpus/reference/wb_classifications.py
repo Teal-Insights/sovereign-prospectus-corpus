@@ -1,10 +1,13 @@
 """World Bank country classification data.
 
 Vendored from explorer/country_metadata.py (feature/explorer-v2) for the
-static snapshot builder; the sovereign_issuers table builder stays in explorer/.
+static snapshot builder; the sovereign_issuers table builder stays in explorer/
+(and still carries FY26-and-earlier values -- see GitHub issue #80).
 
-Sources: World Bank Country and Lending Groups (July 2025 edition).
+Edition: FY2027 (July 1, 2026 - June 30, 2027), verified 2026-07-04 against
+the official CLASS.xlsx, the Data Help Desk page, and the OGHIST workbook:
 https://datahelpdesk.worldbank.org/knowledgebase/articles/906519
+Update annually each July when the World Bank releases new classifications.
 """
 
 # country_code -> (region, income_group, lending_category)
@@ -17,7 +20,7 @@ WORLD_BANK_CLASSIFICATIONS: dict[str, tuple[str, str, str | None]] = {
     "ARM": ("Europe & Central Asia", "Upper middle income", "IBRD"),
     "AUT": ("Europe & Central Asia", "High income", None),
     "BEL": ("Europe & Central Asia", "High income", None),
-    "BGR": ("Europe & Central Asia", "Upper middle income", "IBRD"),
+    "BGR": ("Europe & Central Asia", "High income", "IBRD"),
     "BHR": ("Middle East & North Africa", "High income", None),
     "BIH": ("Europe & Central Asia", "Upper middle income", "IBRD"),
     "BLR": ("Europe & Central Asia", "Upper middle income", "IBRD"),
@@ -31,7 +34,7 @@ WORLD_BANK_CLASSIFICATIONS: dict[str, tuple[str, str, str | None]] = {
     "COD": ("Sub-Saharan Africa", "Low income", "IDA"),
     "COG": ("Sub-Saharan Africa", "Lower middle income", "IDA"),
     "COL": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
-    "CRI": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
+    "CRI": ("Latin America & Caribbean", "High income", "IBRD"),
     "CYP": ("Europe & Central Asia", "High income", None),
     "CZE": ("Europe & Central Asia", "High income", None),
     "DEU": ("Europe & Central Asia", "High income", None),
@@ -45,10 +48,10 @@ WORLD_BANK_CLASSIFICATIONS: dict[str, tuple[str, str, str | None]] = {
     "FRA": ("Europe & Central Asia", "High income", None),
     "GAB": ("Sub-Saharan Africa", "Upper middle income", "IBRD"),
     "GHA": ("Sub-Saharan Africa", "Lower middle income", "IDA"),
-    "GIN": ("Sub-Saharan Africa", "Low income", "IDA"),
+    "GIN": ("Sub-Saharan Africa", "Lower middle income", "IDA"),
     "GRC": ("Europe & Central Asia", "High income", None),
     "GTM": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
-    "GUY": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
+    "GUY": ("Latin America & Caribbean", "High income", "IDA"),
     "HKG": ("East Asia & Pacific", "High income", None),
     "HND": ("Latin America & Caribbean", "Lower middle income", "IDA"),
     "HRV": ("Europe & Central Asia", "High income", None),
@@ -62,7 +65,7 @@ WORLD_BANK_CLASSIFICATIONS: dict[str, tuple[str, str, str | None]] = {
     "JOR": ("Middle East & North Africa", "Upper middle income", "IBRD"),
     "JPN": ("East Asia & Pacific", "High income", None),
     "KAZ": ("Europe & Central Asia", "Upper middle income", "IBRD"),
-    "KEN": ("Sub-Saharan Africa", "Lower middle income", "IDA"),
+    "KEN": ("Sub-Saharan Africa", "Lower middle income", "Blend"),
     "KGZ": ("Europe & Central Asia", "Lower middle income", "IDA"),
     "KOR": ("East Asia & Pacific", "High income", None),
     "KWT": ("Middle East & North Africa", "High income", None),
@@ -71,7 +74,7 @@ WORLD_BANK_CLASSIFICATIONS: dict[str, tuple[str, str, str | None]] = {
         "Lower middle income",
         "IBRD",
     ),  # Downgraded by WB in 2022
-    "LKA": ("South Asia", "Lower middle income", "IBRD"),
+    "LKA": ("South Asia", "Upper middle income", "IDA"),
     "LTU": ("Europe & Central Asia", "High income", None),
     "LUX": ("Europe & Central Asia", "High income", None),
     "LVA": ("Europe & Central Asia", "High income", None),
@@ -86,7 +89,7 @@ WORLD_BANK_CLASSIFICATIONS: dict[str, tuple[str, str, str | None]] = {
     "PAK": ("South Asia", "Lower middle income", "Blend"),
     "PAN": ("Latin America & Caribbean", "High income", "IBRD"),
     "PER": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
-    "PHL": ("East Asia & Pacific", "Lower middle income", "IBRD"),
+    "PHL": ("East Asia & Pacific", "Upper middle income", "IBRD"),
     "POL": ("Europe & Central Asia", "High income", None),
     "PRT": ("Europe & Central Asia", "High income", None),
     "PRY": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
@@ -107,12 +110,12 @@ WORLD_BANK_CLASSIFICATIONS: dict[str, tuple[str, str, str | None]] = {
     "TTO": ("Latin America & Caribbean", "High income", None),
     "TUR": ("Europe & Central Asia", "Upper middle income", "IBRD"),
     "UGA": ("Sub-Saharan Africa", "Low income", "IDA"),
-    "UKR": ("Europe & Central Asia", "Lower middle income", "IBRD"),
+    "UKR": ("Europe & Central Asia", "Upper middle income", "IBRD"),
     "URY": ("Latin America & Caribbean", "High income", "IBRD"),
     "USA": ("North America", "High income", None),
     "UZB": ("Europe & Central Asia", "Lower middle income", "Blend"),
-    "VEN": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
-    "VNM": ("East Asia & Pacific", "Lower middle income", "Blend"),
+    "VEN": ("Latin America & Caribbean", "Lower middle income", "IBRD"),
+    "VNM": ("East Asia & Pacific", "Upper middle income", "IBRD"),
     "ZAF": ("Sub-Saharan Africa", "Upper middle income", "IBRD"),
-    "ZMB": ("Sub-Saharan Africa", "Low income", "IDA"),
+    "ZMB": ("Sub-Saharan Africa", "Lower middle income", "IDA"),
 }

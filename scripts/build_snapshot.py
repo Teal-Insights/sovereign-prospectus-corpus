@@ -3,7 +3,7 @@
 Usage:
     uv run python scripts/build_snapshot.py
     uv run python scripts/build_snapshot.py --db-path data/db/corpus.duckdb \
-        --output-dir data/snapshot --limit 100
+        --output-dir /tmp/snapshot_smoke --limit 100
 
 Writes documents.parquet, text/<slug>.json (one per document), and
 MANIFEST.json, then prints total size by component. Logic lives in
@@ -39,11 +39,35 @@ def _human(num_bytes: int) -> str:
     default="data/snapshot",
     help="Directory for the snapshot output.",
 )
-@click.option("--limit", type=int, default=None, help="Only snapshot the first N documents.")
-def main(db_path: Path, output_dir: Path, limit: int | None) -> None:
+@click.option(
+    "--limit",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Only snapshot the first N documents (smoke tests; requires --output-dir).",
+)
+@click.pass_context
+def main(ctx: click.Context, db_path: Path, output_dir: Path, limit: int | None) -> None:
     """Build documents.parquet, text/<slug>.json files, and MANIFEST.json."""
+    import duckdb
+
+    if limit is not None and ctx.get_parameter_source("output_dir") is not None:
+        from click.core import ParameterSource
+
+        if ctx.get_parameter_source("output_dir") == ParameterSource.DEFAULT:
+            raise click.UsageError(
+                "--limit would overwrite the production parquet and manifest in "
+                "data/snapshot with a partial index. Pass an explicit --output-dir "
+                "for smoke tests."
+            )
+
     click.echo(f"Building snapshot from {db_path} into {output_dir}...")
-    stats = build_snapshot(db_path, output_dir, limit=limit)
+    try:
+        stats = build_snapshot(db_path, output_dir, limit=limit)
+    except duckdb.IOException as exc:
+        raise click.ClickException(
+            f"Could not open {db_path} (is a pipeline step like ingest or "
+            f"build-pages holding the write lock? retry after it finishes): {exc}"
+        ) from exc
 
     comp = stats["components"]
     click.echo(
@@ -56,10 +80,17 @@ def main(db_path: Path, output_dir: Path, limit: int | None) -> None:
         click.echo(
             f"WARNING: {len(stats['unmapped_issuers'])} issuer names have no country "
             "mapping (country shows as Unknown). Add them to "
-            "src/corpus/reference/issuer_country_map.py:"
+            "src/corpus/reference/issuer_country_map.py:",
+            err=True,
         )
         for name in stats["unmapped_issuers"]:
-            click.echo(f"  {name!r}")
+            click.echo(f"  {name!r}", err=True)
+    if stats["sovereign_flag_conflicts"]:
+        click.echo(
+            f"NOTE: {len(stats['sovereign_flag_conflicts'])} issuers where the curated "
+            "map and documents.is_sovereign disagree (map wins; see MANIFEST.json).",
+            err=True,
+        )
     if stats["stale_text_files_removed"]:
         click.echo(f"Removed {stats['stale_text_files_removed']} stale text files.")
     manifest_bytes = (output_dir / "MANIFEST.json").stat().st_size

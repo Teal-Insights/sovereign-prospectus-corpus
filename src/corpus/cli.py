@@ -735,6 +735,7 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
     import time
     from datetime import UTC, datetime
 
+    from corpus.io.safe_write import safe_write
     from corpus.logging import CorpusLogger
     from corpus.parsers.html_parser import HTMLParser
     from corpus.parsers.registry import get_parser
@@ -862,17 +863,17 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
                         "char_count": len(page_text),
                     }
                     out.write(_json.dumps(page_record) + "\n")
-            part_path.rename(output_path)
 
             # Markdown sidecar for build-markdown (Docling provides it;
-            # other parsers don't, and their docs use page text instead)
+            # other parsers don't, and their docs use page text instead).
+            # Written BEFORE the .jsonl rename: the .jsonl is the resume
+            # commit point, so a crash here re-parses and rewrites both.
             markdown = result.metadata.get("markdown", "")
             if markdown.strip():
-                from corpus.io.safe_write import safe_write
-
                 safe_write(
                     text_dir / f"{storage_key}.md", markdown.encode("utf-8"), overwrite=True
                 )
+            part_path.rename(output_path)
 
             logger.log(
                 document_id=storage_key,
