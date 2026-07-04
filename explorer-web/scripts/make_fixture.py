@@ -5,6 +5,11 @@ shape the explorer must handle, writes a snappy parquet with DuckDB (same
 writer as the real snapshot builder, so the type layout matches exactly),
 copies the matching text JSONs, and writes a consistent MANIFEST.json.
 
+Also emits three clearly synthetic documents (issue #88) so text-scale
+pathologies are CI-reachable: an inflated-metadata row for the 5 MB
+click-gate branch, an astral-character doc whose toc offsets diverge
+between code points and UTF-16, and a >1M-unit doc for segmented mode.
+
 Run from the repo root:
     uv run python explorer-web/scripts/make_fixture.py
 """
@@ -15,6 +20,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from typing import Any
 
 import duckdb
 
@@ -57,6 +63,112 @@ def markdown_doc_with_toc(con: duckdb.DuckDBPyConnection, parquet: Path) -> str:
     sys.exit(1)
 
 
+def _utf16_offset(text: str, cp_offset: int) -> int:
+    """Convert a code-point offset to a UTF-16 offset (mirrors snapshot.py)."""
+    return cp_offset + sum(1 for ch in text[:cp_offset] if ord(ch) > 0xFFFF)
+
+
+def _toc_entry(text: str, heading: str, level: int) -> dict[str, Any]:
+    offset = text.index(heading)
+    return {
+        "level": level,
+        "title": heading.lstrip("#").strip(),
+        "offset": offset,
+        "offset_utf16": _utf16_offset(text, offset),
+    }
+
+
+def _large_text() -> tuple[str, list[dict[str, Any]]]:
+    """>1M UTF-16 units with 8 headings; one section exceeds 500K units."""
+    line = "The issuer will pay principal and interest when due. " * 3 + "\n"
+    parts: list[str] = []
+    headings: list[str] = []
+
+    def add_section(n: int, target_chars: int) -> None:
+        heading = f"## Section {n}\n"
+        headings.append(heading)
+        parts.append(heading)
+        body_lines = target_chars // len(line) + 1
+        parts.append(line * body_lines)
+
+    for n in range(1, 8):
+        add_section(n, 60_000)
+    add_section(8, 600_000)  # the oversized section
+    parts.append(line * (100_000 // len(line)))  # tail after the last heading
+    text = "".join(parts)
+    toc = [_toc_entry(text, h.rstrip("\n"), 2) for h in headings]
+    return text, toc
+
+
+def _synthetic_docs() -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """(parquet row, text JSON) pairs. country_code stays NULL on purpose:
+    computeFilterOptions drops null codes, keeping 'Synthetic' out of the
+    baked country options on every CI-built page."""
+    gate_text = "gate fixture\n" * 20
+    astral_text = (
+        "intro \U0001f4c4 emoji front matter\n\n## Heading A\nbody a\n\n## Heading B\nbody b\n"
+    )
+    astral_toc = [
+        _toc_entry(astral_text, "## Heading A", 2),
+        _toc_entry(astral_text, "## Heading B", 2),
+    ]
+    large_text, large_toc = _large_text()
+
+    def row(slug: str, title: str, text: str, text_bytes: int | None = None) -> dict[str, Any]:
+        return {
+            "slug": slug,
+            "source": "synthetic",
+            "display_name": title,
+            "title": title,
+            "doc_type": "SYNTHETIC FIXTURE",
+            "country_name": "Synthetic",
+            "region": "Unknown",
+            "income_group": "Unknown",
+            "has_text": True,
+            "text_source": "markdown",
+            "text_chars": len(text),
+            "text_bytes": text_bytes if text_bytes is not None else len(text.encode("utf-8")),
+        }
+
+    def text_json(slug: str, title: str, text: str, toc: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "slug": slug,
+            "storage_key": None,
+            "source": "synthetic",
+            "display_name": title,
+            "title": title,
+            "doc_type": "SYNTHETIC FIXTURE",
+            "publication_date": None,
+            "country_name": "Synthetic",
+            "region": "Unknown",
+            "income_group": "Unknown",
+            "filing_url": None,
+            "page_count": None,
+            "text_source": "markdown",
+            "text": text,
+            "toc": toc,
+            "pages": [],
+        }
+
+    return [
+        (
+            # text_bytes deliberately inflated: the click-gate reads only the
+            # metadata, so the branch is testable with a tiny real file.
+            row("synthetic-gate", "Synthetic Gate Fixture", gate_text, text_bytes=6_000_000),
+            text_json("synthetic-gate", "Synthetic Gate Fixture", gate_text, []),
+        ),
+        (
+            row("synthetic-astral", "Synthetic Astral Fixture", astral_text),
+            text_json("synthetic-astral", "Synthetic Astral Fixture", astral_text, astral_toc),
+        ),
+        (
+            row("synthetic-large", "Synthetic Segment Fixture", large_text),
+            text_json("synthetic-large", "Synthetic Segment Fixture", large_text, large_toc),
+        ),
+    ]
+
+
 def main() -> None:
     parquet = SNAPSHOT_DIR / "documents.parquet"
     if not parquet.exists():
@@ -89,33 +201,51 @@ def main() -> None:
         shutil.rmtree(FIXTURE_DIR)
     (FIXTURE_DIR / "text").mkdir(parents=True)
 
+    # Schema-cloned temp table pins column types exactly (a hand-declared
+    # table would widen e.g. text_bytes to BIGINT, which hyparquet then
+    # reads back as BigInt and breaks the JS consumers).
+    synthetics = _synthetic_docs()
+    con.execute(f"CREATE TEMP TABLE synth AS SELECT * FROM read_parquet('{parquet}') WHERE false")
+    for row, _ in synthetics:
+        cols = ", ".join(row.keys())
+        placeholders = ", ".join(["?"] * len(row))
+        con.execute(f"INSERT INTO synth ({cols}) VALUES ({placeholders})", list(row.values()))
+
+    fixture_parquet = FIXTURE_DIR / "documents.parquet"
     con.execute(
         f"""
         COPY (
             SELECT * FROM read_parquet('{parquet}')
             WHERE slug IN ({slug_list})
+            UNION ALL
+            SELECT * FROM synth
             ORDER BY slug
-        ) TO '{FIXTURE_DIR / "documents.parquet"}' (FORMAT parquet, COMPRESSION snappy)
+        ) TO '{fixture_parquet}' (FORMAT parquet, COMPRESSION snappy)
         """
     )
 
     rows = con.execute(
         f"""
-        SELECT slug, has_text, source FROM read_parquet('{parquet}')
-        WHERE slug IN ({slug_list})
+        SELECT slug, has_text, source FROM read_parquet('{fixture_parquet}')
         """
     ).fetchall()
+    synthetic_texts = {slug: doc for (row, doc) in synthetics for slug in [row["slug"]]}
     text_files = 0
     by_source: dict[str, int] = {}
     for slug, has_text, source in rows:
         by_source[source] = by_source.get(source, 0) + 1
-        if has_text:
+        if not has_text:
+            continue
+        if slug in synthetic_texts:
+            with open(FIXTURE_DIR / "text" / f"{slug}.json", "w", encoding="utf-8") as f:
+                json.dump(synthetic_texts[slug], f, ensure_ascii=False)
+        else:
             src = SNAPSHOT_DIR / "text" / f"{slug}.json"
             if not src.exists():
                 print(f"ERROR: has_text row {slug} missing text JSON", file=sys.stderr)
                 sys.exit(1)
             shutil.copy(src, FIXTURE_DIR / "text" / f"{slug}.json")
-            text_files += 1
+        text_files += 1
 
     with open(SNAPSHOT_DIR / "MANIFEST.json", encoding="utf-8") as f:
         real_manifest = json.load(f)
@@ -139,6 +269,7 @@ def main() -> None:
     print(f"Fixture: {len(rows)} docs, {text_files} text files, {total / 1000:.0f} KB")
     for shape, found in sorted(slugs.items()):
         print(f"  {shape}: {', '.join(found)}")
+    print(f"  synthetic: {', '.join(sorted(synthetic_texts))}")
 
 
 if __name__ == "__main__":
