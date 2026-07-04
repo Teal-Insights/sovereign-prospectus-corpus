@@ -167,3 +167,6 @@ export function highlightCapNote(cap: number): string {
 export const TOC_FILTER_PLACEHOLDER = 'Filter contents...';
 
 export const FRONT_MATTER_LABEL = '(Front matter)';
+
+export const TOC_JUMP_FALLBACK_NOTE =
+  'That contents entry could not be located; showing the start of the document.';
