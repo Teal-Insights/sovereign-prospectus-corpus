@@ -1,0 +1,59 @@
+---
+import DocText from '../../components/DocText.astro';
+import Base from '../../layouts/Base.astro';
+import { loadDocuments, loadSnapshotManifest, type DocRow } from '../../lib/build-data';
+import { WB_VINTAGE_NOTE, citeAs, formatBytes, formatDate, orNA, sovereignBadge } from '../../lib/format';
+
+export async function getStaticPaths() {
+  const [docs, stamp] = await Promise.all([loadDocuments(), loadSnapshotManifest()]);
+  return docs.map((doc) => ({
+    params: { slug: doc.slug },
+    props: { doc, snapshotDate: stamp.snapshot_date, generatedAt: stamp.generated_at },
+  }));
+}
+
+interface Props {
+  doc: DocRow;
+  snapshotDate: string;
+  generatedAt: string;
+}
+const { doc, snapshotDate, generatedAt } = Astro.props;
+const badge = sovereignBadge(doc.is_sovereign);
+const title = doc.display_name ?? doc.issuer_name ?? doc.slug;
+---
+
+<Base title={`${title} | Sovereign Prospectus Explorer`} snapshotDate={snapshotDate} generatedAt={generatedAt}>
+  <p><a href="/">Back to browse</a></p>
+  <h1>{title} <span class={badge.cls}>{badge.label}</span></h1>
+  <p class="ew-muted">{citeAs(snapshotDate, doc.slug)}</p>
+
+  <table>
+    <tbody>
+      <tr><th scope="row">Issuer</th><td>{orNA(doc.issuer_name)}</td></tr>
+      <tr><th scope="row">Title</th><td>{orNA(doc.title)}</td></tr>
+      <tr><th scope="row">Document type</th><td>{orNA(doc.doc_type)}</td></tr>
+      <tr><th scope="row">Publication date</th><td>{formatDate(doc.publication_date)}</td></tr>
+      <tr><th scope="row">Country</th><td>{orNA(doc.country_name)}</td></tr>
+      <tr><th scope="row">Region</th><td>{orNA(doc.region)} <span class="ew-muted">*</span></td></tr>
+      <tr><th scope="row">Income group</th><td>{orNA(doc.income_group)} <span class="ew-muted">*</span></td></tr>
+      <tr><th scope="row">Lending category</th><td>{orNA(doc.lending_category)} <span class="ew-muted">*</span></td></tr>
+      <tr><th scope="row">Source</th><td>{orNA(doc.source)}</td></tr>
+      <tr><th scope="row">Pages</th><td>{orNA(doc.page_count)}</td></tr>
+      <tr><th scope="row">Text size</th><td>{formatBytes(doc.text_bytes)}</td></tr>
+      <tr>
+        <th scope="row">Original filing</th>
+        <td>{doc.filing_url ? <a href={doc.filing_url} rel="noopener">{doc.filing_url}</a> : 'n/a'}</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="ew-muted">* {WB_VINTAGE_NOTE}</p>
+
+  <DocText
+    slug={doc.slug}
+    hasText={doc.has_text === true}
+    textBytes={doc.text_bytes}
+    textSource={doc.text_source}
+    noTextReason={doc.no_text_reason}
+    filingUrl={doc.filing_url}
+  />
+</Base>

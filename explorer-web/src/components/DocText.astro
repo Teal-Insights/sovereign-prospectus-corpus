@@ -1,0 +1,60 @@
+---
+// Document text region. The provenance block is pre-rendered (static HTML):
+// it must survive JS failure, printing, and archiving. Text itself is
+// fetched client-side by scripts/doc-text.ts, which renders into the single
+// #ew-doc-text container (kept slice-addressable for S3's large-doc
+// strategy) and keeps the raw string reachable via window.__ewDoc.
+
+import { NO_PAGE_ANCHORS_NOTE, PROVENANCE_NOTE, orNA } from '../lib/format';
+
+interface Props {
+  slug: string;
+  hasText: boolean;
+  textBytes: number | null;
+  textSource: string | null;
+  noTextReason: string | null;
+  filingUrl: string | null;
+}
+const { slug, hasText, textBytes, textSource, noTextReason, filingUrl } = Astro.props;
+---
+
+<section aria-labelledby="ew-doc-text-heading">
+  <h2 id="ew-doc-text-heading">Document text</h2>
+
+  <div class="ew-notice">
+    {PROVENANCE_NOTE}
+    {filingUrl && (
+      <>
+        {' '}
+        <a href={filingUrl} rel="noopener">Original filing</a>.
+      </>
+    )}
+    {' '}Text source: {orNA(textSource)}.
+    {textSource === 'markdown' && <> {NO_PAGE_ANCHORS_NOTE}</>}
+  </div>
+
+  <div id="ew-doc-notices"></div>
+
+  {
+    hasText ? (
+      <>
+        <h2>Contents</h2>
+        <ol id="ew-doc-toc" class="ew-muted" data-empty-label="No table of contents in this document."></ol>
+        <div
+          id="ew-doc-text"
+          data-slug={slug}
+          data-text-bytes={textBytes ?? 0}
+          style="white-space: pre-wrap; font-family: var(--ew-font-mono); font-size: var(--ew-font-size-small);"
+        >
+          Loading...
+        </div>
+      </>
+    ) : (
+      <p class="ew-muted">No text available for this document: {orNA(noTextReason)}.</p>
+    )
+  }
+</section>
+
+<script>
+  import '../scripts/doc-text';
+</script>
