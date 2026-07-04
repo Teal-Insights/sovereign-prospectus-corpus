@@ -30,6 +30,24 @@ uv sync
 uv run pytest -v
 ```
 
+## Static snapshot for the web explorer
+
+The web explorer consumes a static snapshot generated from the corpus database:
+
+```bash
+uv run python scripts/build_snapshot.py
+```
+
+This reads `data/db/corpus.duckdb` (read-only) and writes to `data/snapshot/`:
+
+| Component | Contents |
+|---|---|
+| `documents.parquet` | One row per document: stable URL slug, issuer, country, region, income group (World Bank classifications), source, publication date, document type, original-filing URL, text availability |
+| `text/<slug>.json` | Per-document full text (Docling markdown, with per-page text as fallback) plus a table-of-contents structure derived from markdown headings, with character offsets. Plain JSON, gzip-friendly |
+| `MANIFEST.json` | Snapshot date, document counts by source, schema version, component sizes |
+
+Slugs are derived from the pipeline's stable storage keys (`{source}__{native_id}`, e.g. `nsm__101126915` becomes `nsm-101126915`) and are safe to use in URLs. Options: `--db-path`, `--output-dir`, `--limit N` (for smoke tests). The builder logic lives in `src/corpus/snapshot.py`; the script prints total size by component when it finishes.
+
 ## Tech stack
 
 Python 3.12, DuckDB, Docling (PDF parsing), Click CLI, Plotly, Shiny. MIT licensed.
