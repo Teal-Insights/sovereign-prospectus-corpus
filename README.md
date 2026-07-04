@@ -56,6 +56,8 @@ Contract notes for consumers:
 
 Options: `--db-path`, `--output-dir`, `--limit N` (smoke tests; requires an explicit `--output-dir` so a partial index never overwrites `data/snapshot`). The builder logic lives in `src/corpus/snapshot.py`; the script prints total size by component when it finishes.
 
+The web explorer that consumes this snapshot lives in [`explorer-web/`](explorer-web/) (Astro + DuckDB-WASM; decisions and spike measurements in [`explorer-web/ARCHITECTURE.md`](explorer-web/ARCHITECTURE.md)).
+
 ## Tech stack
 
 Python 3.12, DuckDB, Docling (PDF parsing), Click CLI, Plotly, Shiny. MIT licensed.
