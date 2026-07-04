@@ -36,6 +36,10 @@ class TestExtractToc:
     def test_ignores_h1_and_plain_text(self):
         assert extract_toc("# Only Title\n\nno headings here") == []
 
+    def test_captures_edgar_h5_headings(self):
+        md = "text\n\n##### RISK FACTORS\n\nbody"
+        assert extract_toc(md) == [{"level": 5, "title": "RISK FACTORS", "offset": 6}]
+
 
 class TestResolveCountry:
     def test_known_sovereign_issuer(self):

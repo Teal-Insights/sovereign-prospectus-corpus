@@ -32,7 +32,9 @@ if TYPE_CHECKING:
 SCHEMA_VERSION = 1
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
-_HEADING_RE = re.compile(r"^(#{2,3})\s+(.+)$", re.MULTILINE)
+# h2-h3 covers Docling output (all sections are h2); the EDGAR HTML parser
+# emits h5 for section headings, so capture through h5 with true levels.
+_HEADING_RE = re.compile(r"^(#{2,5})\s+(.+)$", re.MULTILINE)
 
 
 def slugify(storage_key: str) -> str:
@@ -41,7 +43,7 @@ def slugify(storage_key: str) -> str:
 
 
 def extract_toc(markdown_text: str) -> list[dict[str, Any]]:
-    """Extract ``##``/``###`` headings with char offsets into the text."""
+    """Extract ``##`` through ``#####`` headings with char offsets into the text."""
     return [
         {
             "level": len(match.group(1)),
