@@ -18,3 +18,9 @@ export function parquetUrl(base: string, generatedAt: string): string {
 export function textUrl(base: string, slug: string, generatedAt: string): string {
   return `${joinUrl(base, `text/${slug}.json`)}?v=${encodeURIComponent(generatedAt)}`;
 }
+
+// App-internal route (root-relative; the site assumes origin-root deployment,
+// recorded as a hosting constraint in ARCHITECTURE.md).
+export function docPath(slug: string): string {
+  return `/doc/${slug}/`;
+}

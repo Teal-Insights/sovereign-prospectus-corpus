@@ -25,39 +25,64 @@ fetched inside the worker = ~6.0 MB total. Budgets: cold < 5 s PASS,
 warm < 2 s PASS, throttled < 15 s PASS, transfer < 10 MB PASS.
 
 Sovereign default scope, live counts, URL state, back/forward, pagination:
-verified in the dev smoke (13/13 checks).
+verified by the committed dev smoke (`scripts/smoke.mjs`, run against
+`npm run dev` on the real snapshot; 13/13 checks on 2026-07-04).
 
-## Run: full-9774 (2026-07-04)
+## Run: full-9774 / full-9774-v2 (2026-07-04)
+
+Two full-scale runs exist in results.json: full-9774 (pre PR-gate code)
+and full-9774-v2 (post PR-gate fixes; current code). Numbers below are
+v2 with v1 in parentheses where they differ beyond noise; run-to-run
+variance is ~10%.
 
 Build (9,775 pages, `astro build` timed directly via /usr/bin/time -l):
-4.63 s build phase, 5.43 s wall, peak RSS 690 MB. dist 148 MB total
-(72 MB wasm assets + ~9,774 doc pages at ~6.3 KB HTML each).
+4.69 s build phase, 5.34 s wall, peak RSS 683 MB (v1: 4.63 s / 690 MB).
+dist 155 MB decimal (148 MiB per du), of which 73.6 MB decimal is the
+two wasm bundles; ~6.3 KB HTML per doc page.
 
-| Scenario | Total to first rows | instantiate | parquet fetch | register | query1 / query2 |
+| Scenario | Total to first rows | instantiate | parquet fetch | register | query1 / first refresh |
 |---|---|---|---|---|---|
-| cold | 1,346 ms | 426 ms | 63 ms | 678 ms | 26 / 32 ms |
-| warm | 795 ms | 391 ms | 62 ms | 185 ms | 24 / 32 ms |
-| throttled (4x CPU, 8 Mbps/40 ms) | 9,101 ms | 6,272 ms | 1,428 ms | 1,146 ms | 31 / 36 ms |
+| cold | 1,509 ms (1,346) | 426 ms | 63 ms | 678 ms | 26 / 32 ms |
+| warm | 850 ms (795) | 391 ms | 62 ms | 185 ms | 24 / 32 ms |
+| throttled (4x CPU, 8 Mbps/40 ms) | 9,186 ms (9,101) | 6,272 ms | 1,428 ms | 1,146 ms | 31 / 36 ms |
+
+The "total to first rows" clock starts at the window load event (data
+work is deferred past first paint by design), so these numbers EXCLUDE
+the initial HTML/CSS/JS download and parse; under throttling that
+exclusion is non-trivial. Lighthouse's FCP/LCP (below) cover the
+pre-load phase. "first refresh" times the list+count query pair of the
+first table render, not a single statement.
 
 Transfer, cold: 2.81 MB page-visible (10 requests; the 1.7 MB parquet
-gzips to ~1.4 MB) + 5.92 MB brotli wasm in the worker = ~8.7 MB.
+gzips to ~1.4 MB in this harness) + 5.92 MB brotli wasm in the worker
+= ~8.7 MB. Note: the harness gzips the parquet on the fly; object
+stores gate compression on content-type and typically will NOT compress
+application/octet-stream, so production cold transfer is ~0.3 MB higher
+(~9.0 MB) unless the host is configured for it.
 Budgets: cold < 5 s PASS, warm < 2 s PASS, throttled < 15 s PASS,
-transfer < 10 MB PASS (but see ARCHITECTURE.md: wasm compression is a
-hard host requirement; uncompressed it is 34 MB and blows the budget).
+transfer < 10 MB PASS (see ARCHITECTURE.md: wasm compression is a hard
+host requirement; uncompressed it is 34 MB and blows the budget).
 
-Doc page (729 KB Peru 424B5): fetch 21 ms, parse 0.8 ms, render 0 ms.
+Doc page (729 KB Peru 424B5): fetch 23 ms, parse 0.8 ms, render 0 ms.
 Worst case (luxse-100387641, 29 MB Philippines): click-gate engaged;
-after click: fetch 376 ms, JSON parse 40 ms, render 7.8 ms, ~2.8 s wall
-from navigation to rendered text. No tab hang.
+post-click work is ~0.4 s (fetch 371 ms + JSON parse 48 ms + render
+9.5 ms); ~2.8 s wall from navigation to rendered text including page
+load and the automated gate click. No tab hang.
 
 Lighthouse (system Chrome headless, served dist): performance 100,
 FCP 978 ms, LCP 1,534 ms, TBT 0 ms, CLS 0. (Playwright's
 chromium-headless-shell fails with NO_FCP under lighthouse; use system
 Chrome or CHROME_PATH.)
 
-bfcache: browse -> doc -> back RESTORES from bfcache
-(notRestoredReasons null; the DuckDB worker does not block it in
-Chromium 149); back navigation ~0.8 s including harness polling.
+bfcache (full-9774-bfcache-v2, measured correctly): browse -> doc ->
+back RESTORES from bfcache with the DuckDB worker alive. Verified with
+full Chrome launched WITHOUT Playwright's default
+--disable-back-forward-cache switch, a page sentinel surviving goBack,
+and pageshow.persisted === true; back navigation 159 ms. The earlier
+full-9774 bfcache record (backNavMs 846, notRestoredReasons null) is
+INVALID as a restore claim: Playwright's default launch disables
+bfcache, so that run measured a full reload, and notRestoredReasons
+null is not a restore signal. Caught by the council PR gate.
 
 ## Hand-verification spot-checks (domain rule)
 
@@ -85,3 +110,13 @@ Chromium 149); back navigation ~0.8 s including harness polling.
   precise value). Wasm memory lives in the worker and is not included.
 - Localhost network: cold/warm "network" time is effectively zero except
   in the throttled scenario, which is the honest broadband-ish proxy.
+- The throttled records' `transferred` summaries undercount (about half
+  the requests are missing from CDP capture under
+  Network.emulateNetworkConditions); only the un-throttled cold
+  `network.transferredBytes` feeds the transfer budget.
+- Doc metrics record `stringLength` (UTF-16 code units of the JSON
+  body), not bytes; `text_bytes` in the parquet is the exact stored
+  size (29,031,849 for the worst case vs stringLength 29,028,574).
+- `wasmFetchMs` is null in all records (worker-side fetch invisible to
+  page-level CDP and resource timing); closing it needs CDP worker
+  auto-attach, filed as a follow-up issue.

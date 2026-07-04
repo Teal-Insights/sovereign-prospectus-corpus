@@ -27,7 +27,10 @@ it('slugs are unique non-empty strings', async () => {
   const docs = await loadDocuments();
   const slugs = docs.map((d) => d.slug);
   expect(new Set(slugs).size).toBe(docs.length);
-  for (const s of slugs) expect(typeof s).toBe('string');
+  for (const s of slugs) {
+    expect(typeof s).toBe('string');
+    expect(s.length).toBeGreaterThan(0);
+  }
 });
 
 it('normalizes dates to ISO strings and keeps nulls null', async () => {

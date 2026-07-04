@@ -15,7 +15,14 @@ export function snapshotDevMiddleware(snapshotDir) {
     hooks: {
       'astro:server:setup': ({ server }) => {
         server.middlewares.use('/data', (req, res) => {
-          const urlPath = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
+          let urlPath;
+          try {
+            urlPath = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
+          } catch {
+            res.statusCode = 400;
+            res.end('bad request');
+            return;
+          }
           const filePath = path.resolve(snapshotDir, '.' + urlPath);
           if (
             !filePath.startsWith(snapshotDir + path.sep) ||

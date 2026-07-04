@@ -49,7 +49,7 @@ def markdown_doc_with_toc(con: duckdb.DuckDBPyConnection, parquet: Path) -> str:
         text_path = SNAPSHOT_DIR / "text" / f"{slug}.json"
         if not text_path.exists():
             continue
-        with open(text_path) as f:
+        with open(text_path, encoding="utf-8") as f:
             doc = json.load(f)
         if doc.get("toc"):
             return str(slug)
@@ -117,7 +117,7 @@ def main() -> None:
             shutil.copy(src, FIXTURE_DIR / "text" / f"{slug}.json")
             text_files += 1
 
-    with open(SNAPSHOT_DIR / "MANIFEST.json") as f:
+    with open(SNAPSHOT_DIR / "MANIFEST.json", encoding="utf-8") as f:
         real_manifest = json.load(f)
     manifest = {
         "schema_version": 1,
@@ -128,8 +128,8 @@ def main() -> None:
         "documents_by_source": dict(sorted(by_source.items())),
         "fixture": True,
     }
-    with open(FIXTURE_DIR / "MANIFEST.json", "w") as f:
-        json.dump(manifest, f, indent=2)
+    with open(FIXTURE_DIR / "MANIFEST.json", "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
 
     total = sum(p.stat().st_size for p in FIXTURE_DIR.rglob("*") if p.is_file())
     if total > MAX_FIXTURE_BYTES:

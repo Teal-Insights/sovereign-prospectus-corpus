@@ -1,10 +1,19 @@
-// Browse client script. Disposable by contract: zero SQL, zero fetch logic,
+// Browse client script. Disposable by contract: zero SQL, zero fetch calls,
 // zero URL assembly in this file; lib modules own all of it, so a future
 // framework island can replace this without touching the data layer.
 // The static shell paints first; all data work starts after load.
 
 import { PUBLIC_DATA_BASE_URL } from '../lib/config';
-import { DRIFT_NOTICE, formatDate, orNA, scopeStatus, scopeToggleLabel, sovereignBadge } from '../lib/format';
+import {
+  DRIFT_NOTICE,
+  filteredStatus,
+  formatDate,
+  orNA,
+  scopeAllStatus,
+  scopeStatus,
+  scopeToggleLabel,
+  sovereignBadge,
+} from '../lib/format';
 import { initDuckDB, registerDocumentsParquet, type DuckHandle } from '../lib/duck';
 import {
   buildCountSql,
@@ -15,8 +24,8 @@ import {
   type BrowseFilters,
   type BrowseRow,
 } from '../lib/queries';
-import { loadManifest } from '../lib/snapshot-client';
-import { parquetUrl } from '../lib/urls';
+import { fetchParquetBytes, loadManifest } from '../lib/snapshot-client';
+import { docPath } from '../lib/urls';
 import { renderError, renderNotice, userMessageOf } from './dom';
 
 const PAGE_SIZE = 50;
@@ -28,13 +37,18 @@ interface UiState {
   page: number;
 }
 
+function clampPage(v: unknown): number {
+  const n = Math.floor(Number(v));
+  return Number.isSafeInteger(n) && n > 0 ? n : 0;
+}
+
 function stateFromUrl(): UiState {
   const q = new URLSearchParams(location.search);
   return {
     country: q.get('country') ?? '',
     source: q.get('source') ?? '',
     includeNonSovereign: q.get('scope') === 'all',
-    page: Math.max(0, Number(q.get('page') ?? 0) || 0),
+    page: clampPage(q.get('page')),
   };
 }
 
@@ -85,7 +99,7 @@ function renderRows(tbody: HTMLTableSectionElement, rows: BrowseRow[]): void {
     dateTd.textContent = formatDate(row.publication_date);
     const issuerTd = document.createElement('td');
     const link = document.createElement('a');
-    link.href = `/doc/${row.slug}/`;
+    link.href = docPath(row.slug);
     link.textContent = orNA(row.display_name ?? row.issuer_name);
     issuerTd.appendChild(link);
     const countryTd = document.createElement('td');
@@ -107,7 +121,6 @@ function renderRows(tbody: HTMLTableSectionElement, rows: BrowseRow[]): void {
 
 async function main(): Promise<void> {
   const status = el<HTMLParagraphElement>('ew-status');
-  const tableRegion = el<HTMLDivElement>('ew-table-region');
   const table = el<HTMLTableElement>('ew-table');
   const tbody = el<HTMLTableSectionElement>('ew-rows');
   const notices = el<HTMLDivElement>('ew-browse-notices');
@@ -121,7 +134,14 @@ async function main(): Promise<void> {
   const state = stateFromUrl();
   const tStart = performance.now();
 
+  // Errors render into the notices region; the table skeleton is never
+  // destroyed, so a failed query does not brick later successful renders.
+  const showError = (e: unknown, fallback: string): void => {
+    renderError(notices, userMessageOf(e, fallback));
+  };
+
   let handle: DuckHandle;
+  let grandTotal = 0;
   let sovereignCount = 0;
   let otherCount = 0;
   const metrics: EwBrowseMetrics = {
@@ -140,7 +160,7 @@ async function main(): Promise<void> {
 
   try {
     const tManifest = performance.now();
-    const manifest = await loadManifest(PUBLIC_DATA_BASE_URL, fetch);
+    const manifest = await loadManifest(PUBLIC_DATA_BASE_URL);
     metrics.manifestMs = performance.now() - tManifest;
 
     const stamped = document.body.dataset.buildGeneratedAt;
@@ -153,27 +173,25 @@ async function main(): Promise<void> {
     metrics.instantiateMs = handle.timings.instantiateMs;
 
     status.textContent = 'Fetching the document index...';
-    const tFetch = performance.now();
-    const res = await fetch(parquetUrl(PUBLIC_DATA_BASE_URL, manifest.generated_at));
-    if (!res.ok) throw new Error(`parquet fetch HTTP ${res.status}`);
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    metrics.parquetFetchMs = performance.now() - tFetch;
+    const parquet = await fetchParquetBytes(PUBLIC_DATA_BASE_URL, manifest.generated_at);
+    metrics.parquetFetchMs = parquet.fetchMs;
 
     const tRegister = performance.now();
-    await registerDocumentsParquet(handle, bytes);
+    await registerDocumentsParquet(handle, parquet.bytes);
     metrics.registerMs = performance.now() - tRegister;
 
     // First query: scope counts (also the engine warm-up; measured apart
-    // from the second, steady-state query).
+    // from the later steady-state queries).
     const tFirst = performance.now();
     const scopeRows = await runQuery(handle.conn, buildScopeCountsSql());
     metrics.firstQueryMs = performance.now() - tFirst;
     const scope = scopeRows[0] as { total: number; sovereign: number };
+    grandTotal = Number(scope.total);
     sovereignCount = Number(scope.sovereign);
-    otherCount = Number(scope.total) - sovereignCount;
+    otherCount = grandTotal - sovereignCount;
   } catch (e) {
     status.textContent = '';
-    renderError(tableRegion, userMessageOf(e, 'Could not start the in-browser query engine.'));
+    showError(e, 'Could not start the in-browser query engine.');
     return;
   }
 
@@ -181,32 +199,50 @@ async function main(): Promise<void> {
   scopeToggle.checked = state.includeNonSovereign;
   scopeToggle.disabled = false;
 
+  // Generation token: overlapping refreshes (rapid clicks) must not let a
+  // stale response render over a newer one or write a stale URL.
+  let refreshGeneration = 0;
+
   async function refresh(): Promise<void> {
+    const generation = ++refreshGeneration;
+    const snapshot: UiState = { ...state };
+    const filters = filtersOf(snapshot);
     try {
-      const filters = filtersOf(state);
       const tQuery = performance.now();
       const rows = (await runQuery(handle.conn, buildListSql(filters))) as unknown as BrowseRow[];
       const countRows = await runQuery(handle.conn, buildCountSql(filters));
+      if (generation !== refreshGeneration) return; // stale
       if (!metrics.secondQueryMs) metrics.secondQueryMs = performance.now() - tQuery;
       const total = Number((countRows[0] as { n: number }).n);
+      const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+      // A shared link can point past the last page; clamp and requery.
+      if (snapshot.page > pages - 1) {
+        state.page = pages - 1;
+        void refresh();
+        return;
+      }
 
       renderRows(tbody, rows);
       table.hidden = false;
       metrics.rowsRendered = rows.length;
       if (!metrics.totalToFirstRenderMs) metrics.totalToFirstRenderMs = performance.now() - tStart;
 
-      const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-      const scopeText = state.includeNonSovereign ? `Showing ${total.toLocaleString('en-US')} documents.` : scopeStatus(sovereignCount);
-      const filterText = total !== (state.includeNonSovereign ? sovereignCount + otherCount : sovereignCount)
-        ? ` ${total.toLocaleString('en-US')} match the current filters.`
-        : '';
-      status.textContent = `${scopeText}${filterText} Page ${state.page + 1} of ${pages.toLocaleString('en-US')}.`;
+      const scopeTotal = snapshot.includeNonSovereign ? grandTotal : sovereignCount;
+      const hasFilters = Boolean(snapshot.country || snapshot.source);
+      const scopeText = hasFilters
+        ? filteredStatus(total, scopeTotal, !snapshot.includeNonSovereign)
+        : snapshot.includeNonSovereign
+          ? scopeAllStatus(grandTotal)
+          : scopeStatus(sovereignCount);
+      status.textContent = `${scopeText} Page ${snapshot.page + 1} of ${pages.toLocaleString('en-US')}.`;
       prev.hidden = next.hidden = false;
-      prev.disabled = state.page === 0;
-      next.disabled = state.page >= pages - 1;
-      stateToUrl(state);
+      prev.disabled = snapshot.page === 0;
+      next.disabled = snapshot.page >= pages - 1;
+      stateToUrl(snapshot);
     } catch (e) {
-      renderError(tableRegion, userMessageOf(e, 'Query failed.'));
+      if (generation !== refreshGeneration) return;
+      showError(e, 'Query failed.');
     }
   }
 
@@ -215,8 +251,14 @@ async function main(): Promise<void> {
       runQuery(handle.conn, buildDistinctSql('country_name')),
       runQuery(handle.conn, buildDistinctSql('source')),
     ]);
-    fillSelect(countrySelect, countries.map((r) => String(r.v)), state.country);
-    fillSelect(sourceSelect, sources.map((r) => String(r.v)), state.source);
+    const countryValues = countries.map((r) => String(r.v));
+    const sourceValues = sources.map((r) => String(r.v));
+    // A URL-supplied filter value that does not exist would silently apply
+    // an invisible filter (select shows "All"); reset it instead.
+    if (state.country && !countryValues.includes(state.country)) state.country = '';
+    if (state.source && !sourceValues.includes(state.source)) state.source = '';
+    fillSelect(countrySelect, countryValues, state.country);
+    fillSelect(sourceSelect, sourceValues, state.source);
   } catch (e) {
     renderNotice(notices, userMessageOf(e, 'Filter values failed to load.'));
   }
@@ -241,7 +283,7 @@ async function main(): Promise<void> {
     void refresh();
   });
   next.addEventListener('click', () => {
-    state.page += 1;
+    if (!next.disabled) state.page += 1;
     void refresh();
   });
 

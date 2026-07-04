@@ -28,6 +28,13 @@ export function sqlQuote(v: string): string {
   return `'${v.replaceAll("'", "''")}'`;
 }
 
+// The docs view is the single named contract between registration (duck.ts)
+// and the query builders below; the bootstrap SQL lives here so every SQL
+// string in the app is in this file.
+export function createDocsViewSql(parquetName: string): string {
+  return `CREATE OR REPLACE VIEW docs AS SELECT * FROM read_parquet(${sqlQuote(parquetName)})`;
+}
+
 function whereClause(f: Pick<BrowseFilters, 'country' | 'source' | 'includeNonSovereign'>): string {
   const conditions: string[] = [];
   if (!f.includeNonSovereign) conditions.push('is_sovereign = true');

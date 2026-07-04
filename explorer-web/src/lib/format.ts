@@ -9,8 +9,12 @@ export const PROVENANCE_NOTE =
 export const NO_PAGE_ANCHORS_NOTE =
   'This text was converted from markdown and carries no page anchors; page citations must be checked against the original filing.';
 export const NOSCRIPT_NOTE = 'Browsing requires JavaScript; document pages are static.';
+export const DOC_NOSCRIPT_NOTE =
+  'Loading the document text requires JavaScript; the metadata above is static.';
+// Fires on any generated_at mismatch, in either direction (data host ahead
+// of the build, or rolled back behind it).
 export const DRIFT_NOTICE =
-  'The data snapshot is newer than this page; listings may not match pre-rendered pages until the site rebuilds.';
+  'The data snapshot differs from the one this page was built from; listings and pre-rendered pages may disagree until the site rebuilds.';
 
 export function formatDate(v: number | Date | string | null | undefined): string {
   if (v === null || v === undefined) return 'undated';
@@ -44,6 +48,17 @@ export function sovereignBadge(v: boolean | null | undefined): SovereignBadge {
 
 export function scopeStatus(sovereign: number): string {
   return `Showing ${sovereign.toLocaleString('en-US')} sovereign documents.`;
+}
+
+export function scopeAllStatus(total: number): string {
+  return `Showing ${total.toLocaleString('en-US')} documents.`;
+}
+
+// Used whenever a country/source filter is active, so the status never
+// claims to be "showing" more documents than the table can reach.
+export function filteredStatus(matching: number, scopeTotal: number, sovereignScope: boolean): string {
+  const kind = sovereignScope ? 'sovereign documents' : 'documents';
+  return `${matching.toLocaleString('en-US')} of ${scopeTotal.toLocaleString('en-US')} ${kind} match the current filters.`;
 }
 
 export function scopeToggleLabel(other: number): string {

@@ -5,6 +5,7 @@ import {
   buildDistinctSql,
   buildListSql,
   buildScopeCountsSql,
+  createDocsViewSql,
   sqlQuote,
 } from '../../src/lib/queries';
 
@@ -48,6 +49,12 @@ it('scope counts cast to INTEGER and cover the three states', () => {
   const sql = buildScopeCountsSql();
   expect(sql).toContain('::INTEGER');
   expect(sql).toContain('is_sovereign = true');
+});
+
+it('docs view bootstrap SQL lives here (single named contract)', () => {
+  expect(createDocsViewSql('documents.parquet')).toBe(
+    "CREATE OR REPLACE VIEW docs AS SELECT * FROM read_parquet('documents.parquet')"
+  );
 });
 
 it('distinct SQL excludes NULLs and sorts', () => {

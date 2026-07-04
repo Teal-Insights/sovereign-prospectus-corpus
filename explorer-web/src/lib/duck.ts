@@ -9,6 +9,8 @@ import workerEh from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import workerMvp from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 import wasmMvp from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 
+import { createDocsViewSql } from './queries';
+
 export interface DuckTimings {
   workerMs: number;
   instantiateMs: number;
@@ -46,7 +48,14 @@ async function boot(): Promise<DuckHandle> {
 }
 
 export function initDuckDB(): Promise<DuckHandle> {
-  cached ??= boot();
+  if (!cached) {
+    cached = boot();
+    // Do not memoize a rejection: a transient worker-spawn failure should
+    // not brick every later init on the page.
+    cached.catch(() => {
+      cached = null;
+    });
+  }
   return cached;
 }
 
@@ -56,5 +65,5 @@ export async function registerDocumentsParquet(handle: DuckHandle, bytes: Uint8A
   // Guard against re-registration (dev HMR, script re-run).
   await handle.db.dropFile(PARQUET_NAME).catch(() => undefined);
   await handle.db.registerFileBuffer(PARQUET_NAME, bytes);
-  await handle.conn.query(`CREATE OR REPLACE VIEW docs AS SELECT * FROM read_parquet('${PARQUET_NAME}')`);
+  await handle.conn.query(createDocsViewSql(PARQUET_NAME));
 }

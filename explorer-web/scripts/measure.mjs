@@ -3,10 +3,14 @@
 // Chromium via Playwright, and appends one JSON record per scenario to
 // measurements/results.json.
 //
+// Run from explorer-web/ (all paths are cwd-relative):
 //   node scripts/measure.mjs --dist dist --data-dir ../data/snapshot_sample \
 //     --scenarios cold,warm,throttled,doc,heap --doc-slug <slug> --label sample-100
 //
 // Scenarios: cold, warm, throttled, doc, worst, bfcache, heap.
+// bfcache uses its own browser launch that re-enables back/forward cache
+// (Playwright disables it by default via --disable-back-forward-cache) and
+// detects an actual restore via a page sentinel + pageshow.persisted.
 
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -56,8 +60,9 @@ async function waitForServer(origin) {
       const res = await fetch(origin + '/', { method: 'HEAD' });
       if (res.status < 500) return;
     } catch {
-      await new Promise((r) => setTimeout(r, 200));
+      // not up yet
     }
+    await new Promise((r) => setTimeout(r, 200));
   }
   throw new Error(`server at ${origin} never came up`);
 }
@@ -171,33 +176,69 @@ try {
   }
 
   if (scenarios.includes('bfcache')) {
-    const context = await browser.newContext();
+    // Playwright's default Chromium launch passes --disable-back-forward-cache,
+    // so a restore can never be observed there. Launch a dedicated browser
+    // with that switch removed; prefer full Chrome (headless shell bfcache
+    // support is doubtful), fall back to bundled Chromium.
+    let bfBrowser;
+    let bfChannel = 'chrome';
+    try {
+      bfBrowser = await chromium.launch({
+        channel: 'chrome',
+        ignoreDefaultArgs: ['--disable-back-forward-cache'],
+      });
+    } catch {
+      bfChannel = 'bundled-chromium';
+      bfBrowser = await chromium.launch({ ignoreDefaultArgs: ['--disable-back-forward-cache'] });
+    }
+    const context = await bfBrowser.newContext();
     const page = await context.newPage();
     await page.goto(`${PAGES_ORIGIN}/`, { waitUntil: 'load' });
     await browseMetrics(page);
+    // Sentinel survives goBack only on a real bfcache restore; pageshow
+    // reports persisted=true on restore. notRestoredReasons null is NOT a
+    // restore signal (it also means "not a history navigation").
+    await page.evaluate(() => {
+      window.__ewBfSentinel = 'alive';
+      window.addEventListener('pageshow', (e) => {
+        window.__ewBfPersisted = e.persisted;
+      });
+    });
     await page.locator('#ew-rows tr a').first().click();
     await page.waitForURL('**/doc/**');
     const tBack = Date.now();
-    await page.goBack();
+    // A bfcache restore fires pageshow, not load; goBack's default
+    // wait-for-load never resolves on a restore.
+    await page.goBack({ waitUntil: 'commit' });
     await page.waitForSelector('#ew-rows tr', { timeout: 180000 });
     const backMs = Date.now() - tBack;
-    const notRestored = await page.evaluate(() => {
-      const nav = performance.getEntriesByType('navigation')[0];
-      return nav && 'notRestoredReasons' in nav ? JSON.stringify(nav.notRestoredReasons) : 'unsupported';
+    const bf = await page.evaluate(() => ({
+      sentinel: window.__ewBfSentinel ?? null,
+      pageshowPersisted: window.__ewBfPersisted ?? null,
+      notRestoredReasons: (() => {
+        const nav = performance.getEntriesByType('navigation')[0];
+        return nav && 'notRestoredReasons' in nav ? JSON.stringify(nav.notRestoredReasons) : 'unsupported';
+      })(),
+    }));
+    record('bfcache', {
+      browser: bfChannel,
+      restored: bf.sentinel === 'alive' && bf.pageshowPersisted === true,
+      backNavMs: backMs,
+      ...bf,
     });
-    record('bfcache', { backNavMs: backMs, notRestoredReasons: notRestored });
     await context.close();
+    await bfBrowser.close();
   }
 
   await browser.close();
 } finally {
   for (const server of servers) server.kill();
+  // Persist whatever completed even if a later scenario threw.
+  const outDir = 'measurements';
+  mkdirSync(outDir, { recursive: true });
+  const outFile = path.join(outDir, 'results.json');
+  const existing = existsSync(outFile) ? JSON.parse(readFileSync(outFile, 'utf8')) : [];
+  existing.push({ ranAt: new Date().toISOString(), label, records: results });
+  writeFileSync(outFile, JSON.stringify(existing, null, 2));
+  console.log(`\nmeasure: ${results.length} scenario record(s) appended to ${outFile}`);
 }
-
-const outDir = 'measurements';
-mkdirSync(outDir, { recursive: true });
-const outFile = path.join(outDir, 'results.json');
-const existing = existsSync(outFile) ? JSON.parse(readFileSync(outFile, 'utf8')) : [];
-existing.push({ ranAt: new Date().toISOString(), label, records: results });
-writeFileSync(outFile, JSON.stringify(existing, null, 2));
-console.log(`\nmeasure: ${results.length} scenario record(s) appended to ${outFile}`);

@@ -95,23 +95,32 @@ Raw measurement records: `measurements/results.json` + `measurements/NOTES.md`.
 
 See `measurements/NOTES.md` for tables and caveats; headlines:
 
-- Full build: 9,775 pages, 4.63 s build / 5.43 s wall, peak RSS 690 MB.
-  dist 148 MB (72 MB wasm, ~6.3 KB HTML per doc page).
-- Browse cold 1,346 ms / warm 795 ms / throttled 9,101 ms to first rows;
-  DuckDB instantiate ~420 ms (6.3 s throttled: the wasm download lives
-  inside it, fetched by the worker); queries 24-36 ms steady-state.
-- Cold transfer ~8.7 MB: 5.92 MB brotli wasm + ~1.4 MB gzipped parquet +
-  page assets.
-- Doc pages: 729 KB text renders in ~22 ms end-to-end. Worst case
+- Full build: 9,775 pages, ~4.7 s build / ~5.4 s wall, peak RSS ~690 MB.
+  dist 155 MB decimal (73.6 MB is the two wasm bundles; ~6.3 KB HTML per
+  doc page).
+- Browse cold ~1.4-1.5 s / warm ~0.8 s / throttled ~9.1-9.2 s to first
+  rows (clock starts at the window load event; Lighthouse FCP/LCP cover
+  the pre-load phase). DuckDB instantiate ~420 ms (6.3 s throttled: the
+  wasm download lives inside it, fetched by the worker); queries
+  24-36 ms steady-state.
+- Cold transfer ~8.7 MB in the harness: 5.92 MB brotli wasm + ~1.4 MB
+  gzipped parquet + page assets (~9.0 MB on hosts that do not compress
+  the octet-stream parquet, which is the common default).
+- Doc pages: 729 KB text renders in ~24 ms end-to-end. Worst case
   (29 MB, `luxse-100387641`) sits behind a click-gate (threshold 5 MB
-  decimal, 15 docs over it) and renders ~2.8 s after the click with no
-  tab hang (JSON parse 40 ms, render 7.8 ms).
+  decimal, 15 docs over it); post-click work is ~0.4 s (fetch + JSON
+  parse 48 ms + render 9.5 ms), ~2.8 s wall from navigation including
+  page load and the gate click. No tab hang.
 - Lighthouse on the served build: performance 100, FCP 978 ms, LCP
   1,534 ms, TBT 0, CLS 0 (DuckDB init deferred past first paint; table
   region has reserved height). S3 inherits a 100 baseline for its 90+
   target.
-- bfcache: browse -> doc -> back RESTORES (notRestoredReasons null); the
-  dedicated DuckDB worker does not block bfcache in Chromium 149.
+- bfcache: browse -> doc -> back RESTORES with the DuckDB worker alive;
+  back navigation 159 ms. Measured with full Chrome and Playwright's
+  default --disable-back-forward-cache switch removed, verified by a
+  surviving page sentinel and pageshow.persisted === true (an earlier
+  record claiming this via notRestoredReasons was methodologically
+  invalid; see measurements/NOTES.md).
 
 ## Hosting constraints (input to TEA-906; no hosting decision made here)
 
@@ -151,6 +160,13 @@ See `measurements/NOTES.md` for tables and caveats; headlines:
   `r2.dev` URLs are rate-limited and explicitly non-production.
 - **MIME:** the host must serve `.wasm` as `application/wasm`
   (instantiateStreaming requires it) and `.json` as `application/json`.
+  The parquet ships as `application/octet-stream`, which most hosts will
+  NOT auto-compress; either accept the 1.7 MB raw fetch (budgeted) or
+  configure the host to compress it.
+- **Origin-root deployment assumed:** internal links are root-relative
+  (`/`, `/doc/<slug>/`; see `docPath` in `src/lib/urls.ts`). Subpath
+  deployments (e.g. a GitHub Pages project page) would need Astro
+  `base` support added first.
 - **COOP/COEP:** not required (mvp/eh only). If threads are ever
   revisited, header configurability varies by host and COEP forces
   CORS-cleanliness on every subresource.
@@ -173,8 +189,9 @@ See `measurements/NOTES.md` for tables and caveats; headlines:
 - **Lighthouse baseline 100 / CLS 0** comes from two commitments S3 must
   keep: DuckDB init deferred until after first paint, and reserved
   layout (`--ew-table-min-height`) for the table region.
-- **bfcache restores** with the DuckDB worker alive (measured, Chromium
-  149); URL state (country/source/scope/page in query params via
+- **bfcache restores** with the DuckDB worker alive (measured with full
+  Chrome, sentinel + pageshow.persisted, 159 ms back navigation); URL
+  state (country/source/scope/page in query params via
   `history.replaceState`) already round-trips through back/forward.
 - **The vintage footnote obligation travels** with any classification
   column/filter S3 adds (see Data credibility).

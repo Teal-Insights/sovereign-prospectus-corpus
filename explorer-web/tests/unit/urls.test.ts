@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 
-import { joinUrl, manifestUrl, parquetUrl, textUrl } from '../../src/lib/urls';
+import { docPath, joinUrl, manifestUrl, parquetUrl, textUrl } from '../../src/lib/urls';
 
 it('joins with exactly one slash', () => {
   expect(joinUrl('https://d.example/snap', 'MANIFEST.json')).toBe('https://d.example/snap/MANIFEST.json');
@@ -10,6 +10,10 @@ it('joins with exactly one slash', () => {
 
 it('manifest url has no version token', () => {
   expect(manifestUrl('/data')).toBe('/data/MANIFEST.json');
+});
+
+it('doc route path', () => {
+  expect(docPath('nsm-101126915')).toBe('/doc/nsm-101126915/');
 });
 
 it('version tokens are encoded (real generated_at contains + and :)', () => {

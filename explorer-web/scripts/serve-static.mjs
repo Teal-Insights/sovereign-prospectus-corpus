@@ -63,6 +63,17 @@ const port = Number(arg('port') ?? 8080);
 const cors = hasFlag('cors');
 
 const server = http.createServer((req, res) => {
+  try {
+    handle(req, res);
+  } catch (e) {
+    // A malformed request (e.g. bad percent-encoding) must never kill the
+    // process mid-measurement-run.
+    res.statusCode = e instanceof URIError ? 400 : 500;
+    res.end('bad request');
+  }
+});
+
+function handle(req, res) {
   const urlPath = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
   let filePath = path.resolve(dir, '.' + urlPath);
   if (!filePath.startsWith(dir + path.sep) && filePath !== dir) {
@@ -102,7 +113,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   createReadStream(filePath).pipe(res);
-});
+}
 
 server.listen(port, '127.0.0.1', () => {
   console.log(`serve-static: ${dir} on http://127.0.0.1:${port} cors=${cors}`);
