@@ -127,10 +127,16 @@ additionally hidden by sovereign scope, and the count additionally hidden by
 the high-income exclusion. The status line composes from format.ts templates:
 
 - Base: "N documents match, newest first (showing A to B). Page k of n."
-- If sovereign scope active: " M non-sovereign or unverified documents hidden."
-- If the high-income exclusion is active: " H high-income documents hidden."
-- If the interplay override is active: " Includes high-income documents
-  selected in the income filter."
+- If sovereign scope hides rows: "Including non-sovereign or unverified
+  documents would add M." (marginal semantics made explicit in the copy;
+  the two hidden counts are marginals and deliberately do not sum to the
+  total hidden by both toggles)
+- If the high-income exclusion hides rows: "Including high-income countries
+  would add H."
+- Override sentence, rendered ONLY when 'High income' is among the selected
+  incomes while the toggle is off (an income selection of only lower bands
+  includes no high-income docs, so the earlier broader wording could assert
+  a falsehood): "High-income documents are included by the income filter."
 - Zero results: "No documents match these filters." (P21)
 
 The browse subtitle is build-stamped and scope-honest: "Browse S sovereign
@@ -265,7 +271,9 @@ Three render modes by text length (UTF-16 units of the fetched string):
    before each 500K step; if a window contains no newline, hard-cut at the
    step but never between surrogate pair halves. Text before the first TOC
    entry belongs to segment 1. Docs with no TOC (12) use fixed 500K cuts
-   snapped forward to the next newline. Segment computation is defensive:
+   snapped to the last newline before each cut point (backward snap keeps
+   every segment bounded by the target; unified with the oversized-section
+   rule at the plan gate). Segment computation is defensive:
    TOC offsets are sorted, deduplicated, and clamped; entries beyond text
    end are dropped.
    UI: "Segment k of n" with persistent Prev/Next segment buttons and a
@@ -293,8 +301,10 @@ consumes it.
 - Input above the text region (`ew-doc-search-*` ids). Matching: literal,
   case-insensitive, offset-exact, with two tolerance rules for
   machine-converted text: whitespace runs in the query match any whitespace
-  run including newlines (`\s+`), and straight quotes/apostrophes in the
-  query also match their typographic variants. Implementation: build the
+  run including newlines (`\s+`), and quotes/apostrophes match across
+  straight and typographic forms in BOTH directions (symmetric classes; the
+  likeliest user flow is copying a phrase out of the rendered document and
+  pasting it into the search box). Implementation: build the
   pattern by escaping regex syntax, then substituting those two character
   classes; run with `matchAll`-equivalent exec loop over the raw string so
   match indices are UTF-16 offsets on the original string (lowercasing the
@@ -309,12 +319,17 @@ consumes it.
   non-advancing-lastIndex guard prevents zero-length-match loops. Measured
   floor after guards: 16-30 ms per scan on the 28.6M-char worst case;
   main-thread with 250 ms debounce, no worker needed.
-- Results: total match count; in segmented mode, per-segment counts and
-  per-section TOC counts (binary search of stored offsets against
-  boundaries; counts update in place, no list rebuild; "(Front matter)"
-  owns pre-TOC matches so section counts always sum to the total). Counts
-  past the compute cap display as "20,000+". Per-section TOC counts are the
-  first feature overboard if schedule slips (recorded).
+- Results: total match count; in segmented mode, the per-segment count
+  rides in the segment label ("Segment 2 of 6 (14 matches in this
+  segment)") and per-section TOC counts sit on TOC entries (binary search
+  of stored offsets against boundaries; counts update in place, no list
+  rebuild; "(Front matter)" owns pre-TOC matches so section counts always
+  sum to the total). The total past the compute cap displays as "20,000+";
+  per-section and per-segment counts are SUPPRESSED when capped (a
+  truncated scan would show false zeros on later sections, which misleads
+  exactly the operative-clauses-at-the-end lookup) with a note that counts
+  are unavailable past the cap. Per-section TOC counts are the first
+  feature overboard if schedule slips (recorded).
 - A match straddling a segment boundary belongs to the segment containing
   its start; its highlight Range is clamped to the segment end.
 - Highlighting: CSS Custom Highlight API (web-verified: Baseline newly
@@ -549,6 +564,14 @@ interaction layer's accessibility.
 comment in code); #86 unconsumed; per-section TOC counts flagged as first
 overboard on schedule risk (generalist m10); real low-end-device INP
 spot-check noted as a nice-to-have beyond the Lighthouse gate (perf m1/m5).
+
+**Plan-gate amendments (2026-07-04, same day):** the implementation-plan
+council (5 fresh reviewers; disposition in the plan doc) fed four
+refinements back into this spec: backward newline snapping unified for all
+cuts; status-copy marginal wording ("would add N") and the override
+sentence narrowed to explicit 'High income' selection; symmetric quote
+tolerance; per-segment counts in the segment label with all per-section and
+per-segment counts suppressed past the compute cap.
 
 **Web-verification outcomes** (all against primary sources: MDN/BCD, CSSWG
 drafts, WebKit source): Highlight API Baseline June 2025 CONFIRMED with
