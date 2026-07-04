@@ -102,3 +102,70 @@ export async function loadSnapshotManifest(): Promise<SnapshotStamp> {
   const m = JSON.parse(raw) as SnapshotStamp;
   return { snapshot_date: m.snapshot_date, generated_at: m.generated_at };
 }
+
+// ---- S3 additions (TEA-903): pure aggregations for the baked static shell.
+// Callers pass `await loadDocuments()`; no I/O here.
+
+export interface CorpusStats {
+  docs: number;
+  sources: number;
+  issuers: number;
+  sovereign: number;
+  related: number;
+}
+
+export function computeStats(rows: DocRow[]): CorpusStats {
+  const sources = new Set<string>();
+  const issuers = new Set<string>();
+  let sovereign = 0;
+  for (const r of rows) {
+    if (r.source !== null) sources.add(r.source);
+    if (r.issuer_name !== null) issuers.add(r.issuer_name);
+    if (r.is_sovereign === true) sovereign += 1;
+  }
+  return {
+    docs: rows.length,
+    sources: sources.size,
+    issuers: issuers.size,
+    sovereign,
+    related: rows.length - sovereign,
+  };
+}
+
+export interface CountryOption {
+  code: string;
+  name: string;
+}
+
+export interface FilterOptions {
+  countries: CountryOption[];
+  regions: string[];
+  incomes: string[];
+  sources: string[];
+}
+
+export function computeFilterOptions(rows: DocRow[]): FilterOptions {
+  const countries = new Map<string, string>();
+  const regions = new Set<string>();
+  const incomes = new Set<string>();
+  const sources = new Set<string>();
+  for (const r of rows) {
+    // null codes dropped on purpose (synthetic fixture rows stay out of
+    // the baked options; null-country docs are unreachable via the filter,
+    // matching v1).
+    if (r.country_code !== null && r.country_name !== null) {
+      countries.set(r.country_code, r.country_name);
+    }
+    regions.add(r.region ?? 'Unknown');
+    incomes.add(r.income_group ?? 'Unknown');
+    if (r.source !== null) sources.add(r.source);
+  }
+  return {
+    countries: [...countries.entries()]
+      .map(([code, name]) => ({ code, name }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    regions: [...regions].sort(),
+    incomes: [...incomes].sort(),
+    sources: [...sources].sort(),
+  };
+}
