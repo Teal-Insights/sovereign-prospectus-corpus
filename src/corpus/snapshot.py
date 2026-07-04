@@ -35,7 +35,9 @@ SCHEMA_VERSION = 1
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 # h2-h3 covers Docling output (all sections are h2); the EDGAR HTML parser
 # emits h5 for section headings, so capture through h5 with true levels.
-_HEADING_RE = re.compile(r"^(#{2,5})\s+(.+)$", re.MULTILINE)
+# [ \t] (not \s) so a bare "##" line can't swallow its newline and turn
+# the next line into a bogus heading title.
+_HEADING_RE = re.compile(r"^(#{2,5})[ \t]+(.+)$", re.MULTILINE)
 
 
 def slugify(storage_key: str) -> str:

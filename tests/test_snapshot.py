@@ -40,6 +40,13 @@ class TestExtractToc:
         md = "text\n\n##### RISK FACTORS\n\nbody"
         assert extract_toc(md) == [{"level": 5, "title": "RISK FACTORS", "offset": 6}]
 
+    def test_bare_hash_line_is_not_a_heading(self):
+        # A "##" with no same-line text must not swallow the newline and
+        # claim the next line as its title (234 corpus docs have these)
+        assert extract_toc("##\n\nnot a title\n\n## Real Heading\n") == [
+            {"level": 2, "title": "Real Heading", "offset": 17}
+        ]
+
 
 class TestResolveCountry:
     def test_known_sovereign_issuer(self):
