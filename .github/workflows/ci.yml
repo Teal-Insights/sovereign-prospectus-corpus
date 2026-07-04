@@ -37,3 +37,30 @@ jobs:
         run: uv run python tests/fixtures/make_sample_pdf.py
       - name: Pytest
         run: uv run pytest tests/ -v -m "not network"
+
+  explorer-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: explorer-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: explorer-web/package-lock.json
+      - run: npm ci
+      - name: Astro check
+        run: npx astro check
+        env:
+          PUBLIC_DATA_BASE_URL: https://data.example.invalid
+      - name: Unit tests
+        run: npx vitest run
+      - name: Fixture build
+        run: npx astro build
+        env:
+          SNAPSHOT_DIR: tests/fixtures/snapshot
+          PUBLIC_DATA_BASE_URL: https://data.example.invalid
+      - name: Assert routes
+        run: node scripts/assert-dist.mjs
