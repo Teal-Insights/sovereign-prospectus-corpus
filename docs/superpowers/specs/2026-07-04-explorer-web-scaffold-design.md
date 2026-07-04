@@ -113,7 +113,9 @@ explorer-web/                  # standalone npm package, not a workspace
     fixtures/snapshot/         # committed fixture (see Fixture requirements)
     unit/*.test.ts             # vitest
   scripts/
-    make-fixture.mjs           # regenerates tests/fixtures from a snapshot dir
+    make_fixture.py            # regenerates tests/fixtures from a snapshot dir
+                               # (Python + duckdb: the same writer as the real
+                               # builder, so the parquet type layout matches)
     serve-static.mjs           # CORS + compression static server (measurement + manual use)
     measure.mjs                # Playwright spike measurements
 ```
