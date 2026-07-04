@@ -51,6 +51,9 @@ pythonVersion = "3.12"
 typeCheckingMode = "basic"
 reportMissingImports = true
 reportMissingTypeStubs = false
+# tests/test_reflow.py imports from demo/data via a sys.path insert;
+# mirror that path here so pyright can resolve it (CI typecheck job)
+extraPaths = ["demo/data"]
 
 [tool.pytest.ini_options]
 markers = ["network: tests requiring network access"]
