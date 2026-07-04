@@ -1,10 +1,26 @@
 ---
 import SearchSlot from '../components/SearchSlot.astro';
 import Base from '../layouts/Base.astro';
-import { loadSnapshotManifest } from '../lib/build-data';
-import { NOSCRIPT_NOTE } from '../lib/format';
+import { computeFilterOptions, computeStats, loadDocuments, loadSnapshotManifest } from '../lib/build-data';
+import {
+  HI_TOGGLE_LABEL,
+  HI_OVERRIDE_HINT,
+  NOSCRIPT_NOTE,
+  STATS_CAPTION,
+  WB_VINTAGE_NOTE,
+  browseSubtitle,
+  scopeToggleLabel,
+  sourceDisplay,
+} from '../lib/format';
 
-const stamp = await loadSnapshotManifest();
+const [docs, stamp] = await Promise.all([loadDocuments(), loadSnapshotManifest()]);
+const stats = computeStats(docs);
+const options = computeFilterOptions(docs);
+const n = (v: number) => v.toLocaleString('en-US');
+
+const GITHUB_URL = 'https://github.com/Teal-Insights/sovereign-prospectus-corpus';
+const PROTOTYPE_URL = 'https://teal-insights.github.io/sovereign-prospectus-corpus/';
+const QCRAFT_URL = 'https://teal-insights.github.io/QCraft-App/';
 ---
 
 <Base
@@ -13,10 +29,76 @@ const stamp = await loadSnapshotManifest();
   generatedAt={stamp.generated_at}
 >
   <h1>Sovereign Prospectus Explorer</h1>
-  <p class="ew-muted">
-    Browse a corpus of sovereign bond prospectuses and related filings. Metadata queries run in
-    your browser (DuckDB-WASM) against a static snapshot.
-  </p>
+  <p class="ew-muted">{browseSubtitle(stats.sovereign, stats.related)}</p>
+
+  <div class="ew-stats" aria-label="Corpus statistics">
+    <div class="ew-stat"><span class="ew-stat-value">{n(stats.docs)}</span> Documents</div>
+    <div class="ew-stat"><span class="ew-stat-value">{n(stats.sources)}</span> Sources</div>
+    <div class="ew-stat"><span class="ew-stat-value">{n(stats.issuers)}</span> Issuers</div>
+    <p class="ew-muted ew-stats-caption">{STATS_CAPTION}</p>
+  </div>
+
+  <details class="ew-about">
+    <summary>About this project</summary>
+    <p>
+      An open-source corpus of sovereign bond prospectuses collected from the FCA National Storage
+      Mechanism, SEC EDGAR, the Sovereign Debt Forum's #PublicDebtIsPublic Dataset, and the
+      Luxembourg Stock Exchange. Built by
+      <a href="https://tealemery.com" target="_blank" rel="noopener noreferrer">Teal Insights</a>
+      with support from
+      <a href="https://naturefinance.net" target="_blank" rel="noopener noreferrer">NatureFinance</a>.
+      <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">GitHub</a> |
+      <a href={`${GITHUB_URL}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer">MIT License</a>.
+    </p>
+    <p>
+      This is an early-stage beta with plenty of rough edges. It grew out of community feedback on
+      a
+      <a href={PROTOTYPE_URL} target="_blank" rel="noopener noreferrer">prototype proposal</a>
+      for scaling clause identification in sovereign bond contracts. That feedback pointed to an
+      immediate pain point: just finding and navigating prospectuses across multiple sources is
+      hard. This explorer is a first down payment on what could become something much more
+      powerful, with your input.
+    </p>
+    <h3>What's next?</h3>
+    <ul>
+      <li>Automated updates as new prospectuses are filed</li>
+      <li>New data sources</li>
+      <li>Filtering by document type (base prospectus, supplement, final terms, etc.)</li>
+      <li>
+        Automated clause identification with expert validation (<a
+          href={PROTOTYPE_URL}
+          target="_blank"
+          rel="noopener noreferrer">learn more</a
+        >)
+      </li>
+      <li>
+        Part of a growing open-source SovTech ecosystem alongside tools like the
+        <a href={QCRAFT_URL} target="_blank" rel="noopener noreferrer">Q-CRAFT Explorer</a>,
+        open-source tools that elevate the sovereign debt conversation by eliminating analytical
+        toil
+      </li>
+    </ul>
+    <h3>Help shape this tool</h3>
+    <p>
+      We're building this with the people who use sovereign debt data. If you have 2 minutes, we'd
+      love to hear from you:
+    </p>
+    <ol>
+      <li>What are your biggest pain points in working with sovereign bond prospectuses?</li>
+      <li>
+        Are you a sovereign debt lawyer who might be interested in "lawyer-in-the-loop" validation
+        to help automatically identify key clauses?
+      </li>
+      <li>
+        Would you be willing to have a short conversation about how this tool could be more useful
+        for your work?
+      </li>
+    </ol>
+    <p>
+      <a href="mailto:lte@tealinsights.com">Get in touch</a> or open an issue on
+      <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noopener noreferrer">GitHub</a>.
+    </p>
+  </details>
 
   <SearchSlot />
 
@@ -25,36 +107,72 @@ const stamp = await loadSnapshotManifest();
   <div id="ew-browse-notices"></div>
 
   <form id="ew-filters" class="ew-filters">
-    <label
-      >Country
-      <select name="country" id="ew-filter-country" disabled>
-        <option value="">All countries</option>
-      </select>
-    </label>
-    <label
-      >Source
-      <select name="source" id="ew-filter-source" disabled>
-        <option value="">All sources</option>
-      </select>
-    </label>
-    <label id="ew-scope-label">
-      <input type="checkbox" id="ew-scope-toggle" disabled />
-      <span id="ew-scope-toggle-text">Include non-sovereign or unverified documents</span>
-    </label>
+    <div class="ew-filter-group">
+      <label
+        >Country
+        <select id="ew-filter-country-select">
+          <option value="">Add country...</option>
+          {options.countries.map((c) => <option value={c.code}>{c.name}</option>)}
+        </select>
+      </label>
+      <ul class="ew-chips" id="ew-filter-country-chips" aria-label="Selected countries"></ul>
+    </div>
+    <div class="ew-filter-group">
+      <label
+        >Region
+        <select id="ew-filter-region-select">
+          <option value="">Add region...</option>
+          {options.regions.map((r) => <option value={r}>{r}</option>)}
+        </select>
+      </label>
+      <ul class="ew-chips" id="ew-filter-region-chips" aria-label="Selected regions"></ul>
+    </div>
+    <div class="ew-filter-group">
+      <label
+        >Income group
+        <select id="ew-filter-income-select">
+          <option value="">Add income group...</option>
+          {options.incomes.map((i) => <option value={i}>{i}</option>)}
+        </select>
+      </label>
+      <ul class="ew-chips" id="ew-filter-income-chips" aria-label="Selected income groups"></ul>
+    </div>
+    <div class="ew-filter-group">
+      <label
+        >Source
+        <select id="ew-filter-source-select">
+          <option value="">Add source...</option>
+          {options.sources.map((s) => <option value={s}>{sourceDisplay(s)}</option>)}
+        </select>
+      </label>
+      <ul class="ew-chips" id="ew-filter-source-chips" aria-label="Selected sources"></ul>
+    </div>
+    <div class="ew-toggles">
+      <label class="ew-check-row">
+        <input type="checkbox" id="ew-scope-toggle" />
+        {scopeToggleLabel(stats.related)}
+      </label>
+      <label class="ew-check-row">
+        <input type="checkbox" id="ew-hi-toggle" aria-describedby="ew-hi-hint" />
+        {HI_TOGGLE_LABEL}
+      </label>
+      <span id="ew-hi-hint">{HI_OVERRIDE_HINT}</span>
+    </div>
   </form>
+  <p class="ew-muted">{WB_VINTAGE_NOTE}</p>
 
   <p id="ew-status" class="ew-muted" aria-live="polite">Loading the document index...</p>
 
-  <div id="ew-table-region" style="min-height: var(--ew-table-min-height);">
+  <div id="ew-table-region">
     <table id="ew-table" hidden>
       <thead>
         <tr>
-          <th>Date</th>
-          <th>Issuer</th>
-          <th>Country</th>
-          <th>Type</th>
-          <th>Source</th>
-          <th>Status</th>
+          <th class="ew-col-date">Date</th>
+          <th class="ew-col-issuer">Issuer</th>
+          <th class="ew-col-country">Country</th>
+          <th class="ew-col-type">Type</th>
+          <th class="ew-col-source">Source</th>
+          <th class="ew-col-status">Status</th>
         </tr>
       </thead>
       <tbody id="ew-rows"></tbody>
@@ -72,22 +190,56 @@ const stamp = await loadSnapshotManifest();
 </script>
 
 <style>
+  .ew-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--ew-space-4);
+    margin: var(--ew-space-3) 0;
+  }
+  .ew-stat-value {
+    font-size: var(--ew-font-size-h1);
+    font-weight: 600;
+    margin-right: var(--ew-space-1);
+  }
+  .ew-stats-caption {
+    flex-basis: 100%;
+    margin: 0;
+  }
+  .ew-about {
+    margin: var(--ew-space-3) 0;
+    padding: var(--ew-space-2) var(--ew-space-3);
+    border: 1px solid var(--ew-color-border);
+    border-radius: var(--ew-radius);
+    background: var(--ew-color-surface);
+  }
+  .ew-about summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
   .ew-filters {
     display: flex;
     flex-wrap: wrap;
     gap: var(--ew-space-3);
-    align-items: end;
-    margin: var(--ew-space-3) 0;
+    align-items: start;
+    margin: var(--ew-space-3) 0 var(--ew-space-1);
   }
-  .ew-filters label {
+  .ew-filter-group label {
     display: flex;
     flex-direction: column;
     gap: var(--ew-space-1);
     font-size: var(--ew-font-size-small);
     color: var(--ew-color-text-muted);
   }
-  #ew-scope-label {
-    flex-direction: row;
+  .ew-toggles {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ew-space-1);
+    font-size: var(--ew-font-size-small);
+  }
+  .ew-check-row {
+    display: flex;
     align-items: center;
+    gap: var(--ew-space-2);
   }
 </style>

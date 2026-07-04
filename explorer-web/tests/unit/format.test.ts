@@ -8,13 +8,10 @@ import {
   PROVENANCE_NOTE,
   WB_VINTAGE_NOTE,
   citeAs,
-  filteredStatus,
   formatBytes,
   formatDate,
   loadGateLabel,
   orNA,
-  scopeAllStatus,
-  scopeStatus,
   scopeToggleLabel,
   sovereignBadge,
 } from '../../src/lib/format';
@@ -43,17 +40,6 @@ it('three-state badge', () => {
   expect(sovereignBadge(null).label).toBe('Unverified');
 });
 
-it('scope copy pinned', () => {
-  expect(scopeStatus(7381)).toBe('Showing 7,381 sovereign documents.');
-  expect(scopeAllStatus(9774)).toBe('Showing 9,774 documents.');
-  expect(scopeToggleLabel(2393)).toBe('Include 2,393 non-sovereign or unverified documents');
-});
-
-it('filtered status never claims to show more than the filter allows', () => {
-  expect(filteredStatus(155, 7381, true)).toBe('155 of 7,381 sovereign documents match the current filters.');
-  expect(filteredStatus(160, 9774, false)).toBe('160 of 9,774 documents match the current filters.');
-});
-
 it('load gate label', () => expect(loadGateLabel(29031849)).toBe('Load full text (29.0 MB)'));
 
 it('pinned copy has no em-dash', () => {
@@ -64,9 +50,6 @@ it('pinned copy has no em-dash', () => {
     NOSCRIPT_NOTE,
     DOC_NOSCRIPT_NOTE,
     DRIFT_NOTICE,
-    scopeStatus(1),
-    scopeAllStatus(1),
-    filteredStatus(1, 2, true),
     scopeToggleLabel(1),
     loadGateLabel(1),
   ];

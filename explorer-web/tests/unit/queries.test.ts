@@ -1,15 +1,17 @@
 import { expect, it } from 'vitest';
 
-import {
-  buildCountSql,
-  buildDistinctSql,
-  buildListSql,
-  buildScopeCountsSql,
-  createDocsViewSql,
-  sqlQuote,
-} from '../../src/lib/queries';
+import { buildListSql, createDocsViewSql, sqlQuote } from '../../src/lib/queries';
 
-const DEFAULTS = { includeNonSovereign: false, page: 0, pageSize: 50 };
+const DEFAULTS = {
+  countries: [],
+  regions: [],
+  incomes: [],
+  sources: [],
+  includeNonSovereign: false,
+  includeHighIncome: false,
+  page: 0,
+  pageSize: 50,
+};
 
 it('pins the null order and slug tiebreak', () => {
   const sql = buildListSql(DEFAULTS);
@@ -38,30 +40,10 @@ it('paginates with LIMIT/OFFSET arithmetic', () => {
   expect(sql).toContain('LIMIT 25 OFFSET 75');
 });
 
-it('count SQL matches the same filters and casts to INTEGER', () => {
-  const sql = buildCountSql({ ...DEFAULTS, source: 'nsm' });
-  expect(sql).toContain('count(*)::INTEGER');
-  expect(sql).toContain("source = 'nsm'");
-  expect(sql).toContain('is_sovereign = true');
-});
-
-it('scope counts cast to INTEGER and cover the three states', () => {
-  const sql = buildScopeCountsSql();
-  expect(sql).toContain('::INTEGER');
-  expect(sql).toContain('is_sovereign = true');
-});
-
 it('docs view bootstrap SQL lives here (single named contract)', () => {
   expect(createDocsViewSql('documents.parquet')).toBe(
     "CREATE OR REPLACE VIEW docs AS SELECT * FROM read_parquet('documents.parquet')"
   );
-});
-
-it('distinct SQL excludes NULLs and sorts', () => {
-  const sql = buildDistinctSql('country_name');
-  expect(sql).toContain('DISTINCT');
-  expect(sql).toContain('country_name IS NOT NULL');
-  expect(sql).toContain('ORDER BY');
 });
 
 // ---- S3 additions (TEA-903): multi-select filters, interplay rule, status counts ----

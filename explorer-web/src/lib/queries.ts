@@ -6,19 +6,14 @@
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 
 export interface BrowseFilters {
-  // S3 multi-select filters (absent = empty). page stays 0-based internal.
-  countries?: string[];
-  regions?: string[];
-  incomes?: string[];
-  sources?: string[];
+  countries: string[];
+  regions: string[];
+  incomes: string[];
+  sources: string[];
   includeNonSovereign: boolean;
-  includeHighIncome?: boolean;
-  page: number;
+  includeHighIncome: boolean;
+  page: number; // 0-based internal (1-based only in the URL codec)
   pageSize: number;
-  // Legacy S2 single-value fields, consumed only by the legacy builders
-  // below; both go away with the scripts/browse.ts rewrite (Task 8).
-  country?: string;
-  source?: string;
 }
 
 export function highIncomeExclusionActive(
@@ -38,10 +33,10 @@ function inList(col: string, values: string[]): string {
 
 function explicitConditions(f: BrowseFilters): string[] {
   const c: string[] = [];
-  if (f.countries?.length) c.push(inList('country_code', f.countries));
-  if (f.regions?.length) c.push(inList("COALESCE(region, 'Unknown')", f.regions));
-  if (f.incomes?.length) c.push(inList("COALESCE(income_group, 'Unknown')", f.incomes));
-  if (f.sources?.length) c.push(inList('source', f.sources));
+  if (f.countries.length) c.push(inList('country_code', f.countries));
+  if (f.regions.length) c.push(inList("COALESCE(region, 'Unknown')", f.regions));
+  if (f.incomes.length) c.push(inList("COALESCE(income_group, 'Unknown')", f.incomes));
+  if (f.sources.length) c.push(inList('source', f.sources));
   return c;
 }
 
@@ -65,14 +60,6 @@ export function sqlQuote(v: string): string {
 // string in the app is in this file.
 export function createDocsViewSql(parquetName: string): string {
   return `CREATE OR REPLACE VIEW docs AS SELECT * FROM read_parquet(${sqlQuote(parquetName)})`;
-}
-
-function whereClause(f: Pick<BrowseFilters, 'country' | 'source' | 'includeNonSovereign'>): string {
-  const conditions: string[] = [];
-  if (!f.includeNonSovereign) conditions.push('is_sovereign = true');
-  if (f.country) conditions.push(`country_name = ${sqlQuote(f.country)}`);
-  if (f.source) conditions.push(`source = ${sqlQuote(f.source)}`);
-  return conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 }
 
 export function buildListSql(f: BrowseFilters): string {
@@ -113,23 +100,6 @@ export function buildStatusCountsSql(f: BrowseFilters): string {
     FROM docs
     ${where}
   `;
-}
-
-export function buildCountSql(f: BrowseFilters): string {
-  return `SELECT count(*)::INTEGER AS n FROM docs ${whereClause(f)}`;
-}
-
-export function buildScopeCountsSql(): string {
-  return `
-    SELECT
-      count(*)::INTEGER AS total,
-      count(*) FILTER (is_sovereign = true)::INTEGER AS sovereign
-    FROM docs
-  `;
-}
-
-export function buildDistinctSql(col: 'country_name' | 'source'): string {
-  return `SELECT DISTINCT ${col} AS v FROM docs WHERE ${col} IS NOT NULL ORDER BY v`;
 }
 
 export async function runQuery(

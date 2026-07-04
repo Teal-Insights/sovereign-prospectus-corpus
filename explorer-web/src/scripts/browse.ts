@@ -1,76 +1,37 @@
 // Browse client script. Disposable by contract: zero SQL, zero fetch calls,
-// zero URL assembly in this file; lib modules own all of it, so a future
-// framework island can replace this without touching the data layer.
-// The static shell paints first; all data work starts after load.
+// zero URL assembly in this file; lib modules own all of it. The URL is the
+// single source of truth: interactions pushState then render; corrections
+// (page clamp, invalid params) replaceState; popstate never writes history.
+// The static shell paints first; DuckDB work starts after the load event
+// (first Lighthouse commitment).
 
 import { PUBLIC_DATA_BASE_URL } from '../lib/config';
-import {
-  DRIFT_NOTICE,
-  filteredStatus,
-  formatDate,
-  orNA,
-  scopeAllStatus,
-  scopeStatus,
-  scopeToggleLabel,
-  sovereignBadge,
-} from '../lib/format';
 import { initDuckDB, registerDocumentsParquet, type DuckHandle } from '../lib/duck';
 import {
-  buildCountSql,
-  buildDistinctSql,
+  DRIFT_NOTICE,
+  DROPPED_PARAM_NOTICE,
+  EMPTY_STATE,
+  chipRemoveLabel,
+  formatDate,
+  orNA,
+  sourceDisplay,
+  sovereignBadge,
+  statusLine,
+} from '../lib/format';
+import {
   buildListSql,
-  buildScopeCountsSql,
+  buildStatusCountsSql,
+  highIncomeExclusionActive,
   runQuery,
   type BrowseFilters,
   type BrowseRow,
 } from '../lib/queries';
 import { fetchParquetBytes, loadManifest } from '../lib/snapshot-client';
+import { decodeBrowseState, encodeBrowseState, type BrowseUrlState } from '../lib/url-state';
 import { docPath } from '../lib/urls';
 import { renderError, renderNotice, userMessageOf } from './dom';
 
 const PAGE_SIZE = 50;
-
-interface UiState {
-  country: string;
-  source: string;
-  includeNonSovereign: boolean;
-  page: number;
-}
-
-function clampPage(v: unknown): number {
-  const n = Math.floor(Number(v));
-  return Number.isSafeInteger(n) && n > 0 ? n : 0;
-}
-
-function stateFromUrl(): UiState {
-  const q = new URLSearchParams(location.search);
-  return {
-    country: q.get('country') ?? '',
-    source: q.get('source') ?? '',
-    includeNonSovereign: q.get('scope') === 'all',
-    page: clampPage(q.get('page')),
-  };
-}
-
-function stateToUrl(s: UiState): void {
-  const q = new URLSearchParams();
-  if (s.country) q.set('country', s.country);
-  if (s.source) q.set('source', s.source);
-  if (s.includeNonSovereign) q.set('scope', 'all');
-  if (s.page > 0) q.set('page', String(s.page));
-  const qs = q.toString();
-  history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
-}
-
-function filtersOf(s: UiState): BrowseFilters {
-  return {
-    country: s.country || undefined,
-    source: s.source || undefined,
-    includeNonSovereign: s.includeNonSovereign,
-    page: s.page,
-    pageSize: PAGE_SIZE,
-  };
-}
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -78,37 +39,164 @@ function el<T extends HTMLElement>(id: string): T {
   return found as T;
 }
 
-function fillSelect(select: HTMLSelectElement, values: string[], current: string): void {
-  for (const v of values) {
-    const option = document.createElement('option');
-    option.value = v;
-    option.textContent = v;
-    if (v === current) option.selected = true;
-    select.appendChild(option);
-  }
-  select.disabled = false;
+const notices = el<HTMLDivElement>('ew-browse-notices');
+const status = el<HTMLParagraphElement>('ew-status');
+const table = el<HTMLTableElement>('ew-table');
+const tbody = el<HTMLTableSectionElement>('ew-rows');
+const prev = el<HTMLButtonElement>('ew-prev');
+const next = el<HTMLButtonElement>('ew-next');
+const scopeToggle = el<HTMLInputElement>('ew-scope-toggle');
+const hiToggle = el<HTMLInputElement>('ew-hi-toggle');
+const hiHint = el<HTMLSpanElement>('ew-hi-hint');
+const form = el<HTMLFormElement>('ew-filters');
+
+interface FilterGroup {
+  stateKey: 'countries' | 'regions' | 'incomes' | 'sources';
+  select: HTMLSelectElement;
+  chips: HTMLUListElement;
 }
 
-function renderRows(tbody: HTMLTableSectionElement, rows: BrowseRow[]): void {
+const GROUPS: FilterGroup[] = (
+  [
+    ['countries', 'country'],
+    ['regions', 'region'],
+    ['incomes', 'income'],
+    ['sources', 'source'],
+  ] as const
+).map(([stateKey, key]) => ({
+  stateKey,
+  select: el<HTMLSelectElement>(`ew-filter-${key}-select`),
+  chips: el<HTMLUListElement>(`ew-filter-${key}-chips`),
+}));
+
+// Baked options are the validation universe for URL values (empty prompt
+// values excluded).
+function optionValues(select: HTMLSelectElement): string[] {
+  return [...select.options].map((o) => o.value).filter((v) => v !== '');
+}
+
+function optionLabel(select: HTMLSelectElement, value: string): string {
+  for (const o of select.options) if (o.value === value) return o.textContent ?? value;
+  return value;
+}
+
+const known = {
+  countries: optionValues(GROUPS[0].select),
+  regions: optionValues(GROUPS[1].select),
+  incomes: optionValues(GROUPS[2].select),
+  sources: optionValues(GROUPS[3].select),
+};
+
+// ---- state (module eval runs pre-load: chips and toggles restore early) ----
+
+let state: BrowseUrlState;
+let ready = false;
+let pendingPop = false;
+let refreshGeneration = 0;
+
+function writeUrl(push: boolean): void {
+  const qs = encodeBrowseState(location.search, state);
+  if (qs === location.search.replace(/^\?/, '')) return; // skip no-op writes
+  const target = qs ? `?${qs}` : location.pathname;
+  try {
+    if (push) history.pushState(null, '', target);
+    else history.replaceState(null, '', target);
+  } catch {
+    // WebKit rate-limits history writes (100 per 10 s); the UI must survive.
+  }
+}
+
+function setNav(button: HTMLButtonElement, disabled: boolean): void {
+  button.hidden = false;
+  button.setAttribute('aria-disabled', String(disabled));
+}
+
+function navDisabled(button: HTMLButtonElement): boolean {
+  return button.getAttribute('aria-disabled') === 'true';
+}
+
+function applyStateToControls(): void {
+  for (const group of GROUPS) {
+    const values = state[group.stateKey];
+    group.chips.innerHTML = '';
+    for (const value of values) {
+      const li = document.createElement('li');
+      li.className = 'ew-chip';
+      const label = document.createElement('span');
+      label.textContent = optionLabel(group.select, value);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.setAttribute('aria-label', chipRemoveLabel(optionLabel(group.select, value)));
+      remove.addEventListener('click', () => removeChip(group, value));
+      li.append(label, remove);
+      group.chips.appendChild(li);
+    }
+    for (const option of group.select.options) {
+      option.disabled = option.value !== '' && values.includes(option.value);
+    }
+    group.select.value = '';
+  }
+  scopeToggle.checked = state.includeNonSovereign;
+  hiToggle.checked = state.includeHighIncome;
+  const overridden = state.incomes.length > 0;
+  hiToggle.disabled = overridden;
+  hiHint.classList.toggle('ew-visible', overridden);
+}
+
+function removeChip(group: FilterGroup, value: string): void {
+  const idx = state[group.stateKey].indexOf(value);
+  state[group.stateKey] = state[group.stateKey].filter((v) => v !== value);
+  state.page = 0;
+  writeUrl(true);
+  applyStateToControls();
+  // Focus rule: next chip in the group, else the group's select (a removed
+  // focused element must never strand focus on body).
+  const remaining = [...group.chips.querySelectorAll('button')];
+  const target = remaining[Math.min(idx, remaining.length - 1)];
+  (target ?? group.select).focus();
+  void refresh();
+}
+
+function toFilters(s: BrowseUrlState): BrowseFilters {
+  return {
+    countries: s.countries,
+    regions: s.regions,
+    incomes: s.incomes,
+    sources: s.sources,
+    includeNonSovereign: s.includeNonSovereign,
+    includeHighIncome: s.includeHighIncome,
+    page: s.page,
+    pageSize: PAGE_SIZE,
+  };
+}
+
+function renderRows(rows: BrowseRow[]): void {
   tbody.innerHTML = '';
   for (const row of rows) {
     const tr = document.createElement('tr');
     const badge = sovereignBadge(row.is_sovereign);
 
     const dateTd = document.createElement('td');
+    dateTd.className = 'ew-col-date';
     dateTd.textContent = formatDate(row.publication_date);
     const issuerTd = document.createElement('td');
+    issuerTd.className = 'ew-col-issuer';
     const link = document.createElement('a');
     link.href = docPath(row.slug);
     link.textContent = orNA(row.display_name ?? row.issuer_name);
     issuerTd.appendChild(link);
     const countryTd = document.createElement('td');
+    countryTd.className = 'ew-col-country';
     countryTd.textContent = orNA(row.country_name);
     const typeTd = document.createElement('td');
+    typeTd.className = 'ew-col-type';
     typeTd.textContent = orNA(row.doc_type);
     const sourceTd = document.createElement('td');
-    sourceTd.textContent = orNA(row.source);
+    sourceTd.className = 'ew-col-source';
+    sourceTd.textContent = sourceDisplay(row.source);
     const badgeTd = document.createElement('td');
+    badgeTd.className = 'ew-col-status';
     const span = document.createElement('span');
     span.className = badge.cls;
     span.textContent = badge.label;
@@ -119,45 +207,152 @@ function renderRows(tbody: HTMLTableSectionElement, rows: BrowseRow[]): void {
   }
 }
 
+let handle: DuckHandle;
+const metrics: EwBrowseMetrics = {
+  bundleName: '',
+  workerMs: 0,
+  instantiateMs: 0,
+  manifestMs: 0,
+  parquetFetchMs: 0,
+  registerMs: 0,
+  firstQueryMs: 0,
+  secondQueryMs: 0,
+  rowsRendered: 0,
+  totalToFirstRenderMs: 0,
+};
+window.__ewMetrics = metrics;
+const tStart = performance.now();
+
+const showError = (e: unknown, fallback: string): void => {
+  renderError(notices, userMessageOf(e, fallback));
+};
+
+async function refresh(): Promise<void> {
+  if (!ready) return;
+  const generation = ++refreshGeneration;
+  const filters = toFilters(state);
+  try {
+    const tQuery = performance.now();
+    const rows = (await runQuery(handle.conn, buildListSql(filters))) as unknown as BrowseRow[];
+    const countRows = await runQuery(handle.conn, buildStatusCountsSql(filters));
+    if (generation !== refreshGeneration) return; // stale response
+    if (!metrics.secondQueryMs) metrics.secondQueryMs = performance.now() - tQuery;
+    const counts = countRows[0] as { matching: number; hidden_scope: number; hidden_hi: number };
+    const matching = Number(counts.matching);
+    const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
+
+    // A shared link can point past the last page; correct via replaceState
+    // (never a pushed entry: a clamp loop would trap the back button).
+    if (state.page > pages - 1) {
+      state.page = pages - 1;
+      writeUrl(false);
+      return refresh();
+    }
+
+    renderRows(rows);
+    table.hidden = false;
+    metrics.rowsRendered = rows.length;
+    if (!metrics.totalToFirstRenderMs) metrics.totalToFirstRenderMs = performance.now() - tStart;
+
+    if (matching === 0) {
+      status.textContent = EMPTY_STATE;
+    } else {
+      const offset = state.page * PAGE_SIZE;
+      // Pinned mapping: inactive or zero marginals render no sentence.
+      const hiddenScope =
+        !state.includeNonSovereign && Number(counts.hidden_scope) > 0
+          ? Number(counts.hidden_scope)
+          : null;
+      const hiddenHi =
+        highIncomeExclusionActive(filters) && Number(counts.hidden_hi) > 0
+          ? Number(counts.hidden_hi)
+          : null;
+      status.textContent = statusLine({
+        matching,
+        shownFrom: offset + 1,
+        shownTo: offset + rows.length,
+        page: state.page + 1,
+        pages,
+        hiddenScope,
+        hiddenHi,
+        hiOverride: !state.includeHighIncome && state.incomes.includes('High income'),
+      });
+    }
+    setNav(prev, state.page === 0);
+    setNav(next, state.page >= pages - 1);
+  } catch (e) {
+    if (generation !== refreshGeneration) return;
+    showError(e, 'Query failed.');
+  }
+}
+
+// ---- wiring (module eval) ----
+
+const decoded = decodeBrowseState(location.search, known);
+state = decoded.state;
+applyStateToControls();
+if (decoded.droppedAny) {
+  renderNotice(notices, DROPPED_PARAM_NOTICE);
+  writeUrl(false);
+}
+
+form.addEventListener('submit', (e) => e.preventDefault());
+
+for (const group of GROUPS) {
+  group.select.addEventListener('change', () => {
+    const value = group.select.value;
+    if (!value || state[group.stateKey].includes(value)) return;
+    state[group.stateKey] = [...state[group.stateKey], value];
+    state.page = 0;
+    writeUrl(true);
+    applyStateToControls();
+    void refresh();
+  });
+}
+
+scopeToggle.addEventListener('change', () => {
+  state.includeNonSovereign = scopeToggle.checked;
+  state.page = 0;
+  writeUrl(true);
+  applyStateToControls();
+  void refresh();
+});
+
+hiToggle.addEventListener('change', () => {
+  state.includeHighIncome = hiToggle.checked;
+  state.page = 0;
+  writeUrl(true);
+  applyStateToControls();
+  void refresh();
+});
+
+prev.addEventListener('click', () => {
+  if (navDisabled(prev)) return;
+  state.page = Math.max(0, state.page - 1);
+  writeUrl(true);
+  void refresh();
+});
+
+next.addEventListener('click', () => {
+  if (navDisabled(next)) return;
+  state.page += 1;
+  writeUrl(true);
+  void refresh();
+});
+
+window.addEventListener('popstate', () => {
+  // Renders initiated by popstate never write history.
+  const popDecoded = decodeBrowseState(location.search, known);
+  state = popDecoded.state;
+  applyStateToControls();
+  if (!ready) {
+    pendingPop = true;
+    return;
+  }
+  void refresh();
+});
+
 async function main(): Promise<void> {
-  const status = el<HTMLParagraphElement>('ew-status');
-  const table = el<HTMLTableElement>('ew-table');
-  const tbody = el<HTMLTableSectionElement>('ew-rows');
-  const notices = el<HTMLDivElement>('ew-browse-notices');
-  const countrySelect = el<HTMLSelectElement>('ew-filter-country');
-  const sourceSelect = el<HTMLSelectElement>('ew-filter-source');
-  const scopeToggle = el<HTMLInputElement>('ew-scope-toggle');
-  const scopeToggleText = el<HTMLSpanElement>('ew-scope-toggle-text');
-  const prev = el<HTMLButtonElement>('ew-prev');
-  const next = el<HTMLButtonElement>('ew-next');
-
-  const state = stateFromUrl();
-  const tStart = performance.now();
-
-  // Errors render into the notices region; the table skeleton is never
-  // destroyed, so a failed query does not brick later successful renders.
-  const showError = (e: unknown, fallback: string): void => {
-    renderError(notices, userMessageOf(e, fallback));
-  };
-
-  let handle: DuckHandle;
-  let grandTotal = 0;
-  let sovereignCount = 0;
-  let otherCount = 0;
-  const metrics: EwBrowseMetrics = {
-    bundleName: '',
-    workerMs: 0,
-    instantiateMs: 0,
-    manifestMs: 0,
-    parquetFetchMs: 0,
-    registerMs: 0,
-    firstQueryMs: 0,
-    secondQueryMs: 0,
-    rowsRendered: 0,
-    totalToFirstRenderMs: 0,
-  };
-  window.__ewMetrics = metrics;
-
   try {
     const tManifest = performance.now();
     const manifest = await loadManifest(PUBLIC_DATA_BASE_URL);
@@ -179,119 +374,18 @@ async function main(): Promise<void> {
     const tRegister = performance.now();
     await registerDocumentsParquet(handle, parquet.bytes);
     metrics.registerMs = performance.now() - tRegister;
-
-    // First query: scope counts (also the engine warm-up; measured apart
-    // from the later steady-state queries).
     const tFirst = performance.now();
-    const scopeRows = await runQuery(handle.conn, buildScopeCountsSql());
-    metrics.firstQueryMs = performance.now() - tFirst;
-    const scope = scopeRows[0] as { total: number; sovereign: number };
-    grandTotal = Number(scope.total);
-    sovereignCount = Number(scope.sovereign);
-    otherCount = grandTotal - sovereignCount;
+    ready = true;
+    if (pendingPop) pendingPop = false; // state is already current; fall through
+    await refresh();
+    if (!metrics.firstQueryMs) metrics.firstQueryMs = performance.now() - tFirst;
   } catch (e) {
     status.textContent = '';
     showError(e, 'Could not start the in-browser query engine.');
-    return;
   }
-
-  scopeToggleText.textContent = scopeToggleLabel(otherCount);
-  scopeToggle.checked = state.includeNonSovereign;
-  scopeToggle.disabled = false;
-
-  // Generation token: overlapping refreshes (rapid clicks) must not let a
-  // stale response render over a newer one or write a stale URL.
-  let refreshGeneration = 0;
-
-  async function refresh(): Promise<void> {
-    const generation = ++refreshGeneration;
-    const snapshot: UiState = { ...state };
-    const filters = filtersOf(snapshot);
-    try {
-      const tQuery = performance.now();
-      const rows = (await runQuery(handle.conn, buildListSql(filters))) as unknown as BrowseRow[];
-      const countRows = await runQuery(handle.conn, buildCountSql(filters));
-      if (generation !== refreshGeneration) return; // stale
-      if (!metrics.secondQueryMs) metrics.secondQueryMs = performance.now() - tQuery;
-      const total = Number((countRows[0] as { n: number }).n);
-      const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-      // A shared link can point past the last page; clamp and requery.
-      if (snapshot.page > pages - 1) {
-        state.page = pages - 1;
-        void refresh();
-        return;
-      }
-
-      renderRows(tbody, rows);
-      table.hidden = false;
-      metrics.rowsRendered = rows.length;
-      if (!metrics.totalToFirstRenderMs) metrics.totalToFirstRenderMs = performance.now() - tStart;
-
-      const scopeTotal = snapshot.includeNonSovereign ? grandTotal : sovereignCount;
-      const hasFilters = Boolean(snapshot.country || snapshot.source);
-      const scopeText = hasFilters
-        ? filteredStatus(total, scopeTotal, !snapshot.includeNonSovereign)
-        : snapshot.includeNonSovereign
-          ? scopeAllStatus(grandTotal)
-          : scopeStatus(sovereignCount);
-      status.textContent = `${scopeText} Page ${snapshot.page + 1} of ${pages.toLocaleString('en-US')}.`;
-      prev.hidden = next.hidden = false;
-      prev.disabled = snapshot.page === 0;
-      next.disabled = snapshot.page >= pages - 1;
-      stateToUrl(snapshot);
-    } catch (e) {
-      if (generation !== refreshGeneration) return;
-      showError(e, 'Query failed.');
-    }
-  }
-
-  try {
-    const [countries, sources] = await Promise.all([
-      runQuery(handle.conn, buildDistinctSql('country_name')),
-      runQuery(handle.conn, buildDistinctSql('source')),
-    ]);
-    const countryValues = countries.map((r) => String(r.v));
-    const sourceValues = sources.map((r) => String(r.v));
-    // A URL-supplied filter value that does not exist would silently apply
-    // an invisible filter (select shows "All"); reset it instead.
-    if (state.country && !countryValues.includes(state.country)) state.country = '';
-    if (state.source && !sourceValues.includes(state.source)) state.source = '';
-    fillSelect(countrySelect, countryValues, state.country);
-    fillSelect(sourceSelect, sourceValues, state.source);
-  } catch (e) {
-    renderNotice(notices, userMessageOf(e, 'Filter values failed to load.'));
-  }
-
-  countrySelect.addEventListener('change', () => {
-    state.country = countrySelect.value;
-    state.page = 0;
-    void refresh();
-  });
-  sourceSelect.addEventListener('change', () => {
-    state.source = sourceSelect.value;
-    state.page = 0;
-    void refresh();
-  });
-  scopeToggle.addEventListener('change', () => {
-    state.includeNonSovereign = scopeToggle.checked;
-    state.page = 0;
-    void refresh();
-  });
-  prev.addEventListener('click', () => {
-    state.page = Math.max(0, state.page - 1);
-    void refresh();
-  });
-  next.addEventListener('click', () => {
-    if (!next.disabled) state.page += 1;
-    void refresh();
-  });
-
-  await refresh();
 }
 
-// Defer all data work until after first paint (static shell renders first;
-// S3 inherits a Lighthouse 90+ target).
+// Defer all data work until after first paint (Lighthouse commitment).
 if (document.readyState === 'complete') {
   void main();
 } else {

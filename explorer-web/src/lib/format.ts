@@ -46,21 +46,6 @@ export function sovereignBadge(v: boolean | null | undefined): SovereignBadge {
   return { label: 'Unverified', cls: 'ew-badge ew-badge--unverified' };
 }
 
-export function scopeStatus(sovereign: number): string {
-  return `Showing ${sovereign.toLocaleString('en-US')} sovereign documents.`;
-}
-
-export function scopeAllStatus(total: number): string {
-  return `Showing ${total.toLocaleString('en-US')} documents.`;
-}
-
-// Used whenever a country/source filter is active, so the status never
-// claims to be "showing" more documents than the table can reach.
-export function filteredStatus(matching: number, scopeTotal: number, sovereignScope: boolean): string {
-  const kind = sovereignScope ? 'sovereign documents' : 'documents';
-  return `${matching.toLocaleString('en-US')} of ${scopeTotal.toLocaleString('en-US')} ${kind} match the current filters.`;
-}
-
 export function scopeToggleLabel(other: number): string {
   return `Include ${other.toLocaleString('en-US')} non-sovereign or unverified documents`;
 }
