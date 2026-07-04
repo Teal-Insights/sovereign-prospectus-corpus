@@ -81,5 +81,105 @@
         "bytes": 45451
       }
     ]
+  },
+  {
+    "ranAt": "2026-07-04T20:21:56.001Z",
+    "label": "full-9774",
+    "records": [
+      {
+        "label": "full-9774",
+        "scenario": "cold",
+        "bundleName": "eh",
+        "workerMs": 3.5,
+        "instantiateMs": 425.5999994277954,
+        "manifestMs": 5.699999809265137,
+        "parquetFetchMs": 63.10000038146973,
+        "registerMs": 678,
+        "firstQueryMs": 25.59999942779541,
+        "secondQueryMs": 32,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 1345.5,
+        "wasmFetchMs": null,
+        "network": {
+          "transferredBytes": 2811912,
+          "wasm": {
+            "url": "",
+            "transferredBytes": 0
+          },
+          "requests": 10
+        }
+      },
+      {
+        "label": "full-9774",
+        "scenario": "heap",
+        "usedJSHeapSizeBytes": 10000000
+      },
+      {
+        "label": "full-9774",
+        "scenario": "warm",
+        "bundleName": "eh",
+        "workerMs": 0.19999980926513672,
+        "instantiateMs": 391.4000005722046,
+        "manifestMs": 1.8000001907348633,
+        "parquetFetchMs": 62.40000057220459,
+        "registerMs": 185.19999980926514,
+        "firstQueryMs": 24.09999942779541,
+        "secondQueryMs": 32.30000019073486,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 794.8000001907349,
+        "wasmFetchMs": null
+      },
+      {
+        "label": "full-9774",
+        "scenario": "throttled",
+        "cpu": "4x",
+        "network": "~8Mbps/40ms",
+        "bundleName": "eh",
+        "workerMs": 2.1999998092651367,
+        "instantiateMs": 6272.199999809265,
+        "manifestMs": 54.19999980926514,
+        "parquetFetchMs": 1428.4000005722046,
+        "registerMs": 1146,
+        "firstQueryMs": 30.5,
+        "secondQueryMs": 36.30000019073486,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 9100.800000190735,
+        "wasmFetchMs": null,
+        "transferred": {
+          "transferredBytes": 1405956,
+          "wasm": {
+            "url": "",
+            "transferredBytes": 0
+          },
+          "requests": 5
+        }
+      },
+      {
+        "label": "full-9774",
+        "scenario": "doc",
+        "slug": "edgar-0000903423-02-000767",
+        "fetchMs": 21.199999809265137,
+        "parseMs": 0.8000001907348633,
+        "renderMs": 0,
+        "bytes": 728629
+      },
+      {
+        "label": "full-9774",
+        "scenario": "worst",
+        "slug": "luxse-100387641",
+        "gateEngaged": true,
+        "wallMsFromNav": 2838,
+        "fetchMs": 375.80000019073486,
+        "parseMs": 40.10000038146973,
+        "renderMs": 7.799999237060547,
+        "bytes": 29028574
+      },
+      {
+        "label": "full-9774",
+        "scenario": "bfcache",
+        "backNavMs": 846,
+        "notRestoredReasons": "null"
+      }
+    ]
   }
 ]
