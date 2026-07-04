@@ -1,0 +1,31 @@
+---
+import '../styles/tokens.css';
+import '../styles/base.css';
+
+interface Props {
+  title: string;
+  snapshotDate: string;
+  generatedAt: string;
+}
+const { title, snapshotDate, generatedAt } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+  </head>
+  <body data-build-generated-at={generatedAt} data-build-snapshot-date={snapshotDate}>
+    <header class="ew-header">
+      <a href="/">Sovereign Prospectus Explorer</a>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer class="ew-footer">
+      Snapshot {snapshotDate}. Data and code: sovereign-prospectus-corpus.
+    </footer>
+  </body>
+</html>

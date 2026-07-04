@@ -1,0 +1,300 @@
+[
+  {
+    "ranAt": "2026-07-04T20:19:33.951Z",
+    "label": "sample-100",
+    "records": [
+      {
+        "label": "sample-100",
+        "scenario": "cold",
+        "bundleName": "eh",
+        "workerMs": 2.6000003814697266,
+        "instantiateMs": 413.69999980926514,
+        "manifestMs": 3.799999237060547,
+        "parquetFetchMs": 2.299999237060547,
+        "registerMs": 906.4000005722046,
+        "firstQueryMs": 24.399999618530273,
+        "secondQueryMs": 25,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 1488.5999994277954,
+        "wasmFetchMs": null,
+        "network": {
+          "transferredBytes": 111140,
+          "wasm": {
+            "url": "",
+            "transferredBytes": 0
+          },
+          "requests": 10
+        }
+      },
+      {
+        "label": "sample-100",
+        "scenario": "heap",
+        "usedJSHeapSizeBytes": 10000000
+      },
+      {
+        "label": "sample-100",
+        "scenario": "warm",
+        "bundleName": "eh",
+        "workerMs": 0.3000001907348633,
+        "instantiateMs": 387.30000019073486,
+        "manifestMs": 1.4000005722045898,
+        "parquetFetchMs": 2.3999996185302734,
+        "registerMs": 185,
+        "firstQueryMs": 23.5,
+        "secondQueryMs": 23.300000190734863,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 718.1999998092651,
+        "wasmFetchMs": null
+      },
+      {
+        "label": "sample-100",
+        "scenario": "throttled",
+        "cpu": "4x",
+        "network": "~8Mbps/40ms",
+        "bundleName": "eh",
+        "workerMs": 2.59999942779541,
+        "instantiateMs": 6275.400000572205,
+        "manifestMs": 53.89999961853027,
+        "parquetFetchMs": 59.69999980926514,
+        "registerMs": 1175.5,
+        "firstQueryMs": 28.300000190734863,
+        "secondQueryMs": 27.399999618530273,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 7752.60000038147,
+        "wasmFetchMs": null,
+        "transferred": {
+          "transferredBytes": 55570,
+          "wasm": {
+            "url": "",
+            "transferredBytes": 0
+          },
+          "requests": 5
+        }
+      },
+      {
+        "label": "sample-100",
+        "scenario": "doc",
+        "slug": "edgar-0001193125-25-081786",
+        "fetchMs": 2.8000001907348633,
+        "parseMs": 0.09999942779541016,
+        "renderMs": 0,
+        "bytes": 45451
+      }
+    ]
+  },
+  {
+    "ranAt": "2026-07-04T20:21:56.001Z",
+    "label": "full-9774",
+    "records": [
+      {
+        "label": "full-9774",
+        "scenario": "cold",
+        "bundleName": "eh",
+        "workerMs": 3.5,
+        "instantiateMs": 425.5999994277954,
+        "manifestMs": 5.699999809265137,
+        "parquetFetchMs": 63.10000038146973,
+        "registerMs": 678,
+        "firstQueryMs": 25.59999942779541,
+        "secondQueryMs": 32,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 1345.5,
+        "wasmFetchMs": null,
+        "network": {
+          "transferredBytes": 2811912,
+          "wasm": {
+            "url": "",
+            "transferredBytes": 0
+          },
+          "requests": 10
+        }
+      },
+      {
+        "label": "full-9774",
+        "scenario": "heap",
+        "usedJSHeapSizeBytes": 10000000
+      },
+      {
+        "label": "full-9774",
+        "scenario": "warm",
+        "bundleName": "eh",
+        "workerMs": 0.19999980926513672,
+        "instantiateMs": 391.4000005722046,
+        "manifestMs": 1.8000001907348633,
+        "parquetFetchMs": 62.40000057220459,
+        "registerMs": 185.19999980926514,
+        "firstQueryMs": 24.09999942779541,
+        "secondQueryMs": 32.30000019073486,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 794.8000001907349,
+        "wasmFetchMs": null
+      },
+      {
+        "label": "full-9774",
+        "scenario": "throttled",
+        "cpu": "4x",
+        "network": "~8Mbps/40ms",
+        "bundleName": "eh",
+        "workerMs": 2.1999998092651367,
+        "instantiateMs": 6272.199999809265,
+        "manifestMs": 54.19999980926514,
+        "parquetFetchMs": 1428.4000005722046,
+        "registerMs": 1146,
+        "firstQueryMs": 30.5,
+        "secondQueryMs": 36.30000019073486,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 9100.800000190735,
+        "wasmFetchMs": null,
+        "transferred": {
+          "transferredBytes": 1405956,
+          "wasm": {
+            "url": "",
+            "transferredBytes": 0
+          },
+          "requests": 5
+        }
+      },
+      {
+        "label": "full-9774",
+        "scenario": "doc",
+        "slug": "edgar-0000903423-02-000767",
+        "fetchMs": 21.199999809265137,
+        "parseMs": 0.8000001907348633,
+        "renderMs": 0,
+        "bytes": 728629
+      },
+      {
+        "label": "full-9774",
+        "scenario": "worst",
+        "slug": "luxse-100387641",
+        "gateEngaged": true,
+        "wallMsFromNav": 2838,
+        "fetchMs": 375.80000019073486,
+        "parseMs": 40.10000038146973,
+        "renderMs": 7.799999237060547,
+        "bytes": 29028574
+      },
+      {
+        "label": "full-9774",
+        "scenario": "bfcache",
+        "backNavMs": 846,
+        "notRestoredReasons": "null"
+      }
+    ]
+  },
+  {
+    "ranAt": "2026-07-04T20:55:14.013Z",
+    "label": "full-9774-v2",
+    "records": [
+      {
+        "label": "full-9774-v2",
+        "scenario": "cold",
+        "bundleName": "eh",
+        "workerMs": 3.5,
+        "instantiateMs": 428,
+        "manifestMs": 5.300000190734863,
+        "parquetFetchMs": 64.30000019073486,
+        "registerMs": 834.3999996185303,
+        "firstQueryMs": 25.800000190734863,
+        "secondQueryMs": 34,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 1509.1000003814697,
+        "wasmFetchMs": null,
+        "network": {
+          "transferredBytes": 2812648,
+          "wasm": {
+            "url": "",
+            "transferredBytes": 0
+          },
+          "requests": 10
+        }
+      },
+      {
+        "label": "full-9774-v2",
+        "scenario": "heap",
+        "usedJSHeapSizeBytes": 10000000
+      },
+      {
+        "label": "full-9774-v2",
+        "scenario": "warm",
+        "bundleName": "eh",
+        "workerMs": 0.19999980926513672,
+        "instantiateMs": 403.5,
+        "manifestMs": 1.6000003814697266,
+        "parquetFetchMs": 87.59999942779541,
+        "registerMs": 182.60000038146973,
+        "firstQueryMs": 23.800000190734863,
+        "secondQueryMs": 31,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 849.5,
+        "wasmFetchMs": null
+      },
+      {
+        "label": "full-9774-v2",
+        "scenario": "throttled",
+        "cpu": "4x",
+        "network": "~8Mbps/40ms",
+        "bundleName": "eh",
+        "workerMs": 2.6999998092651367,
+        "instantiateMs": 6322.800000190735,
+        "manifestMs": 53.20000076293945,
+        "parquetFetchMs": 1429.9000005722046,
+        "registerMs": 1159.6999998092651,
+        "firstQueryMs": 28.699999809265137,
+        "secondQueryMs": 38.80000019073486,
+        "rowsRendered": 50,
+        "totalToFirstRenderMs": 9186.20000076294,
+        "wasmFetchMs": null,
+        "transferred": {
+          "transferredBytes": 1406324,
+          "wasm": {
+            "url": "",
+            "transferredBytes": 0
+          },
+          "requests": 5
+        }
+      },
+      {
+        "label": "full-9774-v2",
+        "scenario": "doc",
+        "slug": "edgar-0000903423-02-000767",
+        "fetchMs": 23,
+        "parseMs": 0.8000001907348633,
+        "renderMs": 0,
+        "stringLength": 728629
+      },
+      {
+        "label": "full-9774-v2",
+        "scenario": "worst",
+        "slug": "luxse-100387641",
+        "gateEngaged": true,
+        "wallMsFromNav": 3031,
+        "fetchMs": 371.30000019073486,
+        "parseMs": 47.90000057220459,
+        "renderMs": 9.5,
+        "stringLength": 29028574
+      }
+    ]
+  },
+  {
+    "ranAt": "2026-07-04T20:56:01.775Z",
+    "label": "full-9774-bfcache-v2",
+    "records": []
+  },
+  {
+    "ranAt": "2026-07-04T20:56:30.015Z",
+    "label": "full-9774-bfcache-v2",
+    "records": [
+      {
+        "label": "full-9774-bfcache-v2",
+        "scenario": "bfcache",
+        "browser": "chrome",
+        "restored": true,
+        "backNavMs": 159,
+        "sentinel": "alive",
+        "pageshowPersisted": true,
+        "notRestoredReasons": "null"
+      }
+    ]
+  }
+]
