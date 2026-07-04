@@ -52,6 +52,13 @@ typeCheckingMode = "basic"
 reportMissingImports = true
 reportMissingTypeStubs = false
 
+# tests/test_reflow.py imports from demo/data via a sys.path insert;
+# mirror that path for tests only so src/ keeps strict import resolution.
+# "." keeps the repo root on the path for scripts.* / tests.fixtures.*
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+extraPaths = [".", "demo/data"]
+
 [tool.pytest.ini_options]
 markers = ["network: tests requiring network access"]
 

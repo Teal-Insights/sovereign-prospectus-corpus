@@ -1,4 +1,31 @@
-# SESSION-HANDOFF.md — Spring Meetings Sprint (overnight parse)
+# SESSION-HANDOFF.md
+
+**Last updated:** 2026-07-04 (TEA-901: corpus refresh + static snapshot)
+
+## Session 2026-07-04: TEA-901 (Explorer v2, S1)
+
+Corpus refreshed to present and static snapshot format defined. Linear
+TEA-901 has the full trail; PR #78 has the code.
+
+- **Corpus refresh (run id `refresh-20260704`):** EDGAR 30 new (current
+  through 2026-06-30), NSM 15 new PDFs (current through 2026-06-03),
+  0 download failures. Corpus: 9,729 to 9,774 documents. Derived tables
+  (document_pages, document_markdown, FTS) refreshed.
+- **Snapshot builder:** `uv run python scripts/build_snapshot.py` writes
+  `data/snapshot/` (documents.parquet 1.1 MB, text/ 9,671 JSON files
+  2.5 GB, MANIFEST.json). Schema version 1. See README.
+- **Pipeline fix:** `corpus parse run` now writes the markdown sidecar
+  that `build-markdown` consumes (was silently discarded before; only
+  the bulk reparse scripts produced .md files).
+- **Known state:** 103 documents have no text (84 EDGAR `.paper`
+  placeholders + 19 unparseable). LuxSE has a separate backlog: only
+  ~10 LuxSE parse outputs live in `data/parsed`; the full April set is
+  in `data/parsed_docling` (DB tables are complete, but `parse run
+  --source all` would try to re-parse 4,945 LuxSE PDFs — avoid).
+
+---
+
+# Archive: Spring Meetings Sprint (overnight parse)
 
 **Last updated:** 2026-04-11 evening (post-implementation, pre-overnight parse)
 **Sprint:** Searchable Explorer for IMF/World Bank Spring Meetings

@@ -14,9 +14,9 @@ jobs:
       - uses: astral-sh/setup-uv@v4
       - run: uv sync --all-extras
       - name: Ruff check
-        run: uv run ruff check src/ tests/
+        run: uv run ruff check src/ tests/ scripts/build_snapshot.py
       - name: Ruff format
-        run: uv run ruff format --check src/ tests/
+        run: uv run ruff format --check src/ tests/ scripts/build_snapshot.py
 
   typecheck:
     runs-on: ubuntu-latest
@@ -25,7 +25,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
       - run: uv sync --all-extras
       - name: Pyright
-        run: uv run pyright src/ tests/
+        run: uv run pyright src/ tests/ scripts/build_snapshot.py
 
   test:
     runs-on: ubuntu-latest
