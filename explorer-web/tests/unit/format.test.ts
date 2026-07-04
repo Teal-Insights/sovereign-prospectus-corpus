@@ -183,7 +183,9 @@ it('assorted S3 strings pinned', () => {
 });
 
 it('every exported string and exercised output is em-dash-free and never says Part', () => {
-  const outputs: string[] = Object.values(fmt).filter((v): v is string => typeof v === 'string');
+  const outputs: string[] = Object.values(fmt as Record<string, unknown>).filter(
+    (v): v is string => typeof v === 'string'
+  );
   outputs.push(
     statusLine({ ...BASE_ARGS, hiddenScope: 1, hiddenHi: 1, hiOverride: true }),
     browseSubtitle(1, 1),
