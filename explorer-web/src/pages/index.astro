@@ -1,8 +1,93 @@
 ---
+import SearchSlot from '../components/SearchSlot.astro';
 import Base from '../layouts/Base.astro';
+import { loadSnapshotManifest } from '../lib/build-data';
+import { NOSCRIPT_NOTE } from '../lib/format';
+
+const stamp = await loadSnapshotManifest();
 ---
 
-<Base title="Sovereign Prospectus Explorer" snapshotDate="pending" generatedAt="pending">
+<Base
+  title="Sovereign Prospectus Explorer"
+  snapshotDate={stamp.snapshot_date}
+  generatedAt={stamp.generated_at}
+>
   <h1>Sovereign Prospectus Explorer</h1>
-  <p class="ew-muted">Scaffold placeholder; the browse table lands in a later task.</p>
+  <p class="ew-muted">
+    Browse a corpus of sovereign bond prospectuses and related filings. Metadata queries run in
+    your browser (DuckDB-WASM) against a static snapshot.
+  </p>
+
+  <SearchSlot />
+
+  <noscript><p class="ew-notice">{NOSCRIPT_NOTE}</p></noscript>
+
+  <div id="ew-browse-notices"></div>
+
+  <form id="ew-filters" class="ew-filters">
+    <label
+      >Country
+      <select name="country" id="ew-filter-country" disabled>
+        <option value="">All countries</option>
+      </select>
+    </label>
+    <label
+      >Source
+      <select name="source" id="ew-filter-source" disabled>
+        <option value="">All sources</option>
+      </select>
+    </label>
+    <label id="ew-scope-label">
+      <input type="checkbox" id="ew-scope-toggle" disabled />
+      <span id="ew-scope-toggle-text">Include non-sovereign or unverified documents</span>
+    </label>
+  </form>
+
+  <p id="ew-status" class="ew-muted" aria-live="polite">Loading the document index...</p>
+
+  <div id="ew-table-region" style="min-height: var(--ew-table-min-height);">
+    <table id="ew-table" hidden>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Issuer</th>
+          <th>Country</th>
+          <th>Type</th>
+          <th>Source</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="ew-rows"></tbody>
+    </table>
+  </div>
+
+  <p>
+    <button id="ew-prev" hidden>Previous</button>
+    <button id="ew-next" hidden>Next</button>
+  </p>
 </Base>
+
+<script>
+  import '../scripts/browse';
+</script>
+
+<style>
+  .ew-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ew-space-3);
+    align-items: end;
+    margin: var(--ew-space-3) 0;
+  }
+  .ew-filters label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ew-space-1);
+    font-size: var(--ew-font-size-small);
+    color: var(--ew-color-text-muted);
+  }
+  #ew-scope-label {
+    flex-direction: row;
+    align-items: center;
+  }
+</style>
