@@ -1,6 +1,38 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-04 (TEA-901: corpus refresh + static snapshot)
+**Last updated:** 2026-07-04 (TEA-902: explorer-web scaffold + spike)
+
+## Session 2026-07-04 (later): TEA-902 (Explorer v2, S2)
+
+explorer-web/ scaffolded (Astro 6.4.8 + DuckDB-WASM 1.32.0) and all three
+spike risks proven with numbers. PR #87 (awaiting merge go-ahead); Linear
+TEA-902 has the full trail; decisions + measurements in
+explorer-web/ARCHITECTURE.md and explorer-web/measurements/NOTES.md.
+
+- **Spike verdicts:** in-browser DuckDB-WASM over the snapshot parquet
+  PASS (cold ~1.4-1.5 s to first rows, warm ~0.8 s, throttled 9.2 s,
+  ~8.7 MB cold transfer); 10k-page pre-render PASS (9,775 pages in
+  ~4.7 s, 683 MB peak RSS); config-driven data URLs PASS (astro:env
+  fail-fast; CORS proven with a two-origin harness). Lighthouse 100 /
+  CLS 0; bfcache genuinely restores (159 ms, measured with full Chrome
+  after the council caught Playwright's default disabling bfcache).
+- **Council gates ran at spec, plan, and PR** (6+4+4 fresh reviewers).
+  Highest-value catches: wasm is 34 MB raw/5.9 MB brotli (hosting
+  constraint), npm latest of duckdb-wasm is a dev build, 22.3% of
+  snapshot rows are non-sovereign (browse now defaults to sovereign
+  scope with live counts + badges), FY2027 classification vintage
+  footnote, the invalid bfcache measurement.
+- **Deferred issues:** #84 (classification_vintage in MANIFEST), #85
+  (unmapped_issuers audit gap), #86 (pages[].offset_utf16), #88
+  (fixture text-scale shapes), #89 (wasm fetch split via CDP worker
+  auto-attach).
+- **Dev notes:** explorer-web needs Node >= 22.12; npm run dev serves
+  the repo snapshot at /data; astro preview does not (use
+  scripts/serve-static.mjs); scripts/smoke.mjs is the browse smoke;
+  scripts/measure.mjs is the spike harness (run from explorer-web/).
+- **Next (S3, TEA-903):** parity build on these seams. Read
+  ARCHITECTURE.md "Inputs for S3" first; the TEA-903 parity pointer
+  should be shiny/app.py, not demo/shiny-app/ (noted on the issue).
 
 ## Session 2026-07-04: TEA-901 (Explorer v2, S1)
 
