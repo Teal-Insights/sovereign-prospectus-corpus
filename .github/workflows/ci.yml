@@ -64,3 +64,16 @@ jobs:
           PUBLIC_DATA_BASE_URL: https://data.example.invalid
       - name: Assert routes
         run: node scripts/assert-dist.mjs
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Smoke build (local data origin)
+        run: npx astro build
+        env:
+          SNAPSHOT_DIR: tests/fixtures/snapshot
+          PUBLIC_DATA_BASE_URL: http://127.0.0.1:8081
+      - name: Browser smoke
+        run: |
+          node scripts/serve-static.mjs --dir dist --port 8080 &
+          node scripts/serve-static.mjs --dir tests/fixtures/snapshot --port 8081 --cors &
+          sleep 1
+          SMOKE_BASE=http://127.0.0.1:8080 node scripts/smoke.mjs
