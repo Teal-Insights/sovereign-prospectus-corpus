@@ -74,7 +74,8 @@ def _seed_db(db_path: Path) -> None:
             publication_date DATE,
             source_page_url VARCHAR,
             download_url VARCHAR,
-            page_count INTEGER
+            page_count INTEGER,
+            scope_status VARCHAR DEFAULT 'in_scope'
         )
         """
     )
@@ -86,11 +87,13 @@ def _seed_db(db_path: Path) -> None:
         "INSERT INTO documents VALUES "
         "(1, 'nsm__111', 'nsm', '111', 'FEDERATIVE REPUBLIC OF BRAZIL', 'Brazil 2031 Notes',"
         " 'prospectus', DATE '2026-01-15', 'https://example.test/filing/111', "
-        " 'https://example.test/dl/111.pdf', 2),"
+        " 'https://example.test/dl/111.pdf', 2, 'in_scope'),"
         "(2, 'edgar__222', 'edgar', '222', NULL, 'Untitled Filing', NULL, NULL,"
-        " NULL, 'https://example.test/dl/222.htm', 1),"
+        " NULL, 'https://example.test/dl/222.htm', 1, 'in_scope'),"
         "(3, 'pdip__333', 'pdip', '333', 'NOBODY KNOWS', NULL, 'supplement', NULL,"
-        " NULL, NULL, NULL)"
+        " NULL, NULL, NULL, 'in_scope'),"
+        "(9, 'nsm__999', 'nsm', '999', 'QUARANTINED ISSUER', 'Bad Parse', NULL, NULL,"
+        " NULL, NULL, NULL, 'quarantine')"
     )
     conn.execute("INSERT INTO document_markdown VALUES (1, '# Doc\n\n## Terms\n\nBody text')")
     conn.execute(
@@ -113,6 +116,8 @@ class TestBuildSnapshot:
 
         frame = pl.read_parquet(out_dir / "documents.parquet")
         assert frame.height == 3
+        # Quarantined document is excluded from the snapshot
+        assert "nsm-999" not in frame["slug"].to_list()
         row = frame.filter(pl.col("slug") == "nsm-111").row(0, named=True)
         assert row["country_name"] == "Brazil"
         assert row["region"] == "Latin America & Caribbean"
@@ -144,6 +149,10 @@ class TestBuildSnapshot:
         assert manifest["schema_version"] == 1
         assert manifest["document_count"] == 3
         assert manifest["components"]["text_files"] == 2
+        # On-disk manifest and returned stats are the same object shape
+        assert manifest == stats
+        # Unmapped issuers are surfaced, not silently dropped
+        assert manifest["unmapped_issuers"] == ["NOBODY KNOWS"]
 
     def test_limit(self, tmp_path):
         db_path = tmp_path / "test.duckdb"
@@ -155,3 +164,48 @@ class TestBuildSnapshot:
         assert stats["document_count"] == 1
         frame = pl.read_parquet(out_dir / "documents.parquet")
         assert frame["slug"].to_list() == ["nsm-111"]
+
+    def test_full_build_removes_stale_text_files(self, tmp_path):
+        db_path = tmp_path / "test.duckdb"
+        _seed_db(db_path)
+        out_dir = tmp_path / "snapshot"
+        (out_dir / "text").mkdir(parents=True)
+        stale = out_dir / "text" / "nsm-gone.json"
+        stale.write_text("{}")
+
+        stats = build_snapshot(db_path, out_dir)
+
+        assert not stale.exists()
+        assert stats["stale_text_files_removed"] == 1
+
+    def test_limit_build_keeps_other_text_files(self, tmp_path):
+        db_path = tmp_path / "test.duckdb"
+        _seed_db(db_path)
+        out_dir = tmp_path / "snapshot"
+        (out_dir / "text").mkdir(parents=True)
+        other = out_dir / "text" / "edgar-222.json"
+        other.write_text("{}")
+
+        stats = build_snapshot(db_path, out_dir, limit=1)
+
+        assert other.exists()
+        assert stats["stale_text_files_removed"] == 0
+
+    def test_slug_collision_raises(self, tmp_path):
+        import duckdb
+        import pytest
+
+        db_path = tmp_path / "test.duckdb"
+        _seed_db(db_path)
+        conn = duckdb.connect(str(db_path))
+        conn.execute(
+            "INSERT INTO documents VALUES "
+            "(4, 'nsm__111.b', 'nsm', '111.b', NULL, 'Colliding Doc', NULL, NULL,"
+            " NULL, NULL, NULL, 'in_scope'),"
+            "(5, 'nsm__111-b', 'nsm', '111-b', NULL, 'Colliding Doc 2', NULL, NULL,"
+            " NULL, NULL, NULL, 'in_scope')"
+        )
+        conn.close()
+
+        with pytest.raises(ValueError, match="Slug collision"):
+            build_snapshot(db_path, tmp_path / "snapshot")

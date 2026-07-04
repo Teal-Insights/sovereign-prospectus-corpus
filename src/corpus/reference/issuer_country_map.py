@@ -8,6 +8,11 @@ Format: issuer_name -> (country_code, country_name, is_sovereign)
 
 # (country_code, country_name, is_sovereign)
 ISSUER_TO_COUNTRY: dict[str, tuple[str, str, bool]] = {
+    # --- Added 2026-07-04 (new spellings from the July corpus refresh) ---
+    "ARAB REPUBLIC OF EGYPT": ("EGY", "Egypt", True),
+    "KINGDOM OF MOROCCO": ("MAR", "Morocco", True),
+    "Federalno Ministarstvo Finansija": ("BIH", "Bosnia and Herzegovina", True),
+    "National Investment Fund of the Republic of Uzbekistan;": ("UZB", "Uzbekistan", False),
     # --- High volume (>100 docs) ---
     "ISRAEL, STATE OF": ("ISR", "Israel", True),
     "BANK OF CYPRUS HOLDINGS PUBLIC LIMITED COMPANY, BANK OF CYPRUS PUBLIC COMPANY LIMITED (2 issuers)": (

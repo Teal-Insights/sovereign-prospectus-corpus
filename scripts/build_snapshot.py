@@ -19,8 +19,8 @@ from corpus.snapshot import build_snapshot
 
 def _human(num_bytes: int) -> str:
     size = float(num_bytes)
-    for unit in ("B", "KB", "MB", "GB"):
-        if size < 1024 or unit == "GB":
+    for unit in ("B", "KB", "MB"):
+        if size < 1024:
             return f"{size:,.1f} {unit}"
         size /= 1024
     return f"{size:,.1f} GB"
@@ -52,11 +52,22 @@ def main(db_path: Path, output_dir: Path, limit: int | None) -> None:
     )
     for source, count in stats["documents_by_source"].items():
         click.echo(f"  {source}: {count}")
+    if stats["unmapped_issuers"]:
+        click.echo(
+            f"WARNING: {len(stats['unmapped_issuers'])} issuer names have no country "
+            "mapping (country shows as Unknown). Add them to "
+            "src/corpus/reference/issuer_country_map.py:"
+        )
+        for name in stats["unmapped_issuers"]:
+            click.echo(f"  {name!r}")
+    if stats["stale_text_files_removed"]:
+        click.echo(f"Removed {stats['stale_text_files_removed']} stale text files.")
+    manifest_bytes = (output_dir / "MANIFEST.json").stat().st_size
     click.echo("Size by component:")
     click.echo(f"  documents.parquet: {_human(comp['documents_parquet_bytes'])}")
     click.echo(f"  text/ ({comp['text_files']} files): {_human(comp['text_bytes'])}")
-    click.echo(f"  MANIFEST.json: {_human(comp['manifest_bytes'])}")
-    total = comp["documents_parquet_bytes"] + comp["text_bytes"] + comp["manifest_bytes"]
+    click.echo(f"  MANIFEST.json: {_human(manifest_bytes)}")
+    total = comp["documents_parquet_bytes"] + comp["text_bytes"] + manifest_bytes
     click.echo(f"  total: {_human(total)}")
 
 

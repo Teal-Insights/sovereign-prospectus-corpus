@@ -21,6 +21,7 @@ import re
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any
 
+from corpus.io.safe_write import safe_write
 from corpus.reference.issuer_country_map import ISSUER_TO_COUNTRY
 from corpus.reference.wb_classifications import WORLD_BANK_CLASSIFICATIONS
 
@@ -108,17 +109,6 @@ def _fetch_text(
     return None, None
 
 
-def _dir_size(path: Path) -> tuple[int, int]:
-    """Return (total_bytes, file_count) for all files directly under path."""
-    total = 0
-    count = 0
-    for child in path.iterdir():
-        if child.is_file():
-            total += child.stat().st_size
-            count += 1
-    return total, count
-
-
 def build_snapshot(
     db_path: Path,
     output_dir: Path,
@@ -148,32 +138,32 @@ def build_snapshot(
                 COALESCE(source_page_url, download_url) AS filing_url,
                 page_count
             FROM documents
+            WHERE scope_status = 'in_scope'
             ORDER BY document_id
         """
         if limit is not None:
             sql += f" LIMIT {int(limit)}"
-        columns = [
-            "document_id",
-            "storage_key",
-            "source",
-            "native_id",
-            "display_name",
-            "issuer_name",
-            "title",
-            "doc_type",
-            "publication_date",
-            "filing_url",
-            "page_count",
-        ]
-        docs = [dict(zip(columns, row, strict=True)) for row in conn.execute(sql).fetchall()]
+        cursor = conn.execute(sql)
+        columns = [d[0] for d in cursor.description]
+        docs = [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
         parquet_rows: list[dict[str, Any]] = []
         text_files = 0
+        text_bytes = 0
         by_source: dict[str, int] = {}
+        slug_owners: dict[str, str] = {}
+        unmapped_issuers: set[str] = set()
 
         for doc in docs:
             slug = slugify(doc["storage_key"])
+            owner = slug_owners.setdefault(slug, doc["storage_key"])
+            if owner != doc["storage_key"]:
+                raise ValueError(
+                    f"Slug collision: {owner!r} and {doc['storage_key']!r} both map to {slug!r}"
+                )
             country = resolve_country(doc["issuer_name"])
+            if doc["issuer_name"] and country["country_code"] is None:
+                unmapped_issuers.add(doc["issuer_name"])
             text, text_source = _fetch_text(conn, doc["document_id"])
             by_source[doc["source"]] = by_source.get(doc["source"], 0) + 1
 
@@ -198,10 +188,12 @@ def build_snapshot(
                     "toc": toc,
                     "text": text,
                 }
-                (text_dir / f"{slug}.json").write_text(
-                    json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode(
+                    "utf-8"
                 )
+                safe_write(text_dir / f"{slug}.json", encoded, overwrite=True)
                 text_files += 1
+                text_bytes += len(encoded)
 
             parquet_rows.append(
                 {
@@ -256,9 +248,21 @@ def build_snapshot(
     }
     frame = pl.DataFrame(parquet_rows, schema=schema)
     parquet_path = output_dir / "documents.parquet"
-    frame.write_parquet(parquet_path)
+    parquet_part = parquet_path.with_suffix(".parquet.part")
+    frame.write_parquet(parquet_part)
+    parquet_part.replace(parquet_path)
 
-    text_bytes, text_count = _dir_size(text_dir)
+    # Full builds own the text dir: drop files for slugs no longer in the
+    # corpus so a synced snapshot can't serve deleted documents. Partial
+    # (--limit) builds skip this, since most slugs are legitimately absent.
+    stale_removed = 0
+    if limit is None:
+        current_slugs = set(slug_owners)
+        for stale in text_dir.glob("*.json"):
+            if stale.stem not in current_slugs:
+                stale.unlink()
+                stale_removed += 1
+
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "snapshot_date": date.today().isoformat(),
@@ -266,13 +270,14 @@ def build_snapshot(
         "document_count": len(parquet_rows),
         "text_file_count": text_files,
         "documents_by_source": dict(sorted(by_source.items())),
+        "unmapped_issuers": sorted(unmapped_issuers),
+        "stale_text_files_removed": stale_removed,
         "components": {
             "documents_parquet_bytes": parquet_path.stat().st_size,
             "text_bytes": text_bytes,
-            "text_files": text_count,
+            "text_files": text_files,
         },
     }
-    manifest_path = output_dir / "MANIFEST.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
-    manifest["components"]["manifest_bytes"] = manifest_path.stat().st_size
+    encoded_manifest = (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
+    safe_write(output_dir / "MANIFEST.json", encoded_manifest, overwrite=True)
     return manifest

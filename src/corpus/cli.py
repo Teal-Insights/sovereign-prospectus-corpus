@@ -868,10 +868,11 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
             # other parsers don't, and their docs use page text instead)
             markdown = result.metadata.get("markdown", "")
             if markdown.strip():
-                md_path = text_dir / f"{storage_key}.md"
-                md_part = md_path.with_suffix(".md.part")
-                md_part.write_text(markdown)
-                md_part.rename(md_path)
+                from corpus.io.safe_write import safe_write
+
+                safe_write(
+                    text_dir / f"{storage_key}.md", markdown.encode("utf-8"), overwrite=True
+                )
 
             logger.log(
                 document_id=storage_key,
