@@ -17,12 +17,17 @@ the user which steps to use — just follow them. The user runs with
   the download, not just building the code.) If anything is underspecified or
   ambiguous, **ask the user NOW** before proceeding.
 
-### Phase 2: Plan (use superpowers)
+### Phase 2: Spec and Plan (superpowers + council gates)
 
-- [ ] Use `superpowers:brainstorming` if this is creative/design work
-- [ ] Use `superpowers:writing-plans` to create an implementation plan
+- [ ] Use `superpowers:brainstorming` to explore intent and draft a spec;
+  save to `docs/superpowers/specs/`
+- [ ] **Council review of the spec** (see "Council of Experts" below).
+  Incorporate what merits it; record pushback with technical reasons
+- [ ] Use `superpowers:writing-plans` to create the implementation plan
 - [ ] Verify the plan covers ALL completion criteria from the spec, including
   running the actual pipeline (not just building it)
+- [ ] **Council review of the plan.** Incorporate; note the disposition in
+  the plan doc
 - [ ] Save plan to `docs/superpowers/plans/`
 
 ### Phase 3: Execute
@@ -55,7 +60,8 @@ actually fits the task:
 - [ ] `uv run pytest -v` — all tests pass
 - [ ] Actually run the pipeline/command end-to-end (not just tests)
 - [ ] Use `superpowers:verification-before-completion`
-- [ ] Use `superpowers:requesting-code-review` for final review
+- [ ] **Council review of the PR diff** (see "Council of Experts" below),
+  alongside `superpowers:requesting-code-review`
 - [ ] Use `superpowers:receiving-code-review` to evaluate and fix feedback
 - [ ] Fix all reasonable issues immediately. File GitHub issues for anything
   deferred (`gh issue create` with context about the feedback source)
@@ -72,6 +78,36 @@ actually fits the task:
 - [ ] File GitHub issues for any deferred feedback
 - [ ] Update `SESSION-HANDOFF.md` with what was completed
 - [ ] Update `TASKS.md` completion status
+
+## Council of Experts (mandatory adversarial review gates)
+
+Ratified July 4, 2026, after the PR #78 round caught stale World Bank
+classifications, a committed machine-specific symlink, and consumer-contract
+gaps that no single review pass had found. Lens diversity is the point: the
+generic reviewers found robustness bugs, but only the domain lens caught the
+data-credibility problem and only the consumer lens caught the contract
+problems. It costs some execution time and saves a lot of rework.
+
+Run a council at three gates: **spec, plan, and PR**.
+
+1. Spawn 4-6 PARALLEL, FRESH-context subagents (never context-inheriting
+   forks; fresh eyes are the value). Pick lenses to fit the artifact,
+   always including:
+   - an independent generalist doing a full review with no prior involvement,
+   - a sovereign-debt domain expert (data credibility for IMF/World Bank
+     audiences),
+   - the consumer of the artifact (whoever builds on it next),
+   - plus specialists as relevant: data pipeline/DuckDB, frontend, CI/deploy,
+     security.
+2. Each reviewer returns severity-ranked findings with concrete failure
+   scenarios AND an explicit "what I checked that came back sound" list
+   (silence must not be ambiguous).
+3. Verify before changing anything factual: claims about reference data
+   (classifications, editions, external facts) go to a separate
+   web-verification agent against primary sources before any edit.
+4. Triage with `superpowers:receiving-code-review` rigor: fix what merits
+   it, push back with technical reasoning and record it, file GitHub issues
+   for deferred items, and post the disposition (PR comment or plan doc).
 
 ## Current Sprint
 
