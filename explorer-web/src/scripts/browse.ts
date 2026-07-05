@@ -10,7 +10,6 @@ import { initDuckDB, registerDocumentsParquet, type DuckHandle } from '../lib/du
 import {
   DRIFT_NOTICE,
   DROPPED_PARAM_NOTICE,
-  EMPTY_STATE,
   chipRemoveLabel,
   formatDate,
   orNA,
@@ -270,30 +269,28 @@ async function refresh(): Promise<void> {
     metrics.rowsRendered = rows.length;
     if (!metrics.totalToFirstRenderMs) metrics.totalToFirstRenderMs = performance.now() - tStart;
 
-    if (matching === 0) {
-      status.textContent = EMPTY_STATE;
-    } else {
-      const offset = state.page * PAGE_SIZE;
-      // Pinned mapping: inactive or zero marginals render no sentence.
-      const hiddenScope =
-        !state.includeNonSovereign && Number(counts.hidden_scope) > 0
-          ? Number(counts.hidden_scope)
-          : null;
-      const hiddenHi =
-        highIncomeExclusionActive(filters) && Number(counts.hidden_hi) > 0
-          ? Number(counts.hidden_hi)
-          : null;
-      status.textContent = statusLine({
-        matching,
-        shownFrom: offset + 1,
-        shownTo: offset + rows.length,
-        page: state.page + 1,
-        pages,
-        hiddenScope,
-        hiddenHi,
-        hiOverride: !state.includeHighIncome && state.incomes.includes('High income'),
-      });
-    }
+    // statusLine renders the zero case itself (EMPTY_STATE + the marginal
+    // sentences): bypassing it here hid WHY a result set was empty.
+    const offset = state.page * PAGE_SIZE;
+    // Pinned mapping: inactive or zero marginals render no sentence.
+    const hiddenScope =
+      !state.includeNonSovereign && Number(counts.hidden_scope) > 0
+        ? Number(counts.hidden_scope)
+        : null;
+    const hiddenHi =
+      highIncomeExclusionActive(filters) && Number(counts.hidden_hi) > 0
+        ? Number(counts.hidden_hi)
+        : null;
+    status.textContent = statusLine({
+      matching,
+      shownFrom: offset + 1,
+      shownTo: offset + rows.length,
+      page: state.page + 1,
+      pages,
+      hiddenScope,
+      hiddenHi,
+      hiOverride: !state.includeHighIncome && state.incomes.includes('High income'),
+    });
     setNav(prev, state.page === 0);
     setNav(next, state.page >= pages - 1);
   } catch (e) {
@@ -358,10 +355,12 @@ next.addEventListener('click', () => {
 });
 
 window.addEventListener('popstate', () => {
-  // Renders initiated by popstate never write history.
+  // Renders initiated by popstate never PUSH history; a non-canonical entry
+  // (unreachable via our own writes, defensive only) is corrected in place.
   const popDecoded = decodeBrowseState(location.search, known);
   state = popDecoded.state;
   applyStateToControls();
+  if (popDecoded.droppedAny) writeUrl(false);
   if (!ready) {
     pendingPop = true;
     return;

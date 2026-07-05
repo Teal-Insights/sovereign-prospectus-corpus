@@ -67,6 +67,22 @@ await page.waitForFunction(() => !location.search.includes('page=99'));
 const lenAfterClamp = await page.evaluate(() => history.length);
 check('page clamp uses replaceState (no history growth)', lenAfterNav === lenAfterClamp, `${lenAfterNav} -> ${lenAfterClamp}`);
 
+// zero results must still explain what the toggles hide (Poland scenario:
+// FIN is one sovereign High-income doc, hidden by the default exclusion).
+// browseReady() gates on rows > 0, which a zero-result page never reaches.
+await page.goto(`${BASE}/?country=FIN`, { waitUntil: 'load' });
+await page.waitForFunction(
+  () => document.getElementById('ew-status')?.textContent?.includes('No documents match'),
+  null,
+  { timeout: 120000 }
+);
+const zeroStatus = await page.textContent('#ew-status');
+check(
+  'zero results keep the would-add sentences',
+  zeroStatus.includes('No documents match') && zeroStatus.includes('would add'),
+  zeroStatus.trim()
+);
+
 await page.goto(`${BASE}/?country=ZZ`, { waitUntil: 'load' });
 await page.waitForSelector('#ew-browse-notices .ew-notice');
 check('dropped-param notice', (await page.textContent('#ew-browse-notices')).includes('no longer valid'));
@@ -123,6 +139,10 @@ check('visible position label', (await page.textContent('#ew-doc-search-pos')).i
 await page.click('#ew-doc-search-next');
 await page.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 2 of 8'), null, { timeout: 10000 });
 check('match navigation advances', true);
+await page.focus('#ew-doc-search-input');
+await page.keyboard.press('Enter');
+await page.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 3 of 8'), null, { timeout: 10000 });
+check('Enter advances to the next match', true);
 const tocCounts = await page.evaluate(
   () => [...document.querySelectorAll('#ew-doc-toc .ew-toc-count')].filter((e) => e.textContent !== '').length
 );

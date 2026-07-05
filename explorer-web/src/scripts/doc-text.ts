@@ -506,6 +506,19 @@ function main(): void {
     if (rawText !== null) runSearch(q); // popstate never writes history
   });
   window.addEventListener('pagehide', () => window.clearTimeout(inputTimer));
+  // Enter mirrors browser find: run any pending search immediately, then
+  // navigate (first activation lands on match 1).
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    window.clearTimeout(inputTimer);
+    const q = searchInput.value;
+    if (q !== lastRanQuery) {
+      runSearch(q);
+      writeQ(q);
+    }
+    if (matches && matches.starts.length > 0) goToMatch(navigated ? matchIndex + 1 : 0);
+  });
 
   // First activation jumps to match 1; after that Prev/Next step and wrap.
   searchPrev.addEventListener('click', () => goToMatch(navigated ? matchIndex - 1 : 0));
