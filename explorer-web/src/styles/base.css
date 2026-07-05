@@ -23,6 +23,11 @@ h2 {
   font-size: var(--ew-font-size-h2);
   margin: var(--ew-space-3) 0 var(--ew-space-2);
 }
+h1,
+h2 {
+  font-family: var(--ew-font-display);
+  font-weight: var(--ew-font-weight-display);
+}
 a {
   color: var(--ew-color-link);
 }

@@ -45,6 +45,16 @@ jobs:
         working-directory: explorer-web
     steps:
       - uses: actions/checkout@v4
+      - name: Font tripwire (Klim licence; open repo must never carry font binaries)
+        working-directory: .
+        # shell: bash enables pipefail, so a git failure cannot masquerade
+        # as "no fonts found".
+        shell: bash
+        run: |
+          found=$(git ls-files -- '*.[wW][oO][fF][fF]2' '*.[wW][oO][fF][fF]' '*.[tT][tT][fF]' '*.[oO][tT][fF]')
+          if [ -n "$found" ]; then
+            echo "Font binaries found in the open repo; licence forbids this:"; echo "$found"; exit 1
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 24

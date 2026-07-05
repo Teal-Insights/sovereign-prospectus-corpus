@@ -28,9 +28,23 @@ if (isBuild) {
       `PUBLIC_DATA_BASE_URL must be an absolute URL (e.g. https://data.example.org/snapshot); got ${dataUrl}`
     );
   }
-  const isLocal = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+  const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+  const isLocal = LOCAL_HOSTS.includes(u.hostname);
   if (u.protocol !== 'https:' && !isLocal) {
     throw new Error(`PUBLIC_DATA_BASE_URL must be https (mixed content); got ${dataUrl}`);
+  }
+  const wasmUrl = env.PUBLIC_WASM_BASE_URL;
+  if (wasmUrl) {
+    let w;
+    try {
+      w = new URL(wasmUrl);
+    } catch {
+      throw new Error(`PUBLIC_WASM_BASE_URL must be an absolute URL when set; got ${wasmUrl}`);
+    }
+    const wLocal = LOCAL_HOSTS.includes(w.hostname);
+    if (w.protocol !== 'https:' && !wLocal) {
+      throw new Error(`PUBLIC_WASM_BASE_URL must be https (mixed content); got ${wasmUrl}`);
+    }
   }
 }
 
@@ -40,6 +54,7 @@ export default defineConfig({
   env: {
     schema: {
       PUBLIC_DATA_BASE_URL: envField.string({ context: 'client', access: 'public' }),
+      PUBLIC_WASM_BASE_URL: envField.string({ context: 'client', access: 'public', optional: true }),
     },
   },
   integrations: [snapshotDevMiddleware(SNAPSHOT_DIR)],

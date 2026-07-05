@@ -3,3 +3,5 @@ node_modules/
 dist/
 .env
 measurements/lighthouse.raw.json
+src/brand/*.astro
+public/fonts/

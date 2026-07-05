@@ -1,0 +1,20 @@
+---
+import Base from '../layouts/Base.astro';
+import { loadSnapshotManifest } from '../lib/build-data';
+
+const stamp = await loadSnapshotManifest();
+---
+
+<Base
+  title="Page not found | Sovereign Prospectus Explorer"
+  snapshotDate={stamp.snapshot_date}
+  generatedAt={stamp.generated_at}
+>
+  <h1>Page not found</h1>
+  <p>
+    That page does not exist. Document addresses look like
+    <code>/doc/&lt;slug&gt;/</code>; the slug may have changed in a
+    snapshot refresh.
+  </p>
+  <p><a href="/">Back to browse</a></p>
+</Base>

@@ -170,6 +170,11 @@ See `measurements/NOTES.md` for tables and caveats; headlines:
 - **COOP/COEP:** not required (mvp/eh only). If threads are ever
   revisited, header configurability varies by host and COEP forces
   CORS-cleanliness on every subresource.
+- **Third live origin:** at runtime DuckDB-WASM fetches
+  `parquet.duckdb_extension.wasm` from extensions.duckdb.org on first
+  query (pre-existing behavior, surfaced at the S4 plan gate). The
+  deployed site depends on that origin's availability; self-hosting the
+  extension is a candidate future issue.
 
 ## S3 (TEA-903): parity build contracts
 
@@ -272,6 +277,35 @@ radius as `--ew-*` custom properties; `base.css` and components consume
 tokens only. Neutral, light-only, system fonts. S4's private wrapper
 re-themes by swapping the tokens file; no Teal Insights brand or fonts
 exist in this package (font licence).
+
+S4 (TEA-904) theme-contract seams, all neutral no-ops when brand files
+are absent:
+
+- `--ew-font-display` + `--ew-font-weight-display` (defaults: body
+  stack, 700) drive h1/h2; the neutral rendering is unchanged.
+- Brand slots in Base.astro via `import.meta.glob`: an optional
+  `src/brand/Head.astro` renders at the end of the AUTHORED head
+  (before Astro's hoisted stylesheet link, which is what font preloads
+  want); an optional `src/brand/Header.astro` replaces the neutral
+  header (re-measure `--ew-jump-offset` against the new height).
+  `src/brand/*.astro` is gitignored; see `src/brand/README.md`.
+- Optional `PUBLIC_WASM_BASE_URL` (https-gated like the data URL): when
+  set, the two DuckDB wasm binaries load from that base instead of the
+  bundled dist assets; worker JS always stays same-origin (Worker()
+  constructor restriction). The base MUST be a VERSIONED path (e.g.
+  `.../duckdb-wasm-1.32.0`) when the host serves immutable caching:
+  worker JS is content-hashed per deploy but this URL is stable, and a
+  version bump behind an unversioned immutable URL breaks returning
+  visitors with a worker/module mismatch. Note the static `?url`
+  imports still emit both binaries into dist; a wrapper that sets the
+  env var should strip `dist/_astro/*.wasm`.
+- `src/pages/404.astro` (static hosts serve dist/404.html for unknown
+  paths); `scripts/assert-dist.mjs` is SNAPSHOT_DIR-aware so a
+  full-snapshot build asserts all routes, not the fixture's.
+- `userMessageOf` logs the raw error to the console so live failures
+  are diagnosable (data-host misconfiguration vs app bug).
+- CI carries a font tripwire: `git ls-files` for font binaries must be
+  empty in this repo, forever (licence).
 
 ## Known dev-environment notes
 
