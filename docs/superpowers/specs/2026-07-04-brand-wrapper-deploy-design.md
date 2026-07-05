@@ -176,7 +176,8 @@ aggregate monthly page views: analytics IS licence compliance. The
 main site's /pipes first-party proxy pattern is reused verbatim.
 Loaded with `defer`. The README documents the cross-site aggregation
 procedure (main site + explorer page views must be summable against
-the tier on order 26060749).
+the tier on the house licence; the order number lives in the private
+wrapper README and tealinsights-site/LICENSE-FONTS.md).
 
 ### D3: Font-loading strategy
 
