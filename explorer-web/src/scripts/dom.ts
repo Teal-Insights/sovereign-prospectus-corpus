@@ -20,6 +20,10 @@ export function renderNotice(el: HTMLElement, message: string): void {
 }
 
 export function userMessageOf(e: unknown, fallback: string): string {
+  // Raw error to the console (S4): live-site failures must be
+  // diagnosable as data-host misconfiguration vs app bug; the rendered
+  // userMessage is deliberately generic.
+  console.error('[explorer]', e);
   if (e && typeof e === 'object' && 'userMessage' in e) {
     return String((e as { userMessage: unknown }).userMessage);
   }
