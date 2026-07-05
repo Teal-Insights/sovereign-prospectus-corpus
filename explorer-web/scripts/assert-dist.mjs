@@ -1,11 +1,13 @@
-// CI gate: every fixture slug must have a pre-rendered page in dist/.
-// Run from explorer-web/ after a fixture build.
+// CI gate: every snapshot slug must have a pre-rendered page in dist/.
+// Run from explorer-web/ after a build, with the SAME SNAPSHOT_DIR the
+// build used (defaults to the fixture, matching CI).
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import { asyncBufferFromFile, parquetReadObjects } from 'hyparquet';
 
-const fixtureParquet = 'tests/fixtures/snapshot/documents.parquet';
+const snapshotDir = process.env.SNAPSHOT_DIR ?? 'tests/fixtures/snapshot';
+const fixtureParquet = path.join(snapshotDir, 'documents.parquet');
 const file = await asyncBufferFromFile(fixtureParquet);
 const rows = await parquetReadObjects({ file, columns: ['slug'] });
 
