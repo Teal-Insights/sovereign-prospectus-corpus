@@ -292,9 +292,13 @@ are absent:
 - Optional `PUBLIC_WASM_BASE_URL` (https-gated like the data URL): when
   set, the two DuckDB wasm binaries load from that base instead of the
   bundled dist assets; worker JS always stays same-origin (Worker()
-  constructor restriction). Note the static `?url` imports still emit
-  both binaries into dist; a wrapper that sets the env var should strip
-  `dist/_astro/*.wasm`.
+  constructor restriction). The base MUST be a VERSIONED path (e.g.
+  `.../duckdb-wasm-1.32.0`) when the host serves immutable caching:
+  worker JS is content-hashed per deploy but this URL is stable, and a
+  version bump behind an unversioned immutable URL breaks returning
+  visitors with a worker/module mismatch. Note the static `?url`
+  imports still emit both binaries into dist; a wrapper that sets the
+  env var should strip `dist/_astro/*.wasm`.
 - `src/pages/404.astro` (static hosts serve dist/404.html for unknown
   paths); `scripts/assert-dist.mjs` is SNAPSHOT_DIR-aware so a
   full-snapshot build asserts all routes, not the fixture's.
