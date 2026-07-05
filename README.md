@@ -1,10 +1,45 @@
 # Searching the Fine Print (at Scale)
 
-An open source pipeline for extracting and searching contract terms from sovereign bond prospectuses. Built on the expert annotations from [#PublicDebtIsPublic](https://publicdebtispublic.mdi.georgetown.edu/).
+An open source pipeline and web explorer for searching sovereign bond prospectuses and the contract terms inside them. Built on the expert annotations from [#PublicDebtIsPublic](https://publicdebtispublic.mdi.georgetown.edu/).
+
+## The explorer
+
+![Browse view of the explorer: 9,774 documents, filters for country, region, income group, and source, and a newest-first document table](docs/images/explorer-web-browse.png)
+
+Browse the full corpus at [prospectus.tealinsights.com](https://prospectus.tealinsights.com): 9,774 documents from 265 sovereign issuers across four sources, filterable by country, region, income group, and source, with full-text reading and in-document search. Every document has a stable, shareable URL and a link to its original filing.
+
+The explorer is a static site (Astro + DuckDB-WASM). No server, no database process, no accounts. The hosted version is this repository's code with Teal Insights branding on top; see [Open core](#open-core).
+
+### Run your own copy
+
+Verified end to end on a fresh clone (Node 22+):
+
+```bash
+git clone https://github.com/Teal-Insights/sovereign-prospectus-corpus.git
+cd sovereign-prospectus-corpus/explorer-web
+npm ci
+
+# fetch the published snapshot index (1.8 MB; document text stays on the CDN)
+mkdir -p ../data/snapshot
+curl --compressed -o ../data/snapshot/MANIFEST.json https://data.tealinsights.com/prospectus/snapshot/MANIFEST.json
+curl --compressed -o ../data/snapshot/documents.parquet https://data.tealinsights.com/prospectus/snapshot/documents.parquet
+
+# build all ~9,800 pages (about 5 seconds on a laptop) and serve
+SNAPSHOT_DIR=../data/snapshot \
+PUBLIC_DATA_BASE_URL=https://data.tealinsights.com/prospectus/snapshot \
+npm run build
+node scripts/serve-static.mjs --dir dist --port 8080
+```
+
+That serves the complete explorer at `http://127.0.0.1:8080`, reading document text from the published data host. `dist/` is plain static files; host them on GitHub Pages, any CDN, or any web server.
+
+To be fully independent of our hosting: run the pipeline to build your own corpus, generate a snapshot with `uv run python scripts/build_snapshot.py`, host the snapshot directory on any static host that satisfies the checklist in [`explorer-web/ARCHITECTURE.md`](explorer-web/ARCHITECTURE.md) (section "Hosting constraints"), and point `PUBLIC_DATA_BASE_URL` at it.
+
+To re-theme a fork: swap `explorer-web/src/styles/tokens.css` (the complete style-value inventory) and optionally drop `Head.astro` / `Header.astro` components into `src/brand/`. The theme contract is documented in [`explorer-web/ARCHITECTURE.md`](explorer-web/ARCHITECTURE.md) (section "Theme").
 
 ## What this does
 
-1. **Downloads** sovereign bond prospectuses from SEC EDGAR, FCA National Storage Mechanism, and the PDIP corpus
+1. **Downloads** sovereign bond prospectuses from SEC EDGAR, the Luxembourg Stock Exchange, the FCA National Storage Mechanism, and the PDIP corpus
 2. **Locates** likely clause sections using deterministic pattern matching
 3. **Extracts** clauses using LLMs with multi-shot prompts derived from PDIP's expert-annotated contracts
 4. **Verifies** every extraction against the source text (95% verbatim match threshold)
@@ -60,7 +95,15 @@ The web explorer that consumes this snapshot lives in [`explorer-web/`](explorer
 
 ## Tech stack
 
-Python 3.12, DuckDB, Docling (PDF parsing), Click CLI, Plotly, Shiny. MIT licensed.
+Pipeline: Python 3.12, DuckDB, Docling (PDF parsing), Click CLI, Plotly, Shiny. Explorer: Astro, TypeScript, DuckDB-WASM. MIT licensed.
+
+## Open core
+
+Everything that makes this tool work is MIT-licensed and public: the pipeline, the corpus snapshot builder, and the web application with its clean default theme. Everything that makes it ours (our name, our fonts, our hosted conveniences) sits in a thin private layer on top, and removing that layer costs a user nothing but the branding.
+
+[prospectus.tealinsights.com](https://prospectus.tealinsights.com) is this repository's code, pinned at a public commit, with our house style applied through the documented theme contract: typefaces we license commercially and cannot redistribute. If you never touch our website, you lose nothing but our fonts. Anyone can diff the deployed behavior against this repository and find no functional gap.
+
+The Teal Insights name and logo are trademarks and are not part of the MIT grant. Details, including source-document provenance, are in [NOTICE](NOTICE).
 
 ## Part of SovTech
 
