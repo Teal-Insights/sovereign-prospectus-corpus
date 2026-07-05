@@ -31,11 +31,11 @@ npm run build
 node scripts/serve-static.mjs --dir dist --port 8080
 ```
 
-That serves the complete explorer at `http://127.0.0.1:8080`, reading document text from the published data host. `dist/` is plain static files; host them on GitHub Pages, any CDN, or any web server.
+That serves the complete explorer at `http://127.0.0.1:8080`, reading document text from the published data host. `dist/` is plain static files; host them on any CDN or web server that serves the app from the origin root. Routes are root-relative (`/doc/<slug>/`), so a GitHub Pages user or organization site or a custom domain works; a project site under a `/repo/` subpath does not.
 
-To be fully independent of our hosting: run the pipeline to build your own corpus, generate a snapshot with `uv run python scripts/build_snapshot.py`, host the snapshot directory on any static host that satisfies the checklist in [`explorer-web/ARCHITECTURE.md`](explorer-web/ARCHITECTURE.md) (section "Hosting constraints"), and point `PUBLIC_DATA_BASE_URL` at it.
+To be fully independent of our hosting: run the pipeline to build your own corpus, generate a snapshot from the repo root with `uv run python scripts/build_snapshot.py`, host the snapshot directory on any static host that satisfies the checklist in [`explorer-web/ARCHITECTURE.md`](explorer-web/ARCHITECTURE.md) (section "Hosting constraints"), and point `PUBLIC_DATA_BASE_URL` at it.
 
-To re-theme a fork: swap `explorer-web/src/styles/tokens.css` (the complete style-value inventory) and optionally drop `Head.astro` / `Header.astro` components into `src/brand/`. The theme contract is documented in [`explorer-web/ARCHITECTURE.md`](explorer-web/ARCHITECTURE.md) (section "Theme").
+To re-theme a fork: swap `explorer-web/src/styles/tokens.css` (the complete style-value inventory) and optionally drop `Head.astro` / `Header.astro` components into `explorer-web/src/brand/`. The theme contract is documented in [`explorer-web/ARCHITECTURE.md`](explorer-web/ARCHITECTURE.md) (section "Theme").
 
 ## What this does
 
