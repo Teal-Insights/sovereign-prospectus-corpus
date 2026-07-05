@@ -45,6 +45,12 @@ jobs:
         working-directory: explorer-web
     steps:
       - uses: actions/checkout@v4
+      - name: Font tripwire (Klim licence; open repo must never carry font binaries)
+        working-directory: .
+        run: |
+          if git ls-files -- '*.woff2' '*.woff' '*.ttf' '*.otf' | grep .; then
+            echo 'Font binaries found in the open repo; licence forbids this.'; exit 1
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 24
