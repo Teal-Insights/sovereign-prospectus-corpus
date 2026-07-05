@@ -9,7 +9,9 @@ import workerEh from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import workerMvp from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 import wasmMvp from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 
+import { PUBLIC_WASM_BASE_URL } from './config';
 import { createDocsViewSql } from './queries';
+import { joinUrl } from './urls';
 
 export interface DuckTimings {
   workerMs: number;
@@ -23,10 +25,18 @@ export interface DuckHandle {
   timings: DuckTimings;
 }
 
-const BUNDLES: duckdb.DuckDBBundles = {
-  mvp: { mainModule: wasmMvp, mainWorker: workerMvp },
-  eh: { mainModule: wasmEh, mainWorker: workerEh },
-};
+// Self-hosted by default; a wrapper may serve the large binaries from its
+// data host (PUBLIC_WASM_BASE_URL). Worker JS is ALWAYS same-origin: the
+// Worker() constructor is same-origin restricted; the wasm binary is not.
+const BUNDLES: duckdb.DuckDBBundles = PUBLIC_WASM_BASE_URL
+  ? {
+      mvp: { mainModule: joinUrl(PUBLIC_WASM_BASE_URL, 'duckdb-mvp.wasm'), mainWorker: workerMvp },
+      eh: { mainModule: joinUrl(PUBLIC_WASM_BASE_URL, 'duckdb-eh.wasm'), mainWorker: workerEh },
+    }
+  : {
+      mvp: { mainModule: wasmMvp, mainWorker: workerMvp },
+      eh: { mainModule: wasmEh, mainWorker: workerEh },
+    };
 
 let cached: Promise<DuckHandle> | null = null;
 
@@ -42,7 +52,7 @@ async function boot(): Promise<DuckHandle> {
   return {
     db,
     conn,
-    bundleName: bundle.mainModule === wasmEh ? 'eh' : 'mvp',
+    bundleName: bundle.mainWorker === workerEh ? 'eh' : 'mvp',
     timings: { workerMs: t1 - t0, instantiateMs: t2 - t1 },
   };
 }

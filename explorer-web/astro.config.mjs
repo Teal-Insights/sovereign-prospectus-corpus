@@ -32,6 +32,19 @@ if (isBuild) {
   if (u.protocol !== 'https:' && !isLocal) {
     throw new Error(`PUBLIC_DATA_BASE_URL must be https (mixed content); got ${dataUrl}`);
   }
+  const wasmUrl = env.PUBLIC_WASM_BASE_URL;
+  if (wasmUrl) {
+    let w;
+    try {
+      w = new URL(wasmUrl);
+    } catch {
+      throw new Error(`PUBLIC_WASM_BASE_URL must be an absolute URL when set; got ${wasmUrl}`);
+    }
+    const wLocal = w.hostname === 'localhost' || w.hostname === '127.0.0.1';
+    if (w.protocol !== 'https:' && !wLocal) {
+      throw new Error(`PUBLIC_WASM_BASE_URL must be https (mixed content); got ${wasmUrl}`);
+    }
+  }
 }
 
 export default defineConfig({
@@ -40,6 +53,7 @@ export default defineConfig({
   env: {
     schema: {
       PUBLIC_DATA_BASE_URL: envField.string({ context: 'client', access: 'public' }),
+      PUBLIC_WASM_BASE_URL: envField.string({ context: 'client', access: 'public', optional: true }),
     },
   },
   integrations: [snapshotDevMiddleware(SNAPSHOT_DIR)],
