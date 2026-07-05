@@ -274,7 +274,16 @@ const stamp = await loadSnapshotManifest();
 </Base>
 ```
 
-- [ ] **Step 2: Verify.** Fixture build; `test -f dist/404.html && grep -c 'Page not found' dist/404.html` expected 1. **Commit** `feat(explorer-web): 404 page (served by static hosts for unknown paths)`
+- [ ] **Step 2: Make assert-dist SNAPSHOT_DIR-aware** (plan-gate CRITICAL: it hardcodes the fixture parquet, and the fixture contains 3 synthetic slugs absent from production, so every production build would fail the assert). In `scripts/assert-dist.mjs`, replace the hardcoded fixture path:
+
+```js
+const snapshotDir = process.env.SNAPSHOT_DIR ?? 'tests/fixtures/snapshot';
+const fixtureParquet = path.join(snapshotDir, 'documents.parquet');
+```
+
+(adapt to the file's actual variable names; neutral no-op upstream because CI always sets the fixture SNAPSHOT_DIR; turns the wrapper's production build into a real all-routes gate.)
+
+- [ ] **Step 3: Verify.** Fixture build; `test -f dist/404.html && grep -c 'Page not found' dist/404.html` expected 1; assert-dist passes with and without SNAPSHOT_DIR set to the fixture. **Commit** `feat(explorer-web): 404 page + SNAPSHOT_DIR-aware assert-dist`
 
 ### Task 5: Raw-error diagnostics
 
@@ -317,7 +326,7 @@ const stamp = await loadSnapshotManifest();
 **Files:**
 - Modify: `explorer-web/ARCHITECTURE.md` (Theme section)
 
-- [ ] **Step 1:** Extend the Theme section with the S4 contract: the two display tokens, the brand slots (Head end-of-head, Header replacement, `--ew-jump-offset` re-measure duty), PUBLIC_WASM_BASE_URL (worker stays same-origin), 404 page, and the tripwire. 6-10 lines, factual.
+- [ ] **Step 1:** Extend the Theme section with the S4 contract: the two display tokens, the brand slots (Head renders at the end of the AUTHORED head, before Astro's hoisted stylesheet link, which is exactly what font preloads want; Header replacement; `--ew-jump-offset` re-measure duty), PUBLIC_WASM_BASE_URL (worker stays same-origin), 404 page, SNAPSHOT_DIR-aware assert-dist, and the tripwire. Also record in Hosting constraints: the runtime fetches `parquet.duckdb_extension.wasm` from extensions.duckdb.org (a third live origin the deployed site depends on; pre-existing behavior, surfaced at the S4 plan gate; candidate future issue to self-host the extension).
 - [ ] **Step 2:** Full local CI parity: `npm ci && npx astro check && npx vitest run`, fixture build + assert-dist, two-origin smoke (CI recipe). Expected: all green.
 - [ ] **Step 3:** Push branch, `gh pr create` titled "S4 seams: brand slots, display tokens, off-origin wasm, 404, diagnostics (TEA-904)" with a body listing the six seams and their no-op guarantees. Comment `@codex review`. PR gate (Phase C) covers the diff; merge waits for Teal.
 
@@ -533,8 +542,12 @@ const deployId = import.meta.env.PUBLIC_DEPLOY_ID ?? 'local';
 <link rel="preload" href="/fonts/soehne-halbfett.woff2" as="font" type="font/woff2" crossorigin />
 <link rel="preload" href="/fonts/tiempos-headline-semibold.woff2" as="font" type="font/woff2" crossorigin />
 <meta name="ti-build" content={`wrapper=${wrapperCommit} pin=${upstreamPin} deploy=${deployId}`} />
-<script defer data-domain="prospectus.tealinsights.com" data-api="/pipes/flow" src="/pipes/main.js"
-></script>
+<script
+  is:inline
+  defer
+  data-domain="prospectus.tealinsights.com"
+  data-api="/pipes/flow"
+  src="/pipes/main.js"></script>
 ```
 
 - [ ] **Step 2: Header.astro** (logo dimensions: read the PNG's real width/height with `sips -g pixelWidth -g pixelHeight brand/assets/teal-insights-logo.png` and set width to round(38 * aspect); the explicit attributes are the CLS guard):
@@ -602,11 +615,24 @@ cp brand/assets/teal-insights-logo.png "$ST/public/"
 
 # Token-inventory assert: every --ew-* name upstream defines must exist
 # in the branded file (S3 added 12 tokens in one PR; drift breaks layout).
+toks=$(grep -o -- '--ew-[a-z0-9-]*' "$UP/src/styles/tokens.css" | sort -u)
+[ -n "$toks" ] || { echo "no --ew-* tokens found upstream (file moved?)"; exit 1; }
 missing=0
 while IFS= read -r tok; do
   grep -q -- "$tok:" brand/tokens.css || { echo "MISSING TOKEN: $tok"; missing=1; }
-done < <(grep -o -- '--ew-[a-z0-9-]*' "$UP/src/styles/tokens.css" | sort -u)
+done <<< "$toks"
 [ "$missing" -eq 0 ] || exit 1
+
+# Wasm version drift guard: the versioned data-host path must match the
+# installed duckdb-wasm, or returning visitors get a poisoned immutable
+# cache on the first version bump.
+if [ -n "${PUBLIC_WASM_BASE_URL:-}" ]; then
+  DW_V=$(node -p "require('./$UP/package.json').dependencies['@duckdb/duckdb-wasm']")
+  case "$PUBLIC_WASM_BASE_URL" in
+    *"duckdb-wasm-$DW_V") : ;;
+    *) echo "PUBLIC_WASM_BASE_URL must end with duckdb-wasm-$DW_V"; exit 1 ;;
+  esac
+fi
 
 # Snapshot acquisition. CI presets SNAPSHOT_DIR (fixture, no network).
 if [ -z "${SNAPSHOT_DIR:-}" ]; then
@@ -618,14 +644,21 @@ if [ -z "${SNAPSHOT_DIR:-}" ]; then
   # a year and later builds would silently get stale bytes.
   curl -fsSL --compressed "$FETCH_BASE/MANIFEST.json" -o "$SNAP/MANIFEST.json"
   GEN=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).generated_at)' "$SNAP/MANIFEST.json")
+  # Guard: an empty/undefined GEN would prime "?v=undefined" as a STABLE
+  # immutable cache key, the exact failure the token exists to prevent.
+  { [ -n "$GEN" ] && [ "$GEN" != "undefined" ]; } || { echo "MANIFEST.generated_at missing"; exit 1; }
   curl -fsSL --compressed "$FETCH_BASE/documents.parquet?v=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$GEN")" -o "$SNAP/documents.parquet"
   head -c4 "$SNAP/documents.parquet" | grep -q 'PAR1' || { echo "parquet magic missing (gzip not decoded?)"; exit 1; }
   export SNAPSHOT_DIR="snapshot-cache"
 fi
 
-# Build stamp (Netlify provides COMMIT_REF/DEPLOY_ID).
+# Build stamp (Netlify provides COMMIT_REF/DEPLOY_ID; verified names).
 export PUBLIC_WRAPPER_COMMIT="${COMMIT_REF:-$(git rev-parse --short HEAD 2>/dev/null || echo local)}"
-export PUBLIC_UPSTREAM_PIN="$(git -C upstream rev-parse --short HEAD 2>/dev/null || echo local)"
+PIN="$(git -C upstream rev-parse --short HEAD 2>/dev/null || echo local)"
+if [ "${NETLIFY:-}" = "true" ] && [ "$PIN" = "local" ]; then
+  echo "submodule pin unreadable in a Netlify build"; exit 1
+fi
+export PUBLIC_UPSTREAM_PIN="$PIN"
 export PUBLIC_DEPLOY_ID="${DEPLOY_ID:-local}"
 
 cd "$ST"
@@ -646,7 +679,7 @@ echo "BUILD OK: $(find dist -name '*.html' | wc -l | tr -d ' ') pages"
 cd ~/Code/prospectus-web-ti
 SNAPSHOT_DIR=tests/fixtures/snapshot PUBLIC_DATA_BASE_URL=https://data.example.invalid bash scripts/build.sh
 ```
-Wait: SNAPSHOT_DIR is resolved from `.build/` cwd, so the fixture path must be valid from there (`tests/fixtures/snapshot` is inside the staging copy: correct as written). Expected: `BUILD OK: 21 pages` (fixture has ~20 docs + index; take the actual number), dist contains fonts + favicon, `grep -c 'Tiempos' .build/dist/_astro/*.css` >= 1, `grep -c 'ti-build' .build/dist/index.html` = 1.
+SNAPSHOT_DIR resolves from `.build/` cwd, so the fixture path is valid from there (it is inside the staging copy). Expected: `BUILD OK: 22 pages` (20 fixture docs + index + 404), dist contains fonts + favicon, `grep -c 'Tiempos' .build/dist/_astro/*.css` >= 1, `grep -c 'ti-build' .build/dist/index.html` = 1.
 
 - [ ] **Step 3: Commit** `build: staging-copy branded build with token assert + tokenized snapshot fetch`
 
@@ -669,7 +702,10 @@ Wait: SNAPSHOT_DIR is resolved from `.build/` cwd, so the fixture path must be v
 
 # The default netlify.app hostname is NOT covered by the font licence;
 # force everything to the licensed subdomain (Netlify never
-# auto-redirects the default subdomain).
+# auto-redirects the default subdomain). HARD COUPLING: the Netlify site
+# name MUST be prospectus-tealinsights, or this rule silently never
+# matches and fonts serve 200 from the real default hostname. If the
+# name is taken at creation, update this `from` BEFORE the first build.
 [[redirects]]
   from = "https://prospectus-tealinsights.netlify.app/*"
   to = "https://prospectus.tealinsights.com/:splat"
@@ -735,6 +771,7 @@ jobs:
           node scripts/serve-static.mjs --dir dist --port 8080 &
           node scripts/serve-static.mjs --dir tests/fixtures/snapshot --port 8081 --cors &
           curl --silent --output /dev/null --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/
+          curl --silent --output /dev/null --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:8081/MANIFEST.json
           SMOKE_BASE=http://127.0.0.1:8080 node scripts/smoke.mjs
       # The branded dist is never uploaded as an artifact (fonts).
 ```
@@ -759,10 +796,21 @@ BUCKET="${BUCKET:?}"
 SNAPSHOT="${SNAPSHOT:?}"
 PREFIX=prospectus/snapshot
 WASM_PREFIX=prospectus/wasm/duckdb-wasm-1.32.0
-STAGE="$(mktemp -d)/stage"
+TMPROOT="$(mktemp -d)"
+STAGE="$TMPROOT/stage"
+trap 'rm -rf "$TMPROOT"' EXIT
 IMMUTABLE="public, max-age=31536000, immutable"
 
-echo "staging gzip tree (gzip -n for deterministic bytes)..."
+command -v aws >/dev/null || { echo "aws cli required"; exit 1; }
+command -v brotli >/dev/null || { echo "brotli required (brew install brotli)"; exit 1; }
+WASM_SRC="$(cd "$(dirname "$0")/.." && pwd)/.build/node_modules/@duckdb/duckdb-wasm/dist"
+[ -d "$WASM_SRC" ] || { echo "run scripts/build.sh first (.build/node_modules missing)"; exit 1; }
+# The versioned prefix must match the installed version: uploading new
+# bytes to an old immutable path is permanent cache poisoning.
+DW_V=$(node -p "require('$WASM_SRC/../package.json').version")
+[ "duckdb-wasm-$DW_V" = "$(basename "$WASM_PREFIX")" ] || { echo "wasm $DW_V != prefix $WASM_PREFIX"; exit 1; }
+
+echo "staging gzip tree (gzip -n: header-stable on one gzip build)..."
 mkdir -p "$STAGE/text"
 gzip -n -9 -c "$SNAPSHOT/documents.parquet" > "$STAGE/documents.parquet"
 find "$SNAPSHOT/text" -name '*.json' -print0 | while IFS= read -r -d '' f; do
@@ -771,9 +819,12 @@ done
 gzip -n -9 -c "$SNAPSHOT/MANIFEST.json" > "$STAGE/MANIFEST.json"
 
 echo "pass 1/4: text (json, gzip, immutable)..."
+# Metadata flags apply to every object THIS sync transfers; never reuse a
+# staging dir and never add --size-only. No --delete: removed docs leave
+# stale (fetchable) objects; a takedown needs a manual aws s3 rm (runbook).
 aws s3 sync "$STAGE/text" "s3://$BUCKET/$PREFIX/text" \
   --content-type application/json --content-encoding gzip \
-  --cache-control "$IMMUTABLE"
+  --cache-control "$IMMUTABLE" --only-show-errors
 
 echo "pass 2/4: parquet..."
 aws s3 cp "$STAGE/documents.parquet" "s3://$BUCKET/$PREFIX/documents.parquet" \
@@ -781,7 +832,6 @@ aws s3 cp "$STAGE/documents.parquet" "s3://$BUCKET/$PREFIX/documents.parquet" \
   --cache-control "$IMMUTABLE"
 
 echo "pass 3/4: wasm (brotli, versioned path)..."
-WASM_SRC="$(cd "$(dirname "$0")/.." && pwd)/.build/node_modules/@duckdb/duckdb-wasm/dist"
 for w in duckdb-eh.wasm duckdb-mvp.wasm; do
   brotli -f -q 11 -o "$STAGE/$w.br" "$WASM_SRC/$w"
   aws s3 cp "$STAGE/$w.br" "s3://$BUCKET/$WASM_PREFIX/$w" \
@@ -798,25 +848,87 @@ aws s3 cp "$STAGE/MANIFEST.json" "s3://$BUCKET/$PREFIX/MANIFEST.json" \
 echo "DONE"
 ```
 
-- [ ] **Step 2: provision-data-host.sh** (idempotent-ish, run once with Teal's credential; region us-east-1): creates the private bucket (Block Public Access on), OAC, the custom cache policy (MinTTL 0 / DefaultTTL 0 / MaxTTL 31536000, query strings ALL, headers none, cookies none), the distribution (origin = bucket via OAC, behavior: the custom policy + managed SimpleCORS response headers policy, compress=false, HTTP methods GET/HEAD/OPTIONS), requests the ACM cert for data.tealinsights.com and PRINTS the validation CNAME, then (post-validation) attaches the alias + cert and PRINTS the distribution domain for the data CNAME. Then sets the bucket policy to the standard cloudfront.amazonaws.com SourceArn grant. Full aws-cli command bodies written in the script; each phase prints the DNS handoff values and exits cleanly so DNS batches can go to Teal as they become available.
-- [ ] **Step 3: iam-deploy-policy.json** (least privilege for provisioning + upload): s3 Create/Put/List on the bucket + objects, cloudfront full on distributions/policies/OAC, acm Request/Describe/List in us-east-1.
+- [ ] **Step 2: provision-data-host.sh** (two phases; region us-east-1; the plan-gate ops reviewer supplied and reviewed these bodies. Phase 1 = bucket + BPA + cache policy + OAC + ACM request, prints DNS batch 1 and exits; the snapshot UPLOAD starts immediately after phase 1, in parallel with cert validation. Phase 2 runs after validation and creates the distribution ONCE with alias + cert, no update-distribution dance):
+
+```bash
+# Phase 1
+aws s3api create-bucket --bucket "$BUCKET" --region us-east-1
+aws s3api put-public-access-block --bucket "$BUCKET" --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+
+CP_ID=$(aws cloudfront create-cache-policy --cache-policy-config '{
+  "Name":"ti-data-precompressed",
+  "Comment":"MinTTL 0 honors per-object Cache-Control; ?v= in key; no AE keying (pre-compressed at rest, Compress=false)",
+  "MinTTL":0,"DefaultTTL":0,"MaxTTL":31536000,
+  "ParametersInCacheKeyAndForwardedToOrigin":{
+    "EnableAcceptEncodingGzip":false,"EnableAcceptEncodingBrotli":false,
+    "HeadersConfig":{"HeaderBehavior":"none"},
+    "CookiesConfig":{"CookieBehavior":"none"},
+    "QueryStringsConfig":{"QueryStringBehavior":"all"}}}' \
+  --query CachePolicy.Id --output text)
+
+OAC_ID=$(aws cloudfront create-origin-access-control --origin-access-control-config \
+  '{"Name":"ti-sovtech-data-oac","OriginAccessControlOriginType":"s3","SigningBehavior":"always","SigningProtocol":"sigv4"}' \
+  --query OriginAccessControl.Id --output text)
+
+CERT_ARN=$(aws acm request-certificate --region us-east-1 --domain-name data.tealinsights.com \
+  --validation-method DNS --query CertificateArn --output text)
+sleep 10
+aws acm describe-certificate --region us-east-1 --certificate-arn "$CERT_ARN" \
+  --query 'Certificate.DomainValidationOptions[0].ResourceRecord'   # -> DNS batch 1
+```
+
+```bash
+# Phase 2 (after Teal adds the validation CNAME)
+aws acm wait certificate-validated --region us-east-1 --certificate-arn "$CERT_ARN"
+DIST_ID=$(aws cloudfront create-distribution --distribution-config '{
+  "CallerReference":"ti-data-'"$(date +%s)"'",
+  "Comment":"data.tealinsights.com (pre-compressed S3 origin)",
+  "Enabled":true,"DefaultRootObject":"","HttpVersion":"http2and3","IsIPV6Enabled":true,
+  "Aliases":{"Quantity":1,"Items":["data.tealinsights.com"]},
+  "Origins":{"Quantity":1,"Items":[{"Id":"s3-data",
+    "DomainName":"'"$BUCKET"'.s3.us-east-1.amazonaws.com",
+    "OriginAccessControlId":"'"$OAC_ID"'","S3OriginConfig":{"OriginAccessIdentity":""}}]},
+  "DefaultCacheBehavior":{"TargetOriginId":"s3-data","ViewerProtocolPolicy":"redirect-to-https",
+    "AllowedMethods":{"Quantity":3,"Items":["GET","HEAD","OPTIONS"],
+      "CachedMethods":{"Quantity":3,"Items":["GET","HEAD","OPTIONS"]}},
+    "Compress":false,"CachePolicyId":"'"$CP_ID"'",
+    "ResponseHeadersPolicyId":"60669652-455b-4ae9-85a4-c4c02393f86c"},
+  "ViewerCertificate":{"ACMCertificateArn":"'"$CERT_ARN"'","SSLSupportMethod":"sni-only",
+    "MinimumProtocolVersion":"TLSv1.2_2021"}}' \
+  --query Distribution.Id --output text)
+# The ResponseHeadersPolicyId is managed SimpleCORS; verify at run time:
+#   aws cloudfront list-response-headers-policies --type managed \
+#     --query "ResponseHeadersPolicyList.Items[?ResponseHeadersPolicy.ResponseHeadersPolicyConfig.Name=='Managed-SimpleCORS'].ResponseHeadersPolicy.Id" --output text
+
+ACCT=$(aws sts get-caller-identity --query Account --output text)
+aws s3api put-bucket-policy --bucket "$BUCKET" --policy '{
+  "Version":"2012-10-17","Statement":[{"Sid":"AllowCloudFront","Effect":"Allow",
+  "Principal":{"Service":"cloudfront.amazonaws.com"},"Action":"s3:GetObject",
+  "Resource":"arn:aws:s3:::'"$BUCKET"'/*",
+  "Condition":{"StringEquals":{"AWS:SourceArn":"arn:aws:cloudfront::'"$ACCT"':distribution/'"$DIST_ID"'"}}}]}'
+aws cloudfront get-distribution --id "$DIST_ID" --query Distribution.DomainName --output text  # -> DNS batch 2
+```
+
+- [ ] **Step 3: iam-deploy-policy.json** enumerating: `s3:CreateBucket, s3:PutBucketPublicAccessBlock, s3:PutBucketPolicy, s3:GetBucketLocation, s3:ListBucket, s3:PutObject`; `cloudfront:CreateCachePolicy, CreateOriginAccessControl, CreateDistribution, GetDistribution, GetDistributionConfig, UpdateDistribution, ListResponseHeadersPolicies`; `acm:RequestCertificate, DescribeCertificate, ListCertificates`; `sts:GetCallerIdentity`.
 - [ ] **Step 4: `bash -n` both scripts (syntax); shellcheck if available. Commit** `data host: provisioning + pre-compressed upload tooling`
 
 ### Task 15: Local verification of the branded build (full snapshot)
 
-- [ ] **Step 1: Full branded build against the local snapshot** (no network):
+- [ ] **Step 1: Full branded build against the local snapshot** (no network; SNAPSHOT_DIR must be ABSOLUTE because astro resolves it from `.build/`):
 
 ```bash
 cd ~/Code/prospectus-web-ti
-SNAPSHOT_DIR=../../data/snapshot PUBLIC_DATA_BASE_URL=http://127.0.0.1:8091 bash scripts/build.sh
+SNAPSHOT_DIR="$HOME/Code/sovereign-prospectus-corpus/data/snapshot" \
+  PUBLIC_DATA_BASE_URL=http://127.0.0.1:8091 bash scripts/build.sh
 ```
-(SNAPSHOT_DIR resolves from `.build/`; `../../data/snapshot` is wrong from there: use the absolute path `$HOME/Code/sovereign-prospectus-corpus/data/snapshot`.) Expected: `BUILD OK: 9776 pages` (9,775 + 404).
+Expected: `BUILD OK: 9776 pages` (9,774 docs + index + 404; MANIFEST document_count is 9774).
 
-- [ ] **Step 2: Serve two origins + eyeball + measure:**
+- [ ] **Step 2: Serve two origins + eyeball + measure** (no --precompress: it is a one-shot compression mode that exits, not a serve flag; the server already gzips json/parquet on the fly):
 
 ```bash
 node .build/scripts/serve-static.mjs --dir .build/dist --port 8090 &
-node .build/scripts/serve-static.mjs --dir ~/Code/sovereign-prospectus-corpus/data/snapshot --port 8091 --cors --precompress &
+node .build/scripts/serve-static.mjs --dir ~/Code/sovereign-prospectus-corpus/data/snapshot --port 8091 --cors &
 ```
 Playwright-driven checks (script in scratchpad, not committed): header offsetHeight -> set `--ew-jump-offset` in brand/tokens.css to the measured value; populated 50-row table region offsetHeight -> raise `--ew-table-min-height` if the measured value exceeds 32rem/512px... measure and record; filters block height at 1280px and 375px vs 8rem; exactly ONE network request per font face; every font request origin = 127.0.0.1:8090.
 - [ ] **Step 3: Lighthouse (system Chrome) on browse bare + parameterized + one doc page.** Gates: perf >= 90, a11y >= 95, CLS <= 0.02 (expect ~100/100/0 on localhost). Record numbers in the wrapper README verification log.
@@ -825,7 +937,7 @@ Playwright-driven checks (script in scratchpad, not committed): header offsetHei
 
 ### Task 16: tealinsights-site licence fix (separate repo, for Teal's merge)
 
-- [ ] **Step 1:** In `~/Code/tealinsights-site`, branch `fix/netlify-app-font-leak`, append to netlify.toml:
+- [ ] **Step 1:** In `~/Code/tealinsights-site`, branch `fix/netlify-app-font-leak`, insert ABOVE the /pipes rules in netlify.toml (first match wins; putting the host rule first gives uniform "nothing serves from netlify.app" semantics):
 
 ```toml
 # The default netlify.app hostname is not covered by the Klim licence;
@@ -845,11 +957,42 @@ Playwright-driven checks (script in scratchpad, not committed): header offsetHei
 ## Phase C: gated ship sequence (each step waits for its prerequisite)
 
 1. **PR gate council** on both diffs (open-repo seams PR + wrapper repo tree), fresh reviewers, dispositions posted (seams PR comment + TEA-904 comment). Fix findings.
-2. Teal merges the seams PR -> bump wrapper submodule to the MERGE SHA, push wrapper to the created GitHub repo, wrapper CI green.
-3. AWS credential arrives -> run provision-data-host.sh phase 1 -> hand Teal the ACM validation CNAME (DNS batch 1) -> cert validates -> phase 2 -> hand the distribution domain (DNS batch 2) -> upload-snapshot.sh -> gate: `curl -fsS -H 'Origin: https://prospectus.tealinsights.com' --compressed https://data.tealinsights.com/prospectus/snapshot/MANIFEST.json`.
-4. Teal creates the Netlify site (builds stopped, previews disabled, env vars: PUBLIC_DATA_BASE_URL=https://data.tealinsights.com/prospectus/snapshot, PUBLIC_WASM_BASE_URL=https://data.tealinsights.com/prospectus/wasm/duckdb-wasm-1.32.0, custom domain added) -> DNS batch 3 (prospectus CNAME) -> first build (Teal's go-ahead) -> TLS provisions.
-5. Live verification per the spec's 10-point plan; record numbers.
-6. TEA-904: comment live Lighthouse numbers + hosting decisions, tick the checklist, close. Update SESSION-HANDOFF.md and the project status.
+2. Teal merges the seams PR -> bump wrapper submodule to the MERGE SHA -> push wrapper main to the created GitHub repo (first push direct; recorded deviation: subsequent pin bumps and changes go via PR) -> wrapper CI green.
+3. AWS credential arrives -> provision-data-host.sh phase 1 (bucket, BPA, cache policy, OAC, ACM request) -> START upload-snapshot.sh IMMEDIATELY (needs only the bucket; ~30-60 min runs in parallel with cert validation) -> hand Teal the ACM validation CNAME (DNS batch 1) -> cert validates -> phase 2 (distribution, bucket policy) -> hand the distribution domain (DNS batch 2) -> gate: `curl -fsS -H 'Origin: https://prospectus.tealinsights.com' --compressed https://data.tealinsights.com/prospectus/snapshot/MANIFEST.json`.
+4. Teal creates the Netlify site: name MUST be `prospectus-tealinsights` (the licence 301 in netlify.toml is host-coupled; if taken, report the actual name so the toml is updated BEFORE the first build). Record the org PLAN (legacy vs credit-metered) on TEA-904. Builds stopped, deploy previews + branch deploys disabled, env vars PUBLIC_DATA_BASE_URL=https://data.tealinsights.com/prospectus/snapshot and PUBLIC_WASM_BASE_URL=https://data.tealinsights.com/prospectus/wasm/duckdb-wasm-1.32.0, custom domain added, register prospectus.tealinsights.com in the Plausible dashboard -> DNS batch 3 (prospectus CNAME) -> first build (Teal's go-ahead) -> TLS provisions.
+5. Live verification per the spec's 10-point plan, PLUS: `curl -sI https://prospectus-tealinsights.netlify.app/fonts/soehne-buch.woff2` expecting 301 to the subdomain. Record numbers.
+6. Confirm the tealinsights-site netlify.app 301 PR (Task 16) is merged: the main-site leak is live until then.
+7. TEA-904: comment live Lighthouse numbers + hosting decisions, tick the checklist, close. Update SESSION-HANDOFF.md and the project status.
+
+## Plan-gate dispositions (3 reviewers, 2026-07-04)
+
+- **Empiricist (prototyped Tasks 1-4 in a scratch copy):** all four seams
+  WORK AS PLANNED verbatim: import.meta.glob brand slots compile and pass
+  astro check 0/0 in both states; the wasm override passed the full
+  three-origin smoke (39 checks incl. axe) with dist wasm deleted and
+  bundleName correct; vitest 97/97; both build-gate reject paths fire
+  with the exact messages. Findings adopted: byte-vs-rendering wording,
+  authored-head emission nuance (recorded in Task 7), the
+  extensions.duckdb.org third-origin discovery (Task 7 + ARCHITECTURE).
+- **Ops reviewer:** CRITICAL assert-dist fixture-binding -> FIXED (Task 4
+  Step 2, SNAPSHOT_DIR-aware upstream). IMPORTANTs all adopted:
+  generated_at guard, wasm version asserts (build.sh + upload script),
+  tool guards + trap cleanup + --only-show-errors in upload-snapshot.sh,
+  full provision-script bodies (one-shot distribution after cert
+  validation), Task 15 command corrections (absolute SNAPSHOT_DIR, no
+  --precompress), Phase C upload reordering + main-site-301 merge step +
+  plan-fact recording + first-push deviation recorded. Sound: token
+  assert scoping, SNAPSHOT_DIR relative semantics, curl/PAR1 mechanics,
+  rsync exclude interplay, MANIFEST-last guarantee.
+- **Netlify/CI reviewer:** IMPORTANT site-name coupling -> FIXED
+  (netlify.toml comment + Phase C.4 + verification curl). Minors
+  adopted: is:inline on the Plausible tag, port 8081 readiness probe,
+  Plausible dashboard registration (Phase C.4), main-site rule ordering
+  (Task 16), wasm URL triple-check confirmed exact. Platform behaviors
+  verified: host-scoped forced redirects, netlify.toml headers are
+  publish-dir independent, no default ACAO (verified live), COMMIT_REF /
+  DEPLOY_ID exact names, PUBLIC_* env exposure without schema, checkout
+  submodules: true semantics.
 
 ## Self-review notes
 
