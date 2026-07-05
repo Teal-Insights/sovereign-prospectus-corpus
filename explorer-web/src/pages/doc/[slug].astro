@@ -2,7 +2,15 @@
 import DocText from '../../components/DocText.astro';
 import Base from '../../layouts/Base.astro';
 import { loadDocuments, loadSnapshotManifest, type DocRow } from '../../lib/build-data';
-import { WB_VINTAGE_NOTE, citeAs, formatBytes, formatDate, orNA, sovereignBadge } from '../../lib/format';
+import {
+  WB_VINTAGE_NOTE,
+  citeAs,
+  formatBytes,
+  formatDate,
+  orNA,
+  sourceDisplay,
+  sovereignBadge,
+} from '../../lib/format';
 
 export async function getStaticPaths() {
   const [docs, stamp] = await Promise.all([loadDocuments(), loadSnapshotManifest()]);
@@ -23,7 +31,7 @@ const title = doc.display_name ?? doc.issuer_name ?? doc.slug;
 ---
 
 <Base title={`${title} | Sovereign Prospectus Explorer`} snapshotDate={snapshotDate} generatedAt={generatedAt}>
-  <p><a href="/">Back to browse</a></p>
+  <p><a href="/" id="ew-back">Back to browse</a></p>
   <h1>{title} <span class={badge.cls}>{badge.label}</span></h1>
   <p class="ew-muted">{citeAs(snapshotDate, doc.slug)}</p>
 
@@ -37,7 +45,7 @@ const title = doc.display_name ?? doc.issuer_name ?? doc.slug;
       <tr><th scope="row">Region</th><td>{orNA(doc.region)} <span class="ew-muted">*</span></td></tr>
       <tr><th scope="row">Income group</th><td>{orNA(doc.income_group)} <span class="ew-muted">*</span></td></tr>
       <tr><th scope="row">Lending category</th><td>{orNA(doc.lending_category)} <span class="ew-muted">*</span></td></tr>
-      <tr><th scope="row">Source</th><td>{orNA(doc.source)}</td></tr>
+      <tr><th scope="row">Source</th><td>{sourceDisplay(doc.source)}</td></tr>
       <tr><th scope="row">Pages</th><td>{orNA(doc.page_count)}</td></tr>
       <tr><th scope="row">Text size</th><td>{formatBytes(doc.text_bytes)}</td></tr>
       <tr>

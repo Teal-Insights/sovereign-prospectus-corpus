@@ -106,3 +106,152 @@ button {
   color: var(--ew-color-text-muted);
   font-size: var(--ew-font-size-small);
 }
+
+/* ---- S3 (TEA-903) ---- */
+
+/* Raw document text. pre-wrap is load-bearing (offset addressing and the
+   facsimile-honest render depend on it); overflow-wrap prevents long
+   unbroken table rows and URLs from forcing page-wide horizontal scroll. */
+#ew-doc-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--ew-font-mono);
+  font-size: var(--ew-font-size-doc);
+}
+
+/* Reserved table layout (second Lighthouse commitment; moved here from the
+   index.astro inline style) plus a mobile safety rail. */
+#ew-table-region {
+  min-height: var(--ew-table-min-height);
+  overflow-x: auto;
+}
+
+/* Visually hidden live region. Never display:none or visibility:hidden,
+   which drop the region from the accessibility tree and silence it. */
+.ew-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Form-control boundaries need the strong token (the light border fails
+   the 3:1 non-text bar and stays decorative-only). */
+input,
+select,
+button {
+  border-color: var(--ew-color-border-strong);
+}
+input[type='checkbox'] {
+  accent-color: var(--ew-color-accent);
+}
+
+/* Filter block: reserved heights so nothing shifts as state applies. */
+.ew-filters {
+  min-height: var(--ew-filters-min-height);
+}
+.ew-chips {
+  min-height: var(--ew-chips-min-height);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ew-space-1);
+  margin: 0 0 var(--ew-space-1);
+  padding: 0;
+  list-style: none;
+}
+.ew-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ew-space-1);
+  padding: 0 var(--ew-space-1) 0 var(--ew-space-2);
+  background: var(--ew-color-surface);
+  border: 1px solid var(--ew-color-border-strong);
+  border-radius: var(--ew-radius);
+  font-size: var(--ew-font-size-small);
+}
+.ew-chip button {
+  border: none;
+  background: none;
+  padding: 0 var(--ew-space-1);
+}
+
+/* The hi-hint is always rendered with space reserved; visibility toggles
+   so the override state cannot shift layout. */
+#ew-hi-hint {
+  visibility: hidden;
+  display: block;
+  color: var(--ew-color-text-muted);
+  font-size: var(--ew-font-size-small);
+}
+#ew-hi-hint.ew-visible {
+  visibility: visible;
+}
+
+/* Target sizes: 24px floor always, 44px on small screens (WCAG 2.5.8 and
+   touch comfort). .ew-check-row is the checkbox LABEL row so the clickable
+   area grows, not the input. */
+.ew-chip button,
+#ew-prev,
+#ew-next,
+#ew-seg-prev,
+#ew-seg-next,
+#ew-doc-search-prev,
+#ew-doc-search-next,
+#ew-doc-toc button,
+.ew-check-row {
+  min-height: var(--ew-tap-target-min);
+}
+.ew-chip button {
+  min-width: var(--ew-tap-target-min);
+}
+
+@media (max-width: 640px) {
+  .ew-chip button,
+  #ew-prev,
+  #ew-next,
+  #ew-seg-prev,
+  #ew-seg-next,
+  #ew-doc-search-prev,
+  #ew-doc-search-next,
+  #ew-doc-toc button,
+  .ew-check-row {
+    min-height: var(--ew-tap-target);
+  }
+  .ew-col-type,
+  .ew-col-source {
+    display: none;
+  }
+  .ew-chip button {
+    min-width: var(--ew-tap-target);
+  }
+}
+
+/* aria-disabled buttons keep focusability (never native disabled, which
+   drops keyboard focus) but must LOOK inert too. */
+button[aria-disabled='true'] {
+  opacity: var(--ew-disabled-opacity);
+  cursor: default;
+}
+
+/* TOC indent levels (was an inline style; tokens-only rule). */
+.ew-toc-level-1 {
+  margin-left: var(--ew-space-3);
+}
+.ew-toc-level-2 {
+  margin-left: var(--ew-space-4);
+}
+.ew-toc-level-3 {
+  margin-left: var(--ew-space-5);
+}
+
+/* TOC entries are real buttons; render them as links inside the list. */
+#ew-doc-toc button {
+  border: none;
+  background: none;
+  color: var(--ew-color-link);
+  text-align: left;
+  cursor: pointer;
+  padding: var(--ew-space-1) 0;
+}

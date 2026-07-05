@@ -1,4 +1,4 @@
-# explorer-web architecture (S2 scaffold, TEA-902)
+# explorer-web architecture (S2 scaffold TEA-902; S3 parity build TEA-903)
 
 Decisions and spike measurements for the Astro + DuckDB-WASM explorer
 scaffold. Spec with council dispositions:
@@ -171,7 +171,68 @@ See `measurements/NOTES.md` for tables and caveats; headlines:
   revisited, header configurability varies by host and COEP forces
   CORS-cleanliness on every subresource.
 
-## Inputs for S3 (TEA-903 parity build)
+## S3 (TEA-903): parity build contracts
+
+Spec with council dispositions:
+`docs/superpowers/specs/2026-07-04-explorer-core-parity-design.md`; plan with
+the plan-gate disposition: `docs/superpowers/plans/2026-07-04-explorer-core-parity.md`.
+
+- **URL is the single source of truth for browse state.** Params: repeated
+  `country`/`region`/`income`/`source` keys, `hi=1`, `scope=all`, 1-based
+  `page` (omitted at 1); doc pages carry `q`. Unknown params PASS THROUGH
+  verbatim on every write (a future SearchSlot param survives filter
+  interactions; unit-tested). History discipline: interactions pushState
+  then render from the URL; corrections (page clamp, invalid values)
+  replaceState; popstate-initiated renders never write history; debounced
+  writes are cancelled on popstate/pagehide; no-op writes skipped; history
+  calls sit in try/catch (WebKit rate limit: 100 writes/10 s).
+- **The `window.__ewDoc` contract** (for S4/TEA-907): `getRawText()` returns
+  the FULL raw string in every render mode (full or segmented) once text is
+  loaded, `null` before load and behind an unclicked gate. `#ew-doc-text`
+  always holds exactly one text node whose content is the rendered slice;
+  `data-seg-start` carries the slice's UTF-16 start offset. `?q=` is the
+  only supported deep-link into a document and never bypasses the 5 MB
+  click-gate (data-cost consent). In-document search controls use the
+  `ew-doc-search-*` prefix; `ew-search-*` stays reserved for the slot.
+- **Large documents** render in segments above 1M UTF-16 units (620 docs):
+  TOC-boundary packing to 500K-unit targets, oversized sections cut at the
+  last newline before each step (hard cuts never split surrogate pairs),
+  fixed cuts for the 12 no-TOC large docs. Segment math is pure and
+  DOM-free (`lib/doc-view.ts`). The UI says "Segment k of n", never "Part"
+  (prospectuses contain literal PART I/II headings; test-guarded), with a
+  notice that segments are a display convenience and not citable.
+- **In-document search compute guards:** minimum query length 2; a hard
+  20,000-match compute cap with look-ahead-one honesty ("20,000+") and
+  per-section/per-segment counts SUPPRESSED when capped; bare-index match
+  storage; whitespace-flexible and symmetrically quote-tolerant literal
+  matching, offset-exact on the raw string (never lowercase the haystack).
+  Highlights paint via the CSS Custom Highlight API bounded to the rendered
+  segment (2,000-range cap; the current match is always painted and lives
+  only in `ew-match-current`); the `::highlight()` rules live in tokens.css
+  with literal var() fallbacks. Without `CSS.highlights`, counts and
+  navigation still work and the current match paints via the selection.
+- **Accessibility channel:** highlight paints are not reliably exposed to
+  assistive tech; the per-page polite live region (`#ew-status` on browse,
+  `#ew-doc-live` on doc pages, 500 ms idle, replace-text updates) carries
+  counts, match positions with context snippets, and segment changes. Focus
+  rules: chip removal moves focus to the next chip else the group's select;
+  TOC jumps and match/segment navigation focus `#ew-doc-text`
+  (tabindex -1, preventScroll); range-end nav buttons use aria-disabled,
+  never disabled.
+- **tokens.css stays the complete style-value inventory.** S3 added:
+  `--ew-color-border-strong` (form-control boundaries; the light border is
+  decorative-only), the four `--ew-color-match-*` highlight pairs,
+  `--ew-font-size-doc` (+ small-screen step-up), `--ew-filters-min-height`,
+  `--ew-chips-min-height`, `--ew-tap-target-min` (24px floor),
+  `--ew-tap-target` (44px under 640px). PRs that add tokens list them.
+- **Lighthouse commitments held:** DuckDB init starts after the window load
+  event (bootstrap block in browse.ts); `#ew-table-region` keeps
+  `min-height: var(--ew-table-min-height)` (now in base.css); all
+  count-bearing static labels (stats, subtitle, scope-toggle count) and the
+  four filter option lists are baked at build time; the hi-override hint is
+  always rendered with visibility toggling so it cannot shift layout.
+
+## Inputs for S3 (TEA-903 parity build; CONSUMED, kept for the record)
 
 - **Large documents:** markdown-sourced text (9,641 docs) has NO page
   anchors in the snapshot (`pages[]` empty; the v1 Shiny page-at-a-time

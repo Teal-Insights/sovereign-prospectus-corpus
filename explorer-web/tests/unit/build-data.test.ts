@@ -76,3 +76,72 @@ it('reads the snapshot manifest for build stamping', async () => {
   expect(m.snapshot_date).toBe(fixtureManifest.snapshot_date);
   expect(m.generated_at).toBe(fixtureManifest.generated_at);
 });
+
+// ---- S3 additions (TEA-903): pure aggregations for the baked static shell ----
+import { computeFilterOptions, computeStats, type DocRow } from '../../src/lib/build-data';
+
+function row(over: Partial<DocRow>): DocRow {
+  return {
+    slug: 's',
+    document_id: null,
+    storage_key: null,
+    source: null,
+    native_id: null,
+    display_name: null,
+    issuer_name: null,
+    title: null,
+    doc_type: null,
+    publication_date: null,
+    country_code: null,
+    country_name: null,
+    region: null,
+    income_group: null,
+    lending_category: null,
+    is_sovereign: null,
+    filing_url: null,
+    page_count: null,
+    has_text: null,
+    text_source: null,
+    text_chars: null,
+    text_bytes: null,
+    no_text_reason: null,
+    ...over,
+  };
+}
+
+it('computeStats: distinct issuers exclude nulls; sovereign + related tile the corpus', () => {
+  const stats = computeStats([
+    row({ slug: 'a', source: 'edgar', issuer_name: 'Kenya', is_sovereign: true }),
+    row({ slug: 'b', source: 'edgar', issuer_name: 'Kenya', is_sovereign: true }),
+    row({ slug: 'c', source: 'nsm', issuer_name: null, is_sovereign: false }),
+    row({ slug: 'd', source: 'pdip', issuer_name: 'Ghana', is_sovereign: null }),
+  ]);
+  expect(stats).toEqual({ docs: 4, sources: 3, issuers: 2, sovereign: 2, related: 2 });
+});
+
+it('computeFilterOptions: null-code countries dropped, name-sorted, Unknown materialized, sorted lists', () => {
+  const opts = computeFilterOptions([
+    row({ slug: 'a', country_code: 'KEN', country_name: 'Kenya', region: 'Sub-Saharan Africa', income_group: 'Lower middle income', source: 'edgar' }),
+    row({ slug: 'b', country_code: 'ARG', country_name: 'Argentina', region: null, income_group: null, source: 'luxse' }),
+    row({ slug: 'c', country_code: 'KEN', country_name: 'Kenya', region: 'Sub-Saharan Africa', income_group: 'Lower middle income', source: 'edgar' }),
+    row({ slug: 'd', country_code: null, country_name: 'Synthetic', region: 'Unknown', income_group: 'Unknown', source: 'synthetic' }),
+  ]);
+  expect(opts.countries).toEqual([
+    { code: 'ARG', name: 'Argentina' },
+    { code: 'KEN', name: 'Kenya' },
+  ]);
+  expect(opts.regions).toEqual(['Sub-Saharan Africa', 'Unknown']);
+  expect(opts.incomes).toEqual(['Lower middle income', 'Unknown']);
+  expect(opts.sources).toEqual(['edgar', 'luxse', 'synthetic']);
+});
+
+it('aggregations over the real fixture agree with the MANIFEST', async () => {
+  const docs = await loadDocuments();
+  const stats = computeStats(docs);
+  expect(stats.docs).toBe(fixtureManifest.document_count);
+  expect(stats.sovereign + stats.related).toBe(stats.docs);
+  const opts = computeFilterOptions(docs);
+  expect(opts.countries.every((c) => c.code && c.name)).toBe(true);
+  // synthetics have null country_code and must not surface as options
+  expect(opts.countries.some((c) => c.name === 'Synthetic')).toBe(false);
+});

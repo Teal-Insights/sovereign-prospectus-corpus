@@ -42,4 +42,41 @@
 
   /* Layout reservations (Lighthouse: avoid CLS while data loads) */
   --ew-table-min-height: 32rem;
+  --ew-filters-min-height: 8rem;
+  --ew-chips-min-height: 2.25rem;
+
+  /* S3 (TEA-903): form-control boundary (>= 3:1 non-text contrast; the
+     light --ew-color-border stays for decorative rules only), search
+     highlight pairs (both >= 4.5:1 against their text color; keep the
+     lightness step between the two backgrounds, it is the visual
+     current-match distinction), doc text size, tap targets. */
+  --ew-color-border-strong: #6b7684;
+  --ew-color-match-bg: #ffe08a;
+  --ew-color-match-text: #1a2129;
+  --ew-color-match-current-bg: #f0a84b;
+  --ew-color-match-current-text: #1a2129;
+  --ew-font-size-doc: 0.875rem;
+  --ew-tap-target-min: 24px;
+  --ew-tap-target: 44px;
+  --ew-disabled-opacity: 0.5;
+  --ew-jump-offset: 80px;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --ew-font-size-doc: 0.9375rem;
+  }
+}
+
+/* Highlight pseudo-elements live in the tokens file so S4's token swap
+   reaches them; the literal fallbacks cover engines that do not resolve
+   var() inside highlight pseudos (Chromium before 134). Only
+   background-color and color: the cross-engine interoperable subset. */
+::highlight(ew-match) {
+  background-color: var(--ew-color-match-bg, #ffe08a);
+  color: var(--ew-color-match-text, #1a2129);
+}
+::highlight(ew-match-current) {
+  background-color: var(--ew-color-match-current-bg, #f0a84b);
+  color: var(--ew-color-match-current-text, #1a2129);
 }

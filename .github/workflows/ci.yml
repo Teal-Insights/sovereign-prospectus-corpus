@@ -64,3 +64,22 @@ jobs:
           PUBLIC_DATA_BASE_URL: https://data.example.invalid
       - name: Assert routes
         run: node scripts/assert-dist.mjs
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('explorer-web/package-lock.json') }}
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Smoke build (local data origin)
+        run: npx astro build
+        env:
+          SNAPSHOT_DIR: tests/fixtures/snapshot
+          PUBLIC_DATA_BASE_URL: http://127.0.0.1:8081
+      - name: Browser smoke
+        run: |
+          node scripts/serve-static.mjs --dir dist --port 8080 &
+          node scripts/serve-static.mjs --dir tests/fixtures/snapshot --port 8081 --cors &
+          curl --silent --output /dev/null --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/
+          curl --silent --output /dev/null --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:8081/MANIFEST.json
+          SMOKE_BASE=http://127.0.0.1:8080 node scripts/smoke.mjs

@@ -1,6 +1,32 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-04 (TEA-902: explorer-web scaffold + spike)
+**Last updated:** 2026-07-04 (TEA-903: explorer-web parity build)
+
+## Session 2026-07-04 (latest): TEA-903 (Explorer v2, S3)
+
+Explorer core built to v1 Shiny parity on the S2 scaffold. PR pending
+merge go-ahead; Linear TEA-903 has the full trail; spec + plan with all
+council dispositions in docs/superpowers/.
+
+- **What shipped:** multi-select filters (select+chips) with repeated
+  query params and unknown-param passthrough; scope status matrix with
+  marginal hidden counts; segment-by-TOC-offset rendering above 1M UTF-16
+  units (620 docs; "Segment", never "Part"); in-document search (compute
+  guards: min length 2, 20K cap, index-only) with CSS Custom Highlight
+  paints, live-region announcements, and a q param that never bypasses
+  the 5 MB gate; history discipline (pushState interactions, replaceState
+  corrections, popstate never writes); baked static shell.
+- **Gates:** spec 6 reviewers, plan 5, PR 5 + a 28-agent code-review
+  workflow; every disposition recorded (spec/plan docs + PR comment).
+  Lighthouse 100 perf / 100 a11y / CLS 0 (bare and parameterized browse;
+  doc 98/100). P1-P22 parity verified side by side against v1 run on the
+  deployed MotherDuck data path. Fixture: issue #88 shapes landed
+  (synthetic-gate/astral/large).
+- **Deferred/known:** #84 vintage footnote still hardcoded (comment links
+  the issue); #86 pages[].offset_utf16 still unconsumed; VoiceOver
+  listen-through optional for Teal (live-region text machine-verified).
+- **Dev notes unchanged** (Node >= 22.12; smoke now needs the two-origin
+  serve recipe in scripts/smoke.mjs header; CI runs it on the fixture).
 
 ## Session 2026-07-04 (later): TEA-902 (Explorer v2, S2)
 

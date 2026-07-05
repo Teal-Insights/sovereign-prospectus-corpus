@@ -6,11 +6,38 @@
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 
 export interface BrowseFilters {
-  country?: string;
-  source?: string;
+  countries: string[];
+  regions: string[];
+  incomes: string[];
+  sources: string[];
   includeNonSovereign: boolean;
-  page: number;
+  includeHighIncome: boolean;
+  page: number; // 0-based internal (1-based only in the URL codec)
   pageSize: number;
+}
+
+export function highIncomeExclusionActive(
+  f: Pick<BrowseFilters, 'includeHighIncome' | 'incomes'>
+): boolean {
+  return !f.includeHighIncome && (f.incomes ?? []).length === 0;
+}
+
+// v1 semantics: COALESCE keeps 'Unknown' rows visible under the default
+// exclusion, and guards a future snapshot regressing to NULL classifications.
+const HI_EXCLUDE = "COALESCE(income_group, 'Unknown') != 'High income'";
+const IS_HI = "COALESCE(income_group, 'Unknown') = 'High income'";
+
+function inList(col: string, values: string[]): string {
+  return `${col} IN (${values.map(sqlQuote).join(', ')})`;
+}
+
+function explicitConditions(f: BrowseFilters): string[] {
+  const c: string[] = [];
+  if (f.countries.length) c.push(inList('country_code', f.countries));
+  if (f.regions.length) c.push(inList("COALESCE(region, 'Unknown')", f.regions));
+  if (f.incomes.length) c.push(inList("COALESCE(income_group, 'Unknown')", f.incomes));
+  if (f.sources.length) c.push(inList('source', f.sources));
+  return c;
 }
 
 export interface BrowseRow {
@@ -35,15 +62,11 @@ export function createDocsViewSql(parquetName: string): string {
   return `CREATE OR REPLACE VIEW docs AS SELECT * FROM read_parquet(${sqlQuote(parquetName)})`;
 }
 
-function whereClause(f: Pick<BrowseFilters, 'country' | 'source' | 'includeNonSovereign'>): string {
-  const conditions: string[] = [];
-  if (!f.includeNonSovereign) conditions.push('is_sovereign = true');
-  if (f.country) conditions.push(`country_name = ${sqlQuote(f.country)}`);
-  if (f.source) conditions.push(`source = ${sqlQuote(f.source)}`);
-  return conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-}
-
 export function buildListSql(f: BrowseFilters): string {
+  const conditions = explicitConditions(f);
+  if (!f.includeNonSovereign) conditions.push('is_sovereign = true');
+  if (highIncomeExclusionActive(f)) conditions.push(HI_EXCLUDE);
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   // strftime keeps dates as ISO strings end to end; Arrow JS's Date32
   // representation has varied across versions (Date objects vs epoch-ms).
   return `
@@ -51,27 +74,32 @@ export function buildListSql(f: BrowseFilters): string {
            strftime(publication_date, '%Y-%m-%d') AS publication_date,
            country_name, doc_type, source, is_sovereign
     FROM docs
-    ${whereClause(f)}
+    ${where}
     ORDER BY publication_date DESC NULLS LAST, slug DESC
     LIMIT ${f.pageSize} OFFSET ${f.page * f.pageSize}
   `;
 }
 
-export function buildCountSql(f: BrowseFilters): string {
-  return `SELECT count(*)::INTEGER AS n FROM docs ${whereClause(f)}`;
-}
-
-export function buildScopeCountsSql(): string {
+// One aggregate round trip for the scope-status copy: the matching count
+// plus the two MARGINAL hidden counts (what each inactive toggle would
+// reveal, given every explicit filter). The client maps zeros/inactive
+// arms to null before statusLine renders sentences.
+export function buildStatusCountsSql(f: BrowseFilters): string {
+  const scopeP = f.includeNonSovereign ? 'TRUE' : 'is_sovereign = true';
+  const notScope = f.includeNonSovereign ? 'FALSE' : 'is_sovereign IS DISTINCT FROM true';
+  const hiActive = highIncomeExclusionActive(f);
+  const hiP = hiActive ? HI_EXCLUDE : 'TRUE';
+  const isHi = hiActive ? IS_HI : 'FALSE';
+  const explicit = explicitConditions(f);
+  const where = explicit.length ? `WHERE ${explicit.join(' AND ')}` : '';
   return `
     SELECT
-      count(*)::INTEGER AS total,
-      count(*) FILTER (is_sovereign = true)::INTEGER AS sovereign
+      count(*) FILTER (WHERE ${scopeP} AND ${hiP})::INTEGER AS matching,
+      count(*) FILTER (WHERE ${hiP} AND ${notScope})::INTEGER AS hidden_scope,
+      count(*) FILTER (WHERE ${scopeP} AND ${isHi})::INTEGER AS hidden_hi
     FROM docs
+    ${where}
   `;
-}
-
-export function buildDistinctSql(col: 'country_name' | 'source'): string {
-  return `SELECT DISTINCT ${col} AS v FROM docs WHERE ${col} IS NOT NULL ORDER BY v`;
 }
 
 export async function runQuery(
