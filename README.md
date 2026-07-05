@@ -1,12 +1,12 @@
 # Searching the Fine Print (at Scale)
 
-An open source pipeline and web explorer for searching sovereign bond prospectuses and the contract terms inside them. Built on the expert annotations from [#PublicDebtIsPublic](https://publicdebtispublic.mdi.georgetown.edu/).
+An open source pipeline and web explorer for searching sovereign bond prospectuses and the contract terms inside them. Informed by the expert annotations from [#PublicDebtIsPublic](https://publicdebtispublic.mdi.georgetown.edu/).
 
 ## The explorer
 
 ![Browse view of the explorer: 9,774 documents, filters for country, region, income group, and source, and a newest-first document table](docs/images/explorer-web-browse.png)
 
-Browse the full corpus at [prospectus.tealinsights.com](https://prospectus.tealinsights.com): 9,774 documents from 265 sovereign issuers across four sources, filterable by country, region, income group, and source, with full-text reading and in-document search. Every document has a stable, shareable URL and a link to its original filing.
+Browse the full corpus at [prospectus.tealinsights.com](https://prospectus.tealinsights.com): 9,774 documents from 265 issuers across four sources, filterable by country, region, income group, and source, with full-text reading and in-document search. Every document has a stable, shareable URL and, where the source provides one, a link to its original filing.
 
 The explorer is a static site (Astro + DuckDB-WASM). No server, no database process, no accounts. The hosted version is this repository's code with Teal Insights branding on top; see [Open core](#open-core).
 
@@ -101,7 +101,7 @@ Pipeline: Python 3.12, DuckDB, Docling (PDF parsing), Click CLI, Plotly, Shiny. 
 
 Everything that makes this tool work is MIT-licensed and public: the pipeline, the corpus snapshot builder, and the web application with its clean default theme. Everything that makes it ours (our name, our fonts, our hosted conveniences) sits in a thin private layer on top, and removing that layer costs a user nothing but the branding.
 
-[prospectus.tealinsights.com](https://prospectus.tealinsights.com) is this repository's code, pinned at a public commit, with our house style applied through the documented theme contract: typefaces we license commercially and cannot redistribute. If you never touch our website, you lose nothing but our fonts. Anyone can diff the deployed behavior against this repository and find no functional gap.
+[prospectus.tealinsights.com](https://prospectus.tealinsights.com) is this repository's code, pinned at a public commit, with our house style applied through the documented theme contract: brand tokens and typefaces we license commercially and cannot redistribute. If you never touch our website, you lose nothing but the branding. Anyone can diff the deployed behavior against this repository and find no functional gap.
 
 The Teal Insights name and logo are trademarks and are not part of the MIT grant. Details, including source-document provenance, are in [NOTICE](NOTICE).
 
@@ -110,9 +110,9 @@ The Teal Insights name and logo are trademarks and are not part of the MIT grant
 This project is part of the [SovTech](https://tealinsights.com) initiative, building open source infrastructure for sovereign debt analysis. Other SovTech tools include [QCraft](https://teal-insights.github.io/QCraft-App/), a user-friendly interface for the IMF's QCRAFT debt sustainability tool that also serves as a proof of concept for modular open source architecture. Supported by [NatureFinance](https://www.naturefinance.net/).
 
 <p>
-  <a href="https://tealinsights.com"><img src="teal-insights-logo.png" alt="Teal Insights" height="50"></a>
+  <a href="https://tealinsights.com"><img src="demo/images/teal-insights-logo.png" alt="Teal Insights" height="50"></a>
   &nbsp;&nbsp;&nbsp;
-  <a href="https://www.naturefinance.net/"><img src="Logo_Nature Finance.png" alt="NatureFinance" height="50"></a>
+  <a href="https://www.naturefinance.net/"><img src="demo/images/naturefinance-logo.png" alt="NatureFinance" height="50"></a>
 </p>
 
 ## Contact
