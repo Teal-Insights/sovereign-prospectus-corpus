@@ -1,406 +1,576 @@
 # S4 (TEA-904): Private brand wrapper + Netlify deploy design
 
-Date: 2026-07-04. Issue: TEA-904. Upstream pin: `f80ed97` (PR #90, S3 parity
-build, on main). Companion docs: `explorer-web/ARCHITECTURE.md` (theme
-contract + hosting constraints), the Klim Web Font Licence (verified against
-klim.co.nz 2026-07-04), `tealinsights-site/LICENSE-FONTS.md`.
+Date: 2026-07-04, revised post-spec-gate. Issue: TEA-904. Upstream base:
+`f80ed97` (PR #90, S3 parity build, on main); the wrapper pins the merge
+SHA of the S4 seams PR described in D2 (see D1). Companion docs:
+`explorer-web/ARCHITECTURE.md` (theme contract + hosting constraints),
+the Klim Web Font Licence (verified against klim.co.nz 2026-07-04),
+`tealinsights-site/LICENSE-FONTS.md`.
 
 ## Goal
 
-The branded explorer live at prospectus.tealinsights.com: a new PRIVATE repo
-`Teal-Insights/prospectus-web-ti` that pulls explorer-web at the pinned ref,
-overrides the neutral theme with Teal Insights brand (Tiempos Headline
-display, Soehne UI/body), and deploys to a new Netlify site. No application
-logic in the private repo. Fonts live only in the private repo and are served
-only from the subdomain. Data hosting resolved. Teal does DNS records and
-dashboard logins from a numbered handoff list.
+The branded explorer live at prospectus.tealinsights.com: a new PRIVATE
+repo `Teal-Insights/prospectus-web-ti` that pulls explorer-web at a
+pinned ref, overrides the neutral theme with Teal Insights brand
+(Tiempos Headline display, Soehne UI/body), and deploys to a new Netlify
+site. No application logic in the private repo. Fonts live only in the
+private repo and are served only from the subdomain. Data hosting
+resolved. Teal does DNS records and dashboard logins from a numbered
+handoff list.
 
 ## Verified facts the design rests on
 
 - **DNS:** tealinsights.com nameservers are Google Cloud DNS
-  (ns-cloud-e*.googledomains.com). Apex A 75.2.60.5 (Netlify LB), www CNAME
-  tealinsights.netlify.app. No prospectus record yet. Consequence: **R2
-  custom domains are unavailable without moving the zone to Cloudflare**
-  (R2 custom domains require the domain to be a zone in the same Cloudflare
-  account).
+  (ns-cloud-e*.googledomains.com). Apex A 75.2.60.5 (Netlify LB), www
+  CNAME tealinsights.netlify.app. No prospectus record yet. Consequence:
+  **R2 custom domains are unavailable without moving the zone to
+  Cloudflare** (R2 custom domains require the domain to be a zone in the
+  same Cloudflare account; partial/CNAME setup is Business tier).
 - **Klim licence (primary source, 2026-07-04):** modification prohibited
-  except a narrow subsetting carve-out (3g, file-size reduction only; not
-  needed at 37-40 KB/file); WOFF2 only (3a); third-party hosting allowed
-  only if the provider adheres to the licence (3e); affirmative hotlink and
-  direct-download protection obligation (3d, "reasonable measures");
-  subdomains of the licensed second-level domain are covered (1f), subject
-  to the aggregate page-view tier across all sites (3a/3b); public repos =
-  redistribution (1d, 3f, 3j). Consequence: fonts stay in the private repo,
-  serve same-origin from prospectus.tealinsights.com, and font paths must
-  NOT carry Access-Control-Allow-Origin (browsers require CORS for
-  cross-origin @font-face, so a missing ACAO header IS the hotlink
-  protection).
+  except a narrow subsetting carve-out (3g, file-size reduction only;
+  not needed at 37-40 KB/file); WOFF2 only (3a); third-party hosting
+  allowed only if the provider adheres to the licence (3e); affirmative
+  hotlink AND direct-download protection obligation (3d, "reasonable
+  measures"); subdomains of the licensed second-level domain are covered
+  (1f), subject to the aggregate page-view tier across all sites
+  (3a/3b); public repos = redistribution (1d, 3f, 3j). Fonts must never
+  reach an unlicensed hostname: **netlify.app is an unlicensed
+  hostname**, Netlify never auto-redirects it, and the spec gate
+  verified the main site is serving Soehne from
+  tealinsights.netlify.app with HTTP 200 today (separate fix, on the
+  handoff).
 - **Theme contract:** `src/styles/tokens.css` is the complete style-value
-  inventory (S3 added 12 tokens; the ::highlight() rules live in tokens.css
-  with literal var() fallbacks). base.css consumes tokens only. h1/h2 have
-  no font-family of their own (inherit body) and no display-font token
-  exists yet. `.ew-header` is a text link; explorer-web/public/ is empty
-  (no favicon anywhere; browsers fall back to requesting /favicon.ico).
-  Base.astro has no head seam (no favicon link, no analytics, no OG tags;
-  OG images are S5 scope per the sprint calendar).
+  inventory (S3 added 12 tokens; the ::highlight() rules live in
+  tokens.css with literal var() fallbacks). base.css consumes tokens
+  only. h1/h2 have no font-family or font-weight rules of their own
+  (system UA bold 700 today). `.ew-header` is a text link;
+  explorer-web has no public/ directory and no favicon; Base.astro has
+  no head seam (no favicon link, no analytics, no OG tags; OG images
+  are S5 scope). No 404 page exists upstream.
 - **Wasm:** dist carries both bundles, 34.2 MB (eh) + 39.4 MB (mvp) raw;
-  5.92 MB brotli for the one a modern browser actually downloads. Worker JS
-  is small (773 KB eh). duck.ts imports both via Vite `?url` (same-origin);
-  the Worker() constructor is same-origin restricted, the wasm binary is
-  not.
-- **Build inputs:** the Astro build reads only documents.parquet (1.75 MB)
-  + MANIFEST.json via SNAPSHOT_DIR; the 2.46 GB text/ corpus is
-  client-fetched from PUBLIC_DATA_BASE_URL (build gate requires https).
-  Tokens/base CSS ships as a LINKED stylesheet in dist (fonts declared
-  there are discovered after the CSS fetch; preload is the lever if
-  Lighthouse objects).
-- **Fonts on hand:** 5 WOFF2 files, 37-40 KB each (~193 KB total), plus
-  @font-face reference blocks and brand tokens in tealinsights-site
-  (surface #FAFAF7, dark #2A2A2A, ink #143E5A, teal #0094BC, divider
-  #D4D0CA, slate #5C6770, terracotta #B5380C; Soehne stack + Tiempos
-  Headline display; main-site header = logo PNG at 38px + nav; Plausible
-  via first-party /pipes proxy in netlify.toml).
-- **CI:** ci.yml explorer-web job = npm ci, astro check, vitest, fixture
-  build, assert-dist.mjs, two-origin browser smoke (serve-static.mjs +
-  smoke.mjs). Node 24 in CI; package.json engines >= 22.12.
-- **Netlify (primary docs, 2026-07-04):** accounts created before
-  2025-09-04 keep legacy plans (Free 100 GB/mo bandwidth hard cap; Pro
-  1 TB/mo); newer accounts are credit-metered (Free 300 credits/mo,
-  bandwidth 20 credits/GB since 2026-04-14, and EVERY production deploy
-  costs 15 credits). The CDN cache key does NOT include query strings for
-  static assets by default (the ?v= scheme is CDN-defeated unless the
-  response sends `Netlify-Vary: query` or the data ships inside the same
-  atomic deploy, which invalidates the CDN on every deploy). Custom
-  `_headers` rules may set Cache-Control freely but Content-Encoding is a
-  forbidden header: pre-compressed serving is impossible; edge brotli is
-  documented for text assets only (application/wasm and large JSON
-  behavior UNDOCUMENTED; requires an empirical probe once a site
-  exists). 54,000 files per directory cap (text/ has 9,671: fine); no
-  documented single-file or total-size cap (staff guidance ~10 MB/file is
-  soft). Public https submodules clone with zero config (recursive
-  submodules do not). Deploys are content-addressed (unchanged files
-  never re-upload) and atomic. External-DNS subdomain = CNAME to
-  <sitename>.netlify.app with automatic Let's Encrypt; NODE_VERSION env
-  or .nvmrc pins Node (default 22 on the current image).
-- **Cloudflare (primary docs, 2026-07-04):** R2 custom domains require
-  the domain to be a zone in the SAME account; keeping DNS at Google
-  Cloud DNS would need a partial (CNAME) setup, which is
-  Business/Enterprise only. r2.dev is rate-limited, "development
-  purposes" only, no cache/custom headers. Workers on workers.dev are
-  documented as hobby-tier ("not business-critical"), and the Cache API
-  is an explicit NO-OP on workers.dev (edge caching requires a custom
-  domain, which again requires the zone). Workers Free = 100k req/day.
-  R2 free tier = 10 GB storage, 1M class A + 10M class B ops/mo, zero
-  egress, but enabling R2 requires a payment method on file. Zone
-  onboarding auto-imports records with explicit "verify MX/TXT yourself"
-  warnings and up-to-24 h nameserver propagation. Net: every
-  Cloudflare-hosted-data path runs through moving the tealinsights.com
-  zone to Cloudflare first.
+  5.92 MB brotli for the one a modern browser downloads. Worker JS is
+  773 KB (eh). duck.ts imports both via Vite `?url` (static imports:
+  both binaries land in dist regardless of any env override); the
+  Worker() constructor is same-origin restricted, the wasm binary is
+  not. duck.ts derives bundleName by identity comparison with the
+  imported URL (breaks under an override; the seams PR fixes it).
+- **Build inputs:** the Astro build reads only documents.parquet
+  (1.75 MB) + MANIFEST.json via SNAPSHOT_DIR; the 2.46 GB text/ corpus
+  is client-fetched from PUBLIC_DATA_BASE_URL (build gate requires
+  https, localhost excepted). Tokens/base CSS ships as one LINKED
+  stylesheet (5.9 KB raw); fonts declared there are discovered after
+  the CSS fetch.
+- **Fonts on hand:** 5 WOFF2 files, 37-40 KB each (~193 KB total).
+  Extracted metrics (fontTools, read-only): Soehne asc 1.171 desc
+  -0.423 linegap 0, avg width 0.4715 (Buch) vs Arial 0.4725
+  (size-adjust ~100%); Tiempos Headline SB asc 0.962 desc -0.25, avg
+  width 0.4864 vs Georgia 0.4636 (size-adjust ~104.9%). --ew-line-height
+  is 1.55 unitless everywhere, so line boxes are metric-independent;
+  residual swap risk is wrap-shift only.
+- **Netlify (primary docs, 2026-07-04):** pre-2025-09-04 accounts keep
+  legacy plans (Free 100 GB/mo bandwidth; Pro 1 TB/mo); newer accounts
+  are credit-metered (Free 300 credits/mo, bandwidth 20 credits/GB, 15
+  credits per successful production deploy). CDN cache key does NOT
+  include query strings for static assets (Netlify-Vary exists; atomic
+  deploys invalidate the CDN anyway). `_headers` sets Cache-Control
+  freely but Content-Encoding is forbidden: pre-compressed serving is
+  impossible; edge brotli documented for text assets only. HTML default
+  is `public, max-age=0, must-revalidate` with atomic invalidation:
+  new deploys show immediately. 54,000 files per directory cap. Public
+  https submodules clone with zero config. Deploys are
+  content-addressed and atomic. External-DNS subdomain = CNAME to
+  <sitename>.netlify.app with automatic Let's Encrypt; the site and
+  custom domain should exist BEFORE the CNAME (Netlify docs order).
+  Deploy Previews are public at enumerable
+  deploy-preview-N--<site>.netlify.app URLs; deploy permalinks
+  (<deploy-id>--<site>.netlify.app) cannot be disabled (unguessable
+  IDs; accepted residual risk). NODE_VERSION env or .nvmrc pins Node.
+- **Cloudflare (primary docs, 2026-07-04):** every
+  Cloudflare-hosted-data path (R2 custom domain, Worker custom domain,
+  functional Cache API) requires the tealinsights.com zone on
+  Cloudflare first. r2.dev is dev-only; workers.dev is hobby-tier and
+  its Cache API is a documented no-op. R2 requires a payment method
+  even for free tier.
+- **AWS (primary docs, 2026-07-04):** CloudFront 1 TB/mo + 10M req/mo
+  always-free survives the 2025 pricing changes on pay-as-you-go (new
+  accounts should take the PAID account plan; the "Free account plan"
+  auto-closes after 6 months). CloudFront edge-compresses only 1 KB to
+  10 MB objects; S3 objects stored with Content-Encoding metadata pass
+  through untouched and are never re-compressed. Managed
+  UseOriginCacheControlHeaders-QueryStrings includes Host in the cache
+  key, and Host-based caching is documented as UNSUPPORTED for S3
+  origins (S3 resolves buckets by Host: guaranteed 403s), so a CUSTOM
+  cache policy is required (five fields, below). SimpleCORS response
+  headers policy adds `ACAO: *` to CORS requests without touching
+  bucket config, on cache hits too. ACM cert in us-east-1, DNS
+  validation CNAMEs at any provider; distribution CNAME at any
+  provider; apex would not work on external DNS but subdomains do. S3
+  ~2.5 GB + monthly PUTs ~ $0.06-0.11/mo.
 
 ## Design decisions
 
 ### D1: How the wrapper pins and pulls explorer-web
 
-**Decision: git submodule of the open repo, pinned at f80ed97; build runs
-against a staging copy.**
+**Decision: git submodule of the open repo; build runs against a staging
+copy. The pin is the merge SHA of the D2 seams PR (which builds on
+f80ed97), stated explicitly: the seams PR merges upstream FIRST, then
+the wrapper pins that commit.**
 
 - The open repo is small (8.7 MB .git), so a submodule clone is cheap.
-- npm-tarball install is not viable: explorer-web is a subdirectory of the
-  monorepo and is not published; npm cannot install a git subdirectory.
-- A build-time tarball fetch (codeload at a SHA) works but hides the pin in
-  a script variable and re-downloads every build. The submodule makes the
-  pin a first-class, reviewable gitlink: bumping it is a one-line diff in a
-  PR, and local dev gets the exact upstream tree.
-- The build never mutates the submodule worktree: `scripts/build.sh` rsyncs
-  `upstream/explorer-web/` to a gitignored `.build/` staging dir, overlays
-  `brand/` files, and builds there. The submodule stays pristine (clean
-  `git status`, no accidental commits of brand files into the open tree).
+- npm-tarball install is not viable: explorer-web is an unpublished
+  subdirectory of the monorepo.
+- A build-time tarball fetch hides the pin in a script variable and
+  re-downloads every build. The submodule makes the pin a first-class,
+  reviewable gitlink: bumping it is a one-line diff in a PR.
+- The build never mutates the submodule worktree: `scripts/build.sh`
+  rsyncs `upstream/explorer-web/` to a gitignored `.build/` staging dir
+  (excluding node_modules, dist, .astro), overlays `brand/`, and builds
+  there. The submodule stays pristine.
+- README pin-bump procedure: bump gitlink, diff upstream tokens.css
+  token NAMES against the branded copy (S3 added 12 in one PR; that
+  will recur), re-run wrapper CI, redeploy.
 
 ### D2: Where the brand override lives (the no-application-logic line)
 
-**Decision: one small upstream PR to explorer-web adds a neutral
-brand-slot contract; the wrapper supplies only assets and markup.**
+**Decision: ONE upstream PR to explorer-web ("S4 seams") adds a neutral
+brand contract; the wrapper supplies only assets and markup.** Contents
+of the seams PR, every item a no-op when brand files are absent:
 
-The tokens.css swap covers every style VALUE, but three brand needs have no
-seam today: a logo/wordmark in the header, head-level additions (favicon
-links, font preloads if needed, analytics), and a display-font for
-headings. Overlaying Base.astro from the wrapper would fork a load-bearing
-layout file (drift trap: every upstream Base.astro change silently
-diverges). Instead, upstream (open repo, neutral defaults, no behavior
-change when brand files are absent):
+1. **`--ew-font-display` + `--ew-font-weight-display` tokens**
+   (defaults: the body stack and 700), consumed by
+   `h1, h2 { font-family: var(--ew-font-display); font-weight:
+   var(--ew-font-weight-display); }` in base.css. Neutral rendering is
+   byte-identical (system stack at UA-bold 700, exactly today's
+   output); the wrapper sets Tiempos + 600.
+2. **Brand slots in Base.astro** via eager `import.meta.glob`: if
+   `src/brand/Head.astro` exists it renders at the end of `<head>`; if
+   `src/brand/Header.astro` exists it replaces the neutral header
+   markup. `src/brand/` ships with a README documenting the contract
+   (neutral examples only: no Klim names or URLs) and a .gitignore for
+   content.
+3. **Optional `PUBLIC_WASM_BASE_URL` env** (astro:env, optional): when
+   set, duck.ts uses `<base>/duckdb-eh.wasm` / `<base>/duckdb-mvp.wasm`
+   as mainModule URLs; worker JS always stays same-origin. Fix
+   bundleName derivation to not depend on URL identity. When unset,
+   byte-identical behavior.
+4. **`src/pages/404.astro`** (neutral, uses Base): Astro emits
+   dist/404.html, which Netlify serves automatically for unknown paths.
+   Closes the S5 QA gap for truncated /doc/ URLs.
+5. **Diagnostics one-liner:** browse.ts and doc-text.ts `console.error`
+   the underlying SnapshotError (message + URL) alongside the rendered
+   userMessage, so live failures are diagnosable (data host
+   misconfiguration vs app bug).
+6. **Font tripwire:** gitignore `explorer-web/public/fonts/` and add a
+   CI step asserting `git ls-files '*.woff2' '*.woff' '*.ttf' '*.otf'`
+   is empty (the only human path by which font bytes could reach the
+   open repo).
 
-1. **`--ew-font-display` token** defaulting to the body stack, consumed by
-   `h1, h2 { font-family: var(--ew-font-display); font-weight: 600; }` in
-   base.css. (600 because Tiempos Headline ships only semibold; with
-   Soehne 400/500/600 loaded, a 700 request would resolve to the 600 face
-   anyway per CSS font matching, so the neutral look shift is nil-to-
-   imperceptible.)
-2. **Brand slots in Base.astro** via `import.meta.glob` with eager import:
-   if `src/brand/Head.astro` exists it renders at the end of `<head>`; if
-   `src/brand/Header.astro` exists it replaces the neutral header markup
-   (else the current text-link header renders). `src/brand/` ships empty
-   (a README documenting the contract) and gitignored for content.
-3. **Optional `PUBLIC_WASM_BASE_URL` env** (astro:env, optional string):
-   when set, duck.ts uses `<base>/duckdb-eh.wasm` and
-   `<base>/duckdb-mvp.wasm` as mainModule URLs instead of the bundled
-   `?url` assets; worker JS always stays same-origin (Worker() constructor
-   restriction). When unset, behavior is byte-identical to today. This is
-   what lets the 34-39 MB binaries live on the data host instead of
-   burning Netlify bandwidth credits.
+The wrapper supplies: `brand/tokens.css` (complete branded inventory
+including @font-face and ::highlight), `brand/Head.astro` (favicons,
+preconnect + font preloads, build-stamp meta, Plausible), 
+`brand/Header.astro` (branded header), fonts, favicons, logo. Markup
+and assets, no logic.
 
-The wrapper then supplies: `brand/tokens.css` (the complete branded
-inventory, including @font-face blocks and the ::highlight rules),
-`brand/Head.astro` (favicon links, Plausible via first-party proxy, font
-preloads only if measurements demand), `brand/Header.astro` (wordmark),
-fonts, favicons, logo. Markup and assets, no logic; every future feature
-still lands upstream.
-
-Plausible earns its place in the wrapper because the Klim licence ties the
-licence tier to aggregate monthly page views: the analytics IS part of
-licence compliance, and the main site's /pipes proxy pattern is reused
-verbatim in the wrapper's netlify.toml.
+Plausible earns its place because the Klim licence ties the tier to
+aggregate monthly page views: analytics IS licence compliance. The
+main site's /pipes first-party proxy pattern is reused verbatim.
+Loaded with `defer`. The README documents the cross-site aggregation
+procedure (main site + explorer page views must be summable against
+the tier on order 26060749).
 
 ### D3: Font-loading strategy
 
 **Decision: all five faces, unmodified, same-origin under /fonts/;
-font-display: swap plus metric-tuned local fallbacks; no preload in v1;
-doc text stays mono.**
+font-display: swap plus metric-tuned fallbacks; preconnect + preload
+from day one; doc text stays mono.**
 
 - Faces: Soehne Buch 400 / Buch Kursiv 400 italic / Kraeftig 500 /
   Halbfett 600, Tiempos Headline Semibold 600 (display). 193 KB total.
-- No subsetting (permitted by 3g but unnecessary at these sizes, and Klim
-  does not support subsetted fonts). No format conversion (3a).
-- @font-face blocks live in the branded tokens.css, so the single-file
-  swap contract holds. URLs are root-relative /fonts/*.woff2 (Vite leaves
-  absolute public paths untouched).
-- CLS defense: paired `@font-face` fallback declarations with
-  size-adjust/ascent-override/descent-override/line-gap-override tuned so
-  the fallback (Helvetica/Arial) occupies the same space as Soehne, and
-  `--ew-jump-offset` re-measured against the branded header height. The
-  S3 reservation tokens (--ew-table-min-height, --ew-filters-min-height,
-  --ew-chips-min-height) are re-checked under brand metrics and adjusted
-  in the branded tokens.css if needed.
-- `#ew-doc-text` keeps `--ew-font-mono` (system mono): the raw-text
-  facsimile is a deliberate S3 decision, webfonting 29 MB of prospectus
-  text buys nothing, and it insulates the largest render surface from
-  font-swap reflow entirely.
+  No subsetting, no format conversion.
+- @font-face blocks live in the branded tokens.css (single-file swap
+  contract holds; adds <10 KB to the one linked stylesheet).
+- **Preload Buch + Tiempos + Halbfett** (stat values and header
+  wordmark are 600-weight above the fold) in brand/Head.astro with
+  `crossorigin` (required on font preloads even same-origin; same-origin
+  requests need no ACAO so this does not conflict with the hotlink
+  posture). Acceptance criteria from the perf review: Lighthouse
+  CLS <= 0.02 and perf >= 90 on all three recorded page types; DevTools
+  shows exactly ONE request per face (guards crossorigin-mismatch
+  double-download); throttled trace shows preloaded fonts finishing
+  before FCP or within 200 ms after.
+- **`<link rel="preconnect" href="https://data.tealinsights.com"
+  crossorigin>`** in brand/Head.astro: saves 120-500 ms of
+  DNS+TCP+TLS on real networks before the MANIFEST fetch; the wasm
+  reuses the warm connection.
+- CLS defense: fallback @font-face declarations with metric overrides.
+  Soehne -> Arial: size-adjust 99.79%, ascent-override 117.1%,
+  descent-override 42.3%, line-gap-override 0%. Tiempos -> Georgia
+  (serif fallback, not Helvetica): size-adjust 104.92%,
+  ascent-override 91.69%, descent-override 23.83%, line-gap-override
+  0%. Line boxes are already metric-independent (unitless 1.55);
+  overrides close the wrap-shift residual.
+- Reservation tokens re-measured under brand metrics, priority order
+  from the perf review: --ew-table-min-height (measure a POPULATED
+  20-row page, not the empty reservation), --ew-filters-min-height
+  (both breakpoints), --ew-jump-offset (branded header height),
+  --ew-chips-min-height.
+- `#ew-doc-text` keeps `--ew-font-mono`: insulates the largest render
+  surface (29 MB worst case) from swap reflow entirely.
 - Fonts get `Cache-Control: public, max-age=31536000, immutable` and NO
-  Access-Control-Allow-Origin header (hotlink protection per Klim 3d).
-- Preload is deliberately deferred: the tokens CSS is the first linked
-  stylesheet, faces are 38 KB each, and Lighthouse runs on the live site
-  decide. If FCP/CLS numbers demand it, `brand/Head.astro` gains
-  `<link rel="preload" as="font" crossorigin>` for Buch + Tiempos only.
+  Access-Control-Allow-Origin header (cross-origin @font-face fails
+  without CORS: the hotlink half of Klim 3d). If a font file ever
+  changes, it gets a new filename (immutable is forever).
+- Klim 3d "direct downloads": adopted baseline = no-ACAO + no directory
+  listing + the netlify.app 301 (D6) + previews disabled, recorded in
+  the README as the "reasonable measures" posture. A
+  Sec-Fetch-Dest-gating Edge Function is documented as available
+  hardening, deliberately not built in v1.
+- `--ew-font-display` never extends below h2 (Tiempos Headline is a
+  display face; 1.25rem is its floor here).
 
-### D4: Brand color mapping (contrast bars re-passed)
+### D4: Brand color mapping (all ratios computed at the gate)
 
-Branded token values, checked against the recorded bars before build (the
-numbers get re-verified in the plan's contrast step):
-
-- `--ew-color-bg` #FFFFFF (keep white for data surfaces; #FAFAF7 for
-  --ew-color-surface), text #2A2A2A, muted slate #5C6770 (4.5:1+ on
-  white), accent/link ink #143E5A with teal #0094BC reserved for hover
-  and the header wordmark accents (raw #0094BC on white is ~3.0:1, below
-  the 4.5:1 text bar, so it is never body-link-on-white).
-- `--ew-color-border` #D4D0CA (decorative), `--ew-color-border-strong`
-  must hold >= 3:1 on white: slate #5C6770 (~5.6:1) passes.
-- Badge/error/notice pairs keep S3's hue semantics recolored toward the
-  brand only where the 4.5:1 pair bar still passes; otherwise S3 values
-  stay (they are already neutral).
-- Highlight pairs: keep S3's amber pair unless the accessibility reviewer
-  proposes brand-adjacent values that hold >= 4.5:1 against #2A2A2A text
-  and preserve the lightness step between current-match and match.
-- Every final value gets a computed contrast ratio comment in the branded
-  tokens.css, mirroring the S3 practice.
+- `--ew-color-bg` #FFFFFF; `--ew-color-surface` #FAFAF7;
+  `--ew-color-text` #2A2A2A (14.35:1 white / 13.73:1 surface);
+  `--ew-color-text-muted` #5C6770 (5.79:1 / 5.53:1);
+  `--ew-color-link` AND `--ew-color-accent` pinned ink #143E5A
+  (11.25:1 / 10.76:1; checkbox accent fill-vs-white and glyph-vs-fill
+  both 11.25:1).
+- **Teal #0094BC is NON-TEXT ONLY** (3.52:1 on white: passes the 3:1
+  non-text bar, fails 4.5:1 text in every state including hover, which
+  axe/Lighthouse cannot catch). Link hover stays in the ink family
+  with underline/weight treatment; the header wordmark may use teal
+  (logotype exemption). If a teal-family text color is ever wanted:
+  #00708F (5.65:1).
+- `--ew-color-border` #D4D0CA (decorative only);
+  `--ew-color-border-strong` #5C6770 (5.79:1 white, 5.53:1 surface;
+  beats S3's 4.62:1).
+- Badge/error/notice pairs: keep S3 values (all still on white:
+  7.30/7.65/5.41 badges, 7.05 error, 6.03 notice); terracotta #B5380C
+  is viable for alert text if wanted (5.94/5.68/5.11/5.51 on
+  white/surface/error-bg/notice-bg).
+- Highlight pairs unchanged (#ffe08a and #f0a84b) with text #2A2A2A:
+  11.13:1 and 7.11:1, lightness step preserved. The ::highlight
+  literal var() fallbacks in the branded file update to #2A2A2A.
+- The branded tokens.css carries the FULL token inventory (all names
+  in upstream tokens.css at the pin); build.sh asserts the branded
+  file defines every --ew-* name the upstream file does (fails the
+  build on drift). Computed contrast ratios recorded as comments per
+  the S3 practice. No `outline: none` anywhere in brand CSS (focus
+  rides on UA defaults, as upstream).
 
 ### D5: Data + wasm hosting
 
 **Decision: split hosting. Pages + fonts + worker JS on Netlify; the
 snapshot (2.46 GB text/, parquet, MANIFEST) AND both wasm binaries on
-S3 + CloudFront at data.tealinsights.com, everything compressible
-pre-compressed at rest.** (AWS facts verified against primary docs
-2026-07-04; see agent findings inline below.)
+S3 + CloudFront at data.tealinsights.com, everything pre-compressed at
+rest.**
 
-Why S3 + CloudFront wins against the alternatives:
+Why S3 + CloudFront wins:
 
-- **It works with DNS exactly where it is.** ACM cert (us-east-1,
-  DNS-validated via CNAMEs at any provider) + one CNAME
-  data.tealinsights.com -> distribution domain. Both are early-day DNS
-  items. Every Cloudflare path (R2 custom domain, Worker custom domain,
-  functional Cache API) requires moving the tealinsights.com zone to
-  Cloudflare nameservers first: an email-endangering, up-to-24 h
-  migration that does not belong in launch week.
-- **Compression is deterministic, not provider-mood.** CloudFront only
-  edge-compresses 1 KB-10 MB objects, so the 29 MB worst-case JSON and
-  34.2 MB wasm would ship raw IF we relied on the edge. We do not: all
-  text JSON + MANIFEST + parquet are stored gzip-encoded
-  (Content-Encoding: gzip metadata, ~490 MB at rest, universal client
-  support), the wasm stored brotli (Content-Encoding: br, 5.92 MB; every
-  wasm-capable browser speaks br on https). S3 passes stored
-  Content-Encoding through; CloudFront never re-compresses such objects.
-- **The binding checklist is satisfiable in managed config:** cache
-  behavior with the managed `UseOriginCacheControlHeaders-QueryStrings`
-  cache policy (query strings IN the cache key, per-object Cache-Control
-  honored: MANIFEST no-store, everything else
-  public,max-age=31536000,immutable, all set as S3 object metadata at
-  upload) + managed `SimpleCORS` response headers policy (blanket
-  `Access-Control-Allow-Origin: *`, no S3 CORS config needed). MIME set
-  per object at upload (application/wasm, application/json,
-  application/octet-stream for parquet).
-- **Cost ~ $0.** CloudFront's 1 TB/mo + 10M req/mo always-free tier
-  survives the 2025 pricing changes on pay-as-you-go; S3 storage + PUTs
-  land at $0.06-0.11/month. New-account note for the handoff: choose the
-  PAID account plan (pay-as-you-go; the "Free account plan" auto-closes
-  after 6 months) and skip the CloudFront flat-rate plans.
-- **Wasm off Netlify** protects the shared team bandwidth/credits (34 MB
-  raw per cold visitor otherwise, and Netlify cannot serve
-  pre-compressed files, and its wasm edge-compression is undocumented)
-  and fixes the throttled cold-load profile (5.92 MB br vs 34.2 MB raw).
-  Requires the D2.3 upstream seam (PUBLIC_WASM_BASE_URL). Worker JS
-  (773 KB, text/javascript: documented Netlify brotli territory) stays
-  same-origin per the Worker() constructor restriction.
-- **S6-ready:** the refresh Action needs one IAM deploy credential
-  (aws s3 sync --content-encoding ... or rclone) + a Netlify build hook.
+- **Works with DNS exactly where it is.** ACM cert (us-east-1,
+  DNS-validated) + CNAME data.tealinsights.com -> distribution. Every
+  Cloudflare path requires the zone move first: not in launch week.
+- **Compression is deterministic.** CloudFront edge compression stops
+  at 10 MB, so the 29 MB JSON and 34.2 MB wasm ship raw IF the edge is
+  relied on; instead everything compressible is stored pre-compressed:
+  text JSON + MANIFEST + parquet gzip (`gzip -n`, ~490 MB at rest,
+  universal decode: this audience sits behind TLS-inspecting proxies
+  that mangle br), wasm brotli (5.92 MB; every wasm-capable browser
+  decodes br on https). S3 serves stored Content-Encoding
+  unconditionally; CloudFront never re-compresses such objects.
+  Distribution "Compress objects automatically" OFF.
+- **Cache + CORS in verified config:** a CUSTOM cache policy (the
+  managed UseOriginCacheControlHeaders-QueryStrings policy puts Host in
+  the cache key, documented unsupported for S3 origins): MinTTL 0,
+  DefaultTTL 0, MaxTTL 31536000, query strings ALL, headers none,
+  cookies none. MinTTL=0 semantics honor per-object Cache-Control:
+  MANIFEST no-store stays uncached end to end (client also fetches it
+  cache:'no-store'); parquet/text/wasm carry
+  public,max-age=31536000,immutable as S3 metadata. Response headers
+  policy: managed SimpleCORS (`ACAO: *`, attached on cache hits too).
+  MIME per object at upload: application/json, application/wasm,
+  application/octet-stream (parquet).
+- **Bucket:** private, Block Public Access ON, CloudFront OAC with the
+  standard cloudfront.amazonaws.com SourceArn policy.
+- **Wasm URLs are versioned:**
+  `/prospectus/wasm/duckdb-wasm-1.32.0/duckdb-{eh,mvp}.wasm`, baked
+  into PUBLIC_WASM_BASE_URL. Immutable caching at an unversioned path
+  would hard-break returning visitors on the first duckdb-wasm bump
+  (worker JS and wasm must version together).
+- **Cost ~ $0:** CloudFront always-free 1 TB/mo + 10M req on
+  pay-as-you-go; S3 $0.06-0.11/mo. New account: PAID account plan,
+  skip flat-rate CloudFront plans (their Free tier also blocks custom
+  cache policies).
+- **S6-ready:** refresh = upload snapshot (MANIFEST last), fire build
+  hook, one IAM deploy credential.
 
-Branches considered and held:
+Branches considered and held: all-on-Netlify (only if legacy plan +
+empirical large-JSON compression probe passes; wasm would ship raw
+regardless since pre-compressed serving is impossible; ?v= would need
+Netlify-Vary: query; dead on arrival on credit pricing), Cloudflare
+zone move + R2 (cleanest long-term, zero egress; post-launch decision
+for Teal; same-hostname migration needs no rebuild), workers.dev /
+r2.dev (refuted for production), jsDelivr wasm (emergency only).
 
-- **All-on-Netlify** (data + wasm inside the site deploy): viable ONLY if
-  the org account is on a LEGACY plan (pre-2025-09-04: 100 GB Free /
-  1 TB Pro classic bandwidth, no per-deploy credit burn) AND an
-  empirical compression probe passes for large application/json (the
-  wasm would ship raw regardless: pre-compressed serving is
-  impossible). CDN staleness is safe in this branch only because data
-  ships in the same atomic deploy; the ?v= scheme still needs
-  `Netlify-Vary: query` via _headers for belt and braces. Held as
-  fallback if AWS onboarding stalls: functional, worse cold-load, no
-  new vendor. If the account is on credit pricing, this branch is dead
-  on arrival (bandwidth 20 credits/GB + 15 credits per deploy against
-  300/mo shared with the main site).
-- **Cloudflare zone move + R2 custom domain:** the cleanest long-term
-  home (zero egress forever, edge cache with query strings in the key,
-  json edge compression) and the original recorded default, but gated
-  on migrating tealinsights.com nameservers (MX/TXT re-verification,
-  24 h propagation, main-site blast radius). Post-launch migration path:
-  move the zone, add data.tealinsights.com as an R2 custom domain, sync
-  the snapshot to R2, and no rebuild is needed because the hostname
-  stays the same. Recorded for S6+, decided by Teal, never in launch
-  week.
-- **workers.dev / r2.dev serving:** refuted for production (hobby-tier
-  framing, Cache API no-op on workers.dev, r2.dev rate-limited
-  dev-only).
-- **jsDelivr for the wasm** (duckdb-wasm's own npm artifacts, CORS +
-  immutable): held as an emergency fallback only; adds a third-party
-  runtime dependency to the flagship and the exact-version pin becomes
-  someone else's uptime.
+Data URL shape:
+`PUBLIC_DATA_BASE_URL=https://data.tealinsights.com/prospectus/snapshot`
+(generic data host, path-scoped per tool).
 
-Data URL shape: `PUBLIC_DATA_BASE_URL=https://data.tealinsights.com/prospectus/snapshot`
-(generic data host, path-scoped per tool, so future SovTech tools share
-the bucket + cert + distribution). PUBLIC_WASM_BASE_URL points at
-`.../prospectus/wasm` carrying the two pinned binaries.
+### D6: Build, deploy, and refresh flow
 
-### D6: Build and refresh flow
-
-- `scripts/build.sh` (runs locally and on Netlify): rsync submodule
-  explorer-web -> .build/, overlay brand/, `npm ci`, then fetch
-  MANIFEST.json + documents.parquet from the LIVE data host
-  (`DATA_BASE_URL`) into `.build/snapshot/`, and `astro build` with
-  SNAPSHOT_DIR=.build/snapshot and PUBLIC_DATA_BASE_URL. Building from
-  the data host's own manifest means pages are stamped with the host's
-  generated_at: no drift notice on deploy, and the S6 refresh flow is
-  already "upload snapshot, fire build hook".
-- `scripts/upload-snapshot.sh`: syncs data/snapshot/ from the corpus
-  machine to the data host (tool depends on D5 host; S3-compatible either
-  way), sets per-object-class Cache-Control and Content-Type at upload.
-- netlify.toml: build command `bash scripts/build.sh`, publish
-  `.build/dist`, NODE_VERSION pin, headers block (font caching sans ACAO,
-  HTML no-cache defaults as upstream assumes), Plausible /pipes redirects.
-- Wrapper CI (GitHub Actions): the branded analogue of the upstream
-  explorer-web job: build.sh against the submodule's fixture snapshot
-  (SNAPSHOT_DIR override), assert-dist, two-origin smoke with the branded
-  dist. No secrets; PUBLIC_DATA_BASE_URL uses the CI dummy.
+- `scripts/build.sh` (local + Netlify + CI, no arguments):
+  1. rsync `upstream/explorer-web/` -> `.build/` (exclude
+     node_modules, dist, .astro), overlay: `brand/tokens.css` ->
+     `.build/src/styles/tokens.css`; `brand/Head.astro` +
+     `brand/Header.astro` -> `.build/src/brand/`; `brand/fonts/` ->
+     `.build/public/fonts/`; favicons + logo -> `.build/public/`.
+  2. Assert the branded tokens.css defines every --ew-* name the
+     upstream tokens.css does.
+  3. Snapshot acquisition: if SNAPSHOT_DIR is preset (wrapper CI uses
+     the submodule fixture), skip network. Else fetch
+     `MANIFEST.json` (no-store) from
+     `${BUILD_DATA_FETCH_BASE:-$PUBLIC_DATA_BASE_URL}`, read
+     generated_at, then fetch `documents.parquet?v=<generated_at>`
+     (NEVER the bare URL: a bare fetch primes CloudFront's
+     unversioned cache entry for a year and later builds silently get
+     stale bytes while stamping fresh generated_at, suppressing the
+     drift notice). Fetch with `curl --compressed` (objects are
+     gzip-at-rest) and assert parquet magic `PAR1` + MANIFEST parses.
+     BUILD_DATA_FETCH_BASE exists solely as an emergency build-time
+     fetch override (e.g. the raw CloudFront domain during a DNS
+     outage); baked client URLs always use PUBLIC_DATA_BASE_URL.
+  4. `npm ci`, `astro build` with SNAPSHOT_DIR + PUBLIC_DATA_BASE_URL
+     + PUBLIC_WASM_BASE_URL.
+  5. Strip `dist/_astro/*.wasm` (74 MB dead weight; the static ?url
+     imports emit both binaries regardless of the env override;
+     assert-dist checks routes only). Run `node
+     scripts/assert-dist.mjs` from the staging copy.
+- `scripts/upload-snapshot.sh` (runs where data/snapshot lives):
+  builds a pre-compressed staging tree (`gzip -n` for determinism),
+  then four metadata-scoped passes: text/*.json (gzip, json,
+  immutable), documents.parquet (gzip, octet-stream, immutable), wasm
+  (br, application/wasm, immutable, versioned path), and MANIFEST.json
+  LAST as a separate `aws s3 cp` (gzip, json, no-store). MANIFEST-last
+  ordering is load-bearing: sync uploads alphabetically, and a visitor
+  fetching the NEW manifest during the upload window would cache OLD
+  parquet/text bytes under the NEW ?v= token immutably. Full re-upload
+  on refresh (~490 MB, ~$0.05) is accepted; never use --size-only.
+  Runbook notes: scripted consumers must send Accept-Encoding/use
+  --compressed (stored encoding is served unconditionally); gzip
+  Content-Encoding at rest makes Range requests range over compressed
+  bytes (nothing ranges today; recorded for any future TEA-907
+  parquet-range design).
+- `netlify.toml`: build `bash scripts/build.sh`, publish `.build/dist`,
+  NODE_VERSION=22, `_headers` (fonts immutable + no ACAO; everything
+  else default), Plausible /pipes redirects, and a FORCED 301
+  `https://<site>.netlify.app/*` ->
+  `https://prospectus.tealinsights.com/:splat` (Netlify never
+  auto-redirects the default subdomain: this is the licence fix; the
+  main site needs the identical rule, on the handoff).
+- Netlify site settings (handoff): Deploy Previews and branch deploys
+  DISABLED (public enumerable netlify.app URLs would serve fonts;
+  deploy permalinks are the accepted unguessable residual). QA fixes
+  verify locally via serve-static, then deploy to production.
+- brand/Head.astro emits a build-stamp meta (wrapper commit, upstream
+  pin, Netlify deploy id from build env) so defect reports pin exact
+  deploys.
+- Wrapper CI (GitHub Actions): build.sh with SNAPSHOT_DIR=fixture +
+  PUBLIC_DATA_BASE_URL dummy, assert-dist, two-origin browser smoke
+  (fixture smoke works against the branded build: no assertion touches
+  branding), and the woff2-never-in-public-repo guard lives upstream
+  (D2.6). Branded dist is never uploaded as an artifact.
 
 ### D7: Repo layout (prospectus-web-ti, private)
 
 ```
-upstream/                       # submodule: Teal-Insights/sovereign-prospectus-corpus @ f80ed97
+upstream/                       # submodule: sovereign-prospectus-corpus @ <seams merge SHA>
 brand/
-  tokens.css                    # complete branded inventory (@font-face, ::highlight, contrast comments)
-  Head.astro                    # favicons, Plausible (proxied), [preloads if needed]
-  Header.astro                  # branded header (logo wordmark, height -> --ew-jump-offset)
+  tokens.css                    # complete branded inventory (@font-face, ::highlight, ratios)
+  Head.astro                    # favicons, preconnect, font preloads, build stamp, Plausible
+  Header.astro                  # branded header (height -> --ew-jump-offset)
   fonts/*.woff2                 # 5 Klim files (LICENSED: private repo only)
   favicon.ico + favicon.svg + apple-touch-icon.png
-  assets/logo.(png|svg)
-scripts/build.sh                # staging build (D6)
-scripts/upload-snapshot.sh      # snapshot -> data host (D6)
-netlify.toml                    # build, publish, headers, redirects
-.github/workflows/ci.yml        # branded fixture build + smoke
-README.md                       # purpose, no-app-logic rule, pin-bump how-to,
-                                # LICENSE-FONTS rules copied verbatim, hosting runbook
+  assets/logo.png
+scripts/build.sh
+scripts/upload-snapshot.sh
+netlify.toml
+.github/workflows/ci.yml
+README.md                       # purpose, no-app-logic rule, pin-bump how-to (tokens diff),
+                                # LICENSE-FONTS rules verbatim PLUS: page-view tier +
+                                # 3-month-average aggregation procedure (Plausible), fonts
+                                # never on data.tealinsights.com (blanket ACAO there),
+                                # netlify.app 301 + previews-off rules, deploy-permalink
+                                # residual, 3i contractor deletion duty, notify-Klim duty,
+                                # local dev loop (.build/ + astro dev), rollback (Netlify
+                                # publish-a-previous-deploy; note an older deploy may
+                                # legitimately show the drift notice), hosting runbook
 ```
 
 ## Scope boundaries
 
-- No application logic in the wrapper; the three upstream seams (D2) are
-  the only open-repo changes, all neutral-default no-ops.
-- OG images and meta descriptions: S5 (sprint calendar assigns them
-  there); the Head slot makes them a wrapper-side follow-up.
-- No search work (#82 / TEA-907), no auto-refresh Action (TEA-906).
-- DNS records, Netlify dashboard, data-host account: Teal, via the
-  numbered handoff list; DNS items go out first (propagation).
+- No application logic in the wrapper; the single seams PR (D2) is the
+  only open-repo change.
+- OG images and meta descriptions: S5 (the Head slot makes them a
+  wrapper-side follow-up).
+- No search work (#82 / TEA-907), no auto-refresh Action (TEA-906),
+  no Sec-Fetch-Dest font gate (documented hardening option).
+- Main-site netlify.app font leak: fix prepared for tealinsights-site
+  (same 301 pattern) but merged by Teal; outside TEA-904's repos.
+- DNS records, Netlify dashboard, AWS account: Teal, via the numbered
+  handoff list.
 
-## Sequencing and the Teal handoff (day structure)
+## Sequencing (revised at the gate: data host BEFORE first build)
 
-Work that needs no dashboard: build the wrapper repo locally, the three
-upstream seams (one small PR to the open repo), the branded tokens with
-contrast math, local branded build + smoke + Lighthouse, the
-upload-snapshot script with pre-compression, and the gh-created private
-repo (gh auth has repo scope; if org policy blocks creation it becomes
-handoff item 0).
+Local-only (no dashboards, all today): seams PR on the open repo;
+wrapper repo built locally (brand files, scripts, CI, README); branded
+fixture build + smoke + local Lighthouse; upload-snapshot.sh staged
+against the local snapshot; this spec + plan + dispositions.
 
-The numbered handoff list (delivered as the first user-facing output of
-the day, DNS-bearing items first):
+Handoff (numbered list to Teal; DNS-latency items as early as their
+prerequisites allow):
 
-1. DNS now: CNAME `prospectus.tealinsights.com` ->
-   `<site-name>.netlify.app` (site name proposed in the list; adjust if
-   taken).
-2. Netlify: record the org plan (legacy pre-2025-09-04 or
-   credit-metered: decides the all-on-Netlify fallback viability and how
-   carefully we ration deploys); grant the Netlify GitHub app access to
-   the private repo; create the site (or `! netlify login` and the
-   session drives it); set env vars; add the custom domain.
-3. AWS: confirm/create the account (Paid account plan), create the
-   scoped IAM credential (policy JSON provided); the session then
-   scripts bucket, upload, ACM request, distribution.
-4. DNS after ACM request: one validation CNAME; DNS after distribution:
-   CNAME `data.tealinsights.com` -> `<distribution>.cloudfront.net`.
-5. Go/no-go points reserved for Teal: PR merges (both repos) and the DNS
-   cutover.
+1. Create the private GitHub repo (blocked for the session by the
+   permission classifier, correctly); grant the Netlify GitHub app
+   access to it.
+2. AWS: confirm/create account (PAID account plan; note: new-account
+   verification holds can take hours, so start this first), create the
+   scoped IAM credential (policy JSON provided). Session then scripts:
+   bucket (private + OAC), upload (~30-60 min for 490 MB), ACM request.
+3. DNS batch 1 (immediately after ACM request): the ACM validation
+   CNAME. Session then creates the distribution.
+4. DNS batch 2 (after distribution exists): CNAME data.tealinsights.com
+   -> <distribution>.cloudfront.net, TTL 300. Gate: `curl -H 'Origin:
+   https://prospectus.tealinsights.com' --compressed
+   https://data.tealinsights.com/prospectus/snapshot/MANIFEST.json`
+   succeeds.
+5. Netlify (after the data-host gate passes): record the org PLAN
+   (legacy vs credit-metered: decides deploy rationing), create the
+   site in the SAME team as tealinsights.com with builds initially
+   stopped, connect the repo, set env vars (PUBLIC_DATA_BASE_URL,
+   PUBLIC_WASM_BASE_URL), DISABLE deploy previews + branch deploys, add
+   the custom domain prospectus.tealinsights.com, then enable builds /
+   trigger the first build.
+6. DNS batch 3: CNAME prospectus.tealinsights.com ->
+   <sitename>.netlify.app, TTL 300 (site + domain exist first, per
+   Netlify's documented order; also avoids a dangling-CNAME takeover
+   smell). Let's Encrypt provisions automatically once it resolves.
+7. Main-site licence fix (separate from TEA-904 but urgent): merge the
+   prepared tealinsights-site 301 PR, or add the same redirect rule in
+   its netlify.toml.
+8. Go/no-go points reserved for Teal: seams PR merge (open repo),
+   wrapper PR merge, DNS cutover, and the first production deploy.
 
-## Verification plan (live site, per the kickoff)
+Interim-hostname policy: never run a production build against the raw
+cloudfront.net domain (PUBLIC_DATA_BASE_URL is baked into 9,775 pages);
+wait for data.tealinsights.com. If DNS stalls, QA can use the
+<sitename>.netlify.app fallback URL knowing: fonts DO load there
+(same-origin within the deploy) but the netlify.app 301 cannot be
+active until the custom domain resolves, TLS-for-subdomain and
+font-origin checks are deferred to cutover, and font exposure on
+netlify.app is time-boxed to that window.
+
+## Verification plan (live site)
 
 1. Lighthouse on prospectus.tealinsights.com: performance >= 90,
-   accessibility >= 95 on browse with brand fonts loaded (record bare +
-   parameterized + doc page, mirroring S3).
-2. Compression: `curl -H 'Accept-Encoding: br,gzip' -so /dev/null
-   -w '%{size_download}'` on the largest text URL
-   (luxse-100387641.json, 29 MB raw -> ~2.7 MB) and the eh wasm
-   (34.2 MB -> 5.92 MB br).
-3. Fonts: every font request originates from prospectus.tealinsights.com
-   (DevTools network check); a cross-origin @font-face fetch of a font
-   URL fails (no ACAO).
-4. MANIFEST reachable from the live origin; drift notice absent; snapshot
-   date current; ?v= tokens present on parquet/text requests.
-5. TLS valid (certificate for prospectus.tealinsights.com).
-6. Smoke suite + measurement harness from explorer-web/scripts/ against
-   the live URL (SMOKE_BASE=https://prospectus.tealinsights.com).
-7. One doc page spot-checked on a phone.
-8. Contrast: computed ratios for every changed token pair recorded in
-   tokens.css comments; axe pass on browse + doc page of the branded
-   build.
+   accessibility >= 95, CLS <= 0.02 on browse bare + parameterized +
+   one doc page, brand fonts loading (record all three, mirroring S3).
+2. Compression + cache semantics, all with
+   `-H 'Origin: https://prospectus.tealinsights.com'` (SimpleCORS only
+   decorates CORS requests): largest text URL
+   (text/luxse-100387641.json?v=<current>) shows Content-Encoding gzip
+   and ~2.7 MB transfer; the eh wasm URL shows Content-Encoding br and
+   ~5.92 MB; repeat the text check WITHOUT ?v= confirming the custom
+   cache policy keys them separately; MANIFEST response shows no-store
+   and fresh generated_at.
+3. Fonts: every font request in DevTools originates from
+   prospectus.tealinsights.com; exactly ONE request per face (preload
+   crossorigin correctness); a cross-origin @font-face fetch fails (no
+   ACAO); `curl -sI https://<site>.netlify.app/fonts/<f>.woff2`
+   returns the 301; deploy previews confirmed off.
+4. MANIFEST reachable from the live origin; drift notice absent right
+   after deploy (and the runbook documents when it legitimately
+   appears); ?v= tokens on parquet/text requests; snapshot date
+   current.
+5. TLS valid for prospectus.tealinsights.com AND data.tealinsights.com.
+6. Live-safe checks (the fixture smoke suite is fixture-bound:
+   synthetic slugs, fixture counts, fixture page bounds; it runs in
+   wrapper CI, NOT against production): manual/scripted live pass over
+   browse (filters, chips, pagination, scope toggle, zero-result
+   country, unknown param passthrough), history back/forward, two real
+   doc pages resolved from the live parquet, in-document search on one,
+   axe on browse + doc.
+7. Phone spot-check pinned to /doc/luxse-100387641/: click-gate shows
+   before any text fetch, post-click render works on cellular,
+   ?q=pari+passu deep-link still respects the gate.
+8. Trailing-slash + 404: /doc/<slug> without slash 301s to the slash
+   form with query string intact; a bad slug serves the branded
+   404.astro with HTTP 404 status.
+9. Contrast ratios recorded as comments in the branded tokens.css; axe
+   (target-size enabled) zero serious/critical on browse + doc.
+10. Rollback rehearsed once: Netlify "publish a previous deploy"
+    (noting the drift-notice caveat for older deploys).
 
-## Council dispositions
+## Council dispositions (spec gate, 6 fresh reviewers, 2026-07-04)
 
-(Recorded after each gate runs.)
+All six reviewed the committed draft; every CRITICAL and IMPORTANT was
+either fixed in this revision or explicitly recorded:
 
-- Spec gate: PENDING
+- **Generalist:** C1 tokenized build fetch -> FIXED (D6.3); C2 pin
+  contradiction -> FIXED (D1: pin = seams merge SHA, seams PR first);
+  C3 live smoke unrunnable -> FIXED (verification 6 rewritten; fixture
+  smoke stays in CI); I1 bootstrap ordering -> FIXED (Sequencing);
+  I2 font-weight seam not neutral -> FIXED (weight token, D2.1);
+  I3 unversioned wasm URL -> FIXED (D5 versioned path); I4 dist wasm
+  dead weight + bundleName -> FIXED (D6.5, D2.3); I5 build.sh modes +
+  overlay mapping -> FIXED (D6.1/6.3). Minors: 404 page (D2.4), local
+  dev docs + tokens diff (D7 README), Range-vs-gzip note (D6), metric
+  fallbacks kept but timeboxed. Accepted-as-is: none rejected.
+- **Deploy/infra:** C1 managed cache policy unsupported on S3 origins
+  -> FIXED (custom five-field policy, D5); I1 MANIFEST-last upload ->
+  FIXED (D6); I2 first-build gate -> FIXED (Sequencing 4-5); I3
+  --compressed + PAR1 -> FIXED (D6.3); I4 site-before-CNAME -> FIXED
+  (Sequencing 5-6); I5 wasm versioning -> FIXED; I6 four-pass upload +
+  staging tree -> FIXED (D6). Minors adopted: Origin-header curls, TTL
+  300, OAC + BPA, scripted-consumer caveat, font-rename rule,
+  refresh-rebuild credit note (recorded here: every refresh rewrites
+  all HTML; refresh cadence = deploy cadence on a credit plan).
+- **Font licence:** C1 netlify.app leak (incl. LIVE main-site leak
+  found during review) -> FIXED for the wrapper (forced 301 in
+  netlify.toml from first deploy) + main-site fix on the handoff; C2
+  deploy previews -> FIXED (disabled; permalink residual documented);
+  I1 woff2 tripwire -> FIXED (D2.6); I2 direct-download posture ->
+  DECIDED (baseline recorded in README; Edge Function documented, not
+  built); I3 README additions -> FIXED (D7). Minors adopted (neutral
+  upstream examples, netlify.app 301 verification line, no dist
+  artifacts, org visibility-change restriction suggested to Teal).
+- **Performance:** no criticals. Preconnect -> ADOPTED (D3); day-one
+  preload -> ADOPTED (D3, with the reviewer's acceptance criteria);
+  swap+metrics over optional -> CONFIRMED (Tiempos fallback moved to
+  Georgia); reservation re-measure priorities -> ADOPTED; gzip (not
+  br) for text -> CONFIRMED; Plausible defer + dist-wasm note ->
+  ADOPTED.
+- **Accessibility:** C1 teal hover fails 1.4.3 -> FIXED (D4: teal is
+  non-text only; hover stays ink); corrected ratios recorded (3.52,
+  5.79, full table in the review); accent pinned to ink -> ADOPTED;
+  full-inventory token assert -> ADOPTED (D4/D6.2); highlight literal
+  fallbacks -> ADOPTED; display font never below h2 -> ADOPTED.
+- **S5 QA analyst:** C1 fixture smoke -> FIXED (as generalist C3); C2
+  no 404 -> FIXED (D2.4); C3 no rollback -> FIXED (verification 10 +
+  README); C4 build DNS dependency -> FIXED (BUILD_DATA_FETCH_BASE +
+  sequencing gate); I1 preview posture -> FIXED (disabled + local
+  verify loop); I2 diagnosability -> FIXED (D2.5 console.error); I3
+  fallback-URL semantics -> FIXED (Sequencing, interim policy); I4
+  trailing slash -> FIXED (verification 8); I5 pinned phone check ->
+  FIXED (verification 7); I6 drift-notice briefing -> FIXED
+  (README/runbook note). Minors adopted: build-stamp meta,
+  Content-Encoding assertions in curls, live zero-result check.
+
+Sound findings (all six): split hosting + pre-compression + custom
+policy semantics, submodule + staging build, brand-slot seams as
+genuinely neutral, no-ACAO hotlink mechanics, mono doc text as the
+best CLS decision, URL-state discipline, scope discipline.
+
+- Spec gate: PASSED with revisions (this document).
 - Plan gate: PENDING
 - PR gate: PENDING
