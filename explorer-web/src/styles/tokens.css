@@ -30,6 +30,11 @@
   --ew-font-size-h1: 1.5rem;
   --ew-font-size-h2: 1.25rem;
   --ew-line-height: 1.55;
+  /* S4 (TEA-904): display face for h1/h2. Neutral default = the body
+     stack at UA bold weight, byte-identical to the pre-token rendering;
+     the private wrapper overrides both. */
+  --ew-font-display: var(--ew-font-body);
+  --ew-font-weight-display: 700;
 
   /* Space and shape */
   --ew-space-1: 0.25rem;
