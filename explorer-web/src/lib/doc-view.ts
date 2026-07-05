@@ -184,7 +184,12 @@ export function countsByBins(starts: number[], binStarts: number[]): number[] {
 }
 
 export function snippetAround(text: string, start: number, end: number, context = 40): string {
-  const from = Math.max(0, start - context);
-  const to = Math.min(text.length, end + context);
+  let from = Math.max(0, start - context);
+  let to = Math.min(text.length, end + context);
+  // never begin on a low surrogate or end after a lone high surrogate
+  const fromCode = text.charCodeAt(from);
+  if (fromCode >= 0xdc00 && fromCode <= 0xdfff) from++;
+  const lastCode = text.charCodeAt(to - 1);
+  if (lastCode >= 0xd800 && lastCode <= 0xdbff) to--;
   return text.slice(from, to).replace(/\s+/g, ' ').trim();
 }

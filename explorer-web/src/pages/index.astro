@@ -153,7 +153,7 @@ const QCRAFT_URL = 'https://teal-insights.github.io/QCraft-App/';
         {scopeToggleLabel(stats.related)}
       </label>
       <label class="ew-check-row">
-        <input type="checkbox" id="ew-hi-toggle" aria-describedby="ew-hi-hint" />
+        <input type="checkbox" id="ew-hi-toggle" />
         {HI_TOGGLE_LABEL}
       </label>
       <span id="ew-hi-hint">{HI_OVERRIDE_HINT}</span>
@@ -163,7 +163,7 @@ const QCRAFT_URL = 'https://teal-insights.github.io/QCraft-App/';
 
   <p id="ew-status" class="ew-muted" aria-live="polite">Loading the document index...</p>
 
-  <div id="ew-table-region">
+  <div id="ew-table-region" tabindex="-1">
     <table id="ew-table" hidden>
       <thead>
         <tr>

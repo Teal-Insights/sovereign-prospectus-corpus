@@ -5,6 +5,8 @@
 // in-document search over the FULL raw string and CSS Custom Highlight
 // paints bounded to the rendered segment. The live region #ew-doc-live is
 // the accessible channel: highlight paints are not reliably exposed to AT.
+// Typing never navigates: only explicit actions (match/segment buttons, TOC
+// entries, a q= restore) scroll or move focus.
 
 import {
   COUNTS_PAST_CAP_NOTE,
@@ -15,11 +17,12 @@ import {
   SEGMENTS_NOTICE,
   TOC_JUMP_FALLBACK_NOTE,
   absenceCopy,
-  formatBytes,
   highlightCapNote,
   loadGateLabel,
+  loadingText,
   matchCountCopy,
   matchPositionCopy,
+  matchPositionLabel,
   segmentLabel,
 } from '../lib/format';
 import { PUBLIC_DATA_BASE_URL } from '../lib/config';
@@ -54,6 +57,13 @@ let segIndex = 0;
 let segmented = false;
 let matches: SearchMatches | null = null;
 let matchIndex = -1;
+// Typing computes results but never navigates; the first Next/Prev (or a
+// q= restore) performs the first jump.
+let navigated = false;
+// The last query actually executed: a trailing debounce tick for an
+// unchanged query must not re-run the search (it would reset navigation
+// state right after a Next click that landed inside the debounce window).
+let lastRanQuery: string | null = null;
 
 // One manifest read per page view, shared by the drift check and text load.
 let manifestPromise: Promise<Manifest> | null = null;
@@ -90,13 +100,14 @@ async function driftCheck(): Promise<void> {
   }
 }
 
-// Back to browse: same-origin referrer from the browse page means
-// history.back() restores filters and scroll (bfcache keeps the worker
-// alive); direct entries fall through to the plain link.
+// Back to browse: a same-origin referrer from the browse page AND a real
+// prior history entry mean history.back() restores filters and scroll via
+// bfcache. A new tab (middle-click) has the referrer but history.length 1;
+// it must fall through to the plain link or the control is dead.
 function wireBackLink(): void {
   const back = byId<HTMLAnchorElement>('ew-back');
   back?.addEventListener('click', (e) => {
-    if (!document.referrer) return;
+    if (!document.referrer || history.length <= 1) return;
     try {
       const ref = new URL(document.referrer);
       if (ref.origin === location.origin && ref.pathname === '/') {
@@ -121,6 +132,7 @@ function main(): void {
   const searchPrev = byId<HTMLButtonElement>('ew-doc-search-prev')!;
   const searchNext = byId<HTMLButtonElement>('ew-doc-search-next')!;
   const searchCount = byId<HTMLSpanElement>('ew-doc-search-count')!;
+  const searchPos = byId<HTMLSpanElement>('ew-doc-search-pos')!;
   const searchHint = byId<HTMLParagraphElement>('ew-doc-search-hint')!;
   const tocList = byId<HTMLOListElement>('ew-doc-toc')!;
   const tocFilter = byId<HTMLInputElement>('ew-doc-toc-filter')!;
@@ -172,29 +184,46 @@ function main(): void {
   }
 
   function selectionFallback(): void {
-    if (!matches || matchIndex < 0) return;
+    // Always clear first: a stale selection visually asserts a match that
+    // no longer exists (council PR gate).
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    if (!matches || matchIndex < 0 || !navigated) return;
     const node = textNode();
     if (!node) return;
     const segStart = segStartOffset();
     const r = rangeFor(node, segStart, matches.starts[matchIndex], matches.ends[matchIndex]);
-    if (!r) return;
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(r);
+    if (r) sel?.addRange(r);
   }
 
   let capNoteShown = false;
+  function updateHint(): void {
+    if (matches?.capped) {
+      searchHint.textContent = COUNTS_PAST_CAP_NOTE;
+      searchHint.hidden = false;
+    } else if (capNoteShown) {
+      searchHint.textContent = highlightCapNote(HIGHLIGHT_CAP);
+      searchHint.hidden = false;
+    } else {
+      searchHint.hidden = true;
+    }
+  }
+
   function applyHighlights(): void {
+    capNoteShown = false;
     if (!supportsHighlights) {
       selectionFallback();
+      updateHint();
       return;
     }
     CSS.highlights.delete('ew-match');
     CSS.highlights.delete('ew-match-current');
-    capNoteShown = false;
     const node = textNode();
     // Never build ranges over Loading/error DOM states.
-    if (!matches || rawText === null || !node) return;
+    if (!matches || rawText === null || !node) {
+      updateHint();
+      return;
+    }
     const segStart = segStartOffset();
     const segEnd = segStart + node.data.length;
     const { starts, ends } = matches;
@@ -225,16 +254,10 @@ function main(): void {
     updateHint();
   }
 
-  function updateHint(): void {
-    if (matches?.capped) {
-      searchHint.textContent = COUNTS_PAST_CAP_NOTE;
-      searchHint.hidden = false;
-    } else if (capNoteShown) {
-      searchHint.textContent = highlightCapNote(HIGHLIGHT_CAP);
-      searchHint.hidden = false;
-    } else {
-      searchHint.hidden = true;
-    }
+  function jumpOffsetPx(): number {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--ew-jump-offset');
+    const parsed = Number.parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : 80;
   }
 
   function scrollToOffset(off: number): void {
@@ -246,7 +269,7 @@ function main(): void {
     range.setStart(node, local);
     range.setEnd(node, Math.min(local + 1, node.data.length));
     const rect = range.getBoundingClientRect(); // forces layout; correct immediately
-    window.scrollTo({ top: rect.top + window.scrollY - 80 });
+    window.scrollTo({ top: rect.top + window.scrollY - jumpOffsetPx() });
   }
 
   function segmentMatchCount(): number | null {
@@ -275,7 +298,7 @@ function main(): void {
     applyHighlights();
   }
 
-  function jumpToOffset(off: number): void {
+  function jumpToOffset(off: number, label?: string): void {
     if (rawText === null) return;
     if (off < 0 || off >= Math.max(rawText.length, 1)) {
       if (segmented) renderSegment(0);
@@ -290,6 +313,11 @@ function main(): void {
     }
     scrollToOffset(off);
     focusText();
+    if (label) {
+      announce(
+        segmented ? `${label}. ${segmentLabel(segIndex + 1, segments.length, null)}` : label
+      );
+    }
   }
 
   // TOC bins align 1:1 with the rendered list rows: a synthetic front-matter
@@ -318,28 +346,34 @@ function main(): void {
     const frag = document.createDocumentFragment();
     for (const row of rows) {
       const li = document.createElement('li');
-      li.style.marginLeft = `${Math.max(0, row.level - 2)}rem`;
+      li.className = `ew-toc-level-${Math.min(Math.max(row.level - 2, 0), 3)}`;
+      li.dataset.needle = row.title.toLowerCase(); // cached for the filter
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = row.title;
-      btn.addEventListener('click', () => jumpToOffset(row.offset));
+      btn.addEventListener('click', () => jumpToOffset(row.offset, row.title));
       const count = document.createElement('span');
       count.className = 'ew-toc-count ew-muted';
       li.append(btn, count);
       frag.appendChild(li);
     }
     tocList.appendChild(frag);
-    if (toc.length > TOC_FILTER_THRESHOLD) {
-      tocFilter.hidden = false;
-      tocFilter.addEventListener('input', () => {
-        const needle = tocFilter.value.trim().toLowerCase();
-        for (const li of tocList.children) {
-          const label = li.querySelector('button')?.textContent?.toLowerCase() ?? '';
-          (li as HTMLElement).hidden = needle !== '' && !label.includes(needle);
-        }
-      });
-    }
+    if (toc.length > TOC_FILTER_THRESHOLD) tocFilter.hidden = false;
   }
+
+  // Wired ONCE (a gate-retry path re-runs renderToc; a listener there would
+  // stack). Debounced: 2,001 rows per raw keystroke is real layout work.
+  let tocFilterTimer: number | undefined;
+  tocFilter.addEventListener('input', () => {
+    window.clearTimeout(tocFilterTimer);
+    tocFilterTimer = window.setTimeout(() => {
+      const needle = tocFilter.value.trim().toLowerCase();
+      for (const li of tocList.children) {
+        const el = li as HTMLElement;
+        el.hidden = needle !== '' && !(el.dataset.needle ?? '').includes(needle);
+      }
+    }, 250);
+  });
 
   // Counts update IN PLACE (the list is never rebuilt per keystroke), and
   // are suppressed when the scan capped: a truncated scan would show false
@@ -362,8 +396,9 @@ function main(): void {
 
   function goToMatch(i: number): void {
     if (!matches || matches.starts.length === 0 || rawText === null) return;
+    navigated = true;
     const n = matches.starts.length;
-    matchIndex = ((i % n) + n) % n; // navigation wraps
+    matchIndex = ((i % n) + n) % n; // navigation wraps; the position label keeps it honest
     const off = matches.starts[matchIndex];
     if (segmented) {
       const target = segmentForOffset(segments, off);
@@ -375,6 +410,7 @@ function main(): void {
     scrollToOffset(off);
     focusText();
     updateSegNav();
+    searchPos.textContent = matchPositionLabel(matchIndex + 1, n, matches.capped);
     announce(
       matchPositionCopy(
         matchIndex + 1,
@@ -388,7 +424,9 @@ function main(): void {
   function clearSearchUi(): void {
     matches = null;
     matchIndex = -1;
+    navigated = false;
     searchCount.textContent = '';
+    searchPos.textContent = '';
     searchHint.hidden = true;
     searchPrev.hidden = true;
     searchNext.hidden = true;
@@ -397,8 +435,12 @@ function main(): void {
     updateSegNav();
   }
 
+  // Typing path: computes and paints, announces the count, but NEVER
+  // scrolls or moves focus (a debounced keystroke stealing focus from the
+  // input kills continued typing; council PR gate).
   function runSearch(q: string): void {
     if (rawText === null) return;
+    lastRanQuery = q;
     if (!q.trim()) {
       clearSearchUi();
       return;
@@ -408,14 +450,18 @@ function main(): void {
       clearSearchUi();
       searchHint.textContent = MIN_QUERY_HINT;
       searchHint.hidden = false;
+      announce(MIN_QUERY_HINT);
       return;
     }
     matches = found;
+    matchIndex = 0;
+    navigated = false;
     const total = found.starts.length;
     if (total === 0) {
       matchIndex = -1;
       searchPrev.hidden = true;
       searchNext.hidden = true;
+      searchPos.textContent = '';
       searchCount.textContent = absenceCopy(q);
       announce(absenceCopy(q));
       applyHighlights();
@@ -424,10 +470,13 @@ function main(): void {
       return;
     }
     searchCount.textContent = matchCountCopy(total, found.capped, q);
+    searchPos.textContent = '';
+    announce(matchCountCopy(total, found.capped, q));
     searchPrev.hidden = false;
     searchNext.hidden = false;
     updateTocCounts();
-    goToMatch(0); // announces the first match position with a snippet
+    updateSegNav();
+    applyHighlights(); // paints match 1 as current wherever it is; no scroll
   }
 
   // ONE debounce timer drives both the search and the URL write; cancelled
@@ -446,7 +495,7 @@ function main(): void {
     window.clearTimeout(inputTimer);
     inputTimer = window.setTimeout(() => {
       const q = searchInput.value;
-      runSearch(q);
+      if (q !== lastRanQuery) runSearch(q);
       writeQ(q);
     }, 250);
   });
@@ -458,8 +507,9 @@ function main(): void {
   });
   window.addEventListener('pagehide', () => window.clearTimeout(inputTimer));
 
-  searchPrev.addEventListener('click', () => goToMatch(matchIndex - 1));
-  searchNext.addEventListener('click', () => goToMatch(matchIndex + 1));
+  // First activation jumps to match 1; after that Prev/Next step and wrap.
+  searchPrev.addEventListener('click', () => goToMatch(navigated ? matchIndex - 1 : 0));
+  searchNext.addEventListener('click', () => goToMatch(navigated ? matchIndex + 1 : 0));
 
   segPrev.addEventListener('click', () => {
     if (segPrev.getAttribute('aria-disabled') === 'true') return;
@@ -485,14 +535,14 @@ function main(): void {
       button.remove();
       // Focus rule: the click removed the focused element; the loading
       // announcement + post-load focus hand-off replace it.
-      announce(`Loading ${formatBytes(bytes)}...`);
+      announce(loadingText(bytes));
       void loadText(true);
     });
     target.appendChild(button);
   }
 
   async function loadText(afterGate: boolean): Promise<void> {
-    container!.textContent = `Loading ${formatBytes(bytes)}...`;
+    container!.textContent = loadingText(bytes);
     try {
       const manifest = await getManifest();
       const result = await fetchDocText(PUBLIC_DATA_BASE_URL, slug, manifest.generated_at);
@@ -524,23 +574,34 @@ function main(): void {
       };
 
       // q restores only after the text exists; on gated docs that means
-      // only after the user consented to the download.
+      // only after the user consented to the download. A q restore IS an
+      // explicit navigation; zero-match and too-short restores still need
+      // a focus destination after the gate button removed itself.
       const q0 = decodeDocQuery(location.search);
       if (q0) {
         searchInput.value = q0;
         runSearch(q0);
+        if (matches && matches.starts.length > 0) {
+          goToMatch(0);
+        } else if (afterGate) {
+          focusText();
+        }
       } else if (afterGate) {
         focusText();
       }
     } catch (e) {
+      const message = userMessageOf(e, 'Could not load the document text from the data host.');
       searchInput.disabled = true; // search over a failed load stays off
-      renderError(container!, userMessageOf(e, 'Could not load the document text from the data host.'));
+      renderError(container!, message);
+      announce(message); // the live region must not stay stuck on "Loading..."
       if (bytes > GATE_BYTES) {
         // Leave a retry affordance; a transient failure on a 29 MB document
-        // must not require a full page reload.
+        // must not require a full page reload. Focus it: the gate click
+        // removed the previously focused element.
         const retry = document.createElement('p');
         container!.appendChild(retry);
         renderGateButton(retry);
+        retry.querySelector('button')?.focus();
       }
     }
   }

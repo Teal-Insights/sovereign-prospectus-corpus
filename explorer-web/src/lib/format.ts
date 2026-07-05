@@ -91,10 +91,14 @@ export interface StatusLineArgs {
 }
 
 export function statusLine(a: StatusLineArgs): string {
+  // Zero results keep the marginal sentences: "No documents match" with the
+  // reason hidden would read as "not in the corpus" (council PR gate).
   let s =
-    `${num(a.matching)} documents match, newest first ` +
-    `(showing ${num(a.shownFrom)} to ${num(a.shownTo)}). ` +
-    `Page ${num(a.page)} of ${num(a.pages)}.`;
+    a.matching === 0
+      ? EMPTY_STATE
+      : `${num(a.matching)} documents match, newest first ` +
+        `(showing ${num(a.shownFrom)} to ${num(a.shownTo)}). ` +
+        `Page ${num(a.page)} of ${num(a.pages)}.`;
   if (a.hiddenScope !== null && a.hiddenScope > 0) {
     s += ` Including non-sovereign or unverified documents would add ${num(a.hiddenScope)}.`;
   }
@@ -131,11 +135,16 @@ export function matchCountCopy(total: number, capped: boolean, query: string): s
   return `${num(total)} ${word} for "${query}".`;
 }
 
-export function matchPositionCopy(i: number, n: number, capped: boolean, snippet: string): string {
-  return `Match ${num(i)} of ${num(n)}${capped ? '+' : ''}: ${snippet}`;
+export function matchPositionLabel(i: number, n: number, capped: boolean): string {
+  return `Match ${num(i)} of ${num(n)}${capped ? '+' : ''}`;
 }
 
-export const COUNTS_PAST_CAP_NOTE = 'Per-section counts are unavailable past 20,000 matches.';
+export function matchPositionCopy(i: number, n: number, capped: boolean, snippet: string): string {
+  return `${matchPositionLabel(i, n, capped)}: ${snippet}`;
+}
+
+export const COUNTS_PAST_CAP_NOTE =
+  'Per-section and per-segment counts are unavailable past 20,000 matches.';
 
 export function absenceCopy(query: string): string {
   return `No exact matches for "${query}". Search is literal; machine-converted text can split phrases across line breaks.`;
@@ -167,6 +176,12 @@ export function highlightCapNote(cap: number): string {
 export const TOC_FILTER_PLACEHOLDER = 'Filter contents...';
 
 export const FRONT_MATTER_LABEL = '(Front matter)';
+
+export const NO_TOC_LABEL = 'No table of contents in this document.';
+
+export function loadingText(bytes: number): string {
+  return `Loading ${formatBytes(bytes)}...`;
+}
 
 export const TOC_JUMP_FALLBACK_NOTE =
   'That contents entry could not be located; showing the start of the document.';

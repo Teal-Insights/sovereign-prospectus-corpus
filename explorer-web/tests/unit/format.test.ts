@@ -65,6 +65,7 @@ it('cite line', () =>
 import * as fmt from '../../src/lib/format';
 import {
   DROPPED_PARAM_NOTICE,
+  NO_TOC_LABEL,
   EMPTY_STATE,
   FRONT_MATTER_LABEL,
   HI_OVERRIDE_HINT,
@@ -76,8 +77,10 @@ import {
   browseSubtitle,
   chipRemoveLabel,
   highlightCapNote,
+  loadingText,
   matchCountCopy,
   matchPositionCopy,
+  matchPositionLabel,
   segmentLabel,
   sourceDisplay,
   statusLine,
@@ -122,6 +125,18 @@ it('status line renders the override sentence only when flagged', () => {
 
 it('status line suppresses null hidden counts (zero maps to null upstream)', () => {
   expect(statusLine(BASE_ARGS)).not.toContain('would add');
+});
+
+it('zero results keep the marginal sentences (Poland scenario)', () => {
+  const s = statusLine({ ...BASE_ARGS, matching: 0, hiddenHi: 42 });
+  expect(s).toBe('No documents match these filters. Including high-income countries would add 42.');
+});
+
+it('match position label and loading text pinned', () => {
+  expect(matchPositionLabel(3, 128, false)).toBe('Match 3 of 128');
+  expect(matchPositionLabel(3, 20000, true)).toBe('Match 3 of 20,000+');
+  expect(loadingText(29031849)).toBe('Loading 29.0 MB...');
+  expect(NO_TOC_LABEL).toBe('No table of contents in this document.');
 });
 
 it('empty state pinned', () => expect(EMPTY_STATE).toBe('No documents match these filters.'));
@@ -201,6 +216,6 @@ it('every exported string and exercised output is em-dash-free and never says Pa
   for (const s of outputs) {
     expect(s.includes('—')).toBe(false);
     expect(s.includes('–')).toBe(false);
-    expect(/\bPart\b/.test(s)).toBe(false);
+    expect(/\bparts?\b/i.test(s)).toBe(false);
   }
 });

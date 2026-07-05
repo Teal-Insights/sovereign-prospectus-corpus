@@ -203,6 +203,9 @@ input[type='checkbox'] {
 .ew-check-row {
   min-height: var(--ew-tap-target-min);
 }
+.ew-chip button {
+  min-width: var(--ew-tap-target-min);
+}
 
 @media (max-width: 640px) {
   .ew-chip button,
@@ -220,6 +223,27 @@ input[type='checkbox'] {
   .ew-col-source {
     display: none;
   }
+  .ew-chip button {
+    min-width: var(--ew-tap-target);
+  }
+}
+
+/* aria-disabled buttons keep focusability (never native disabled, which
+   drops keyboard focus) but must LOOK inert too. */
+button[aria-disabled='true'] {
+  opacity: var(--ew-disabled-opacity);
+  cursor: default;
+}
+
+/* TOC indent levels (was an inline style; tokens-only rule). */
+.ew-toc-level-1 {
+  margin-left: var(--ew-space-3);
+}
+.ew-toc-level-2 {
+  margin-left: var(--ew-space-4);
+}
+.ew-toc-level-3 {
+  margin-left: var(--ew-space-5);
 }
 
 /* TOC entries are real buttons; render them as links inside the list. */

@@ -54,6 +54,11 @@ check('metrics populated', Boolean(metrics && metrics.bundleName && metrics.tota
 await page.goBack();
 await page.waitForFunction(() => !new URLSearchParams(location.search).has('country'));
 check('back restores unfiltered state', (await page.locator('#ew-filter-country-chips .ew-chip').count()) === 0);
+await page.goForward();
+await page.waitForFunction(() => new URLSearchParams(location.search).has('country'));
+check('forward restores the chip', (await page.locator('#ew-filter-country-chips .ew-chip').count()) === 1);
+await page.goBack();
+await page.waitForFunction(() => !new URLSearchParams(location.search).has('country'));
 
 await page.goto(`${BASE}/?page=99`, { waitUntil: 'load' });
 const lenAfterNav = await page.evaluate(() => history.length);
@@ -86,16 +91,35 @@ check('override sentence with High income selected', true);
 await page.goto(`${BASE}/doc/synthetic-large/`, { waitUntil: 'load' });
 await docReady();
 check('segmented mode', /Segment 1 of \d+/.test(await page.textContent('#ew-seg-label')));
+check('provenance notice visible', (await page.textContent('body')).includes('Text is machine-converted'));
+check('seg prev starts aria-disabled', (await page.getAttribute('#ew-seg-prev', 'aria-disabled')) === 'true');
+await page.click('#ew-seg-next');
+await page.waitForFunction(() => document.getElementById('ew-seg-label')?.textContent?.includes('Segment 2'), null, { timeout: 10000 });
+check('segment next button works', true);
+await page.click('#ew-seg-prev');
+await page.waitForFunction(() => document.getElementById('ew-seg-label')?.textContent?.includes('Segment 1'), null, { timeout: 10000 });
+check('segment prev button works', true);
 await page.locator('#ew-doc-toc-details summary').click();
 await page.locator('#ew-doc-toc button').last().click();
 await page.waitForFunction(() => window.scrollY > 0);
 check('toc jump scrolls', true, `scrollY>0`);
 check('toc jump focuses text', (await page.evaluate(() => document.activeElement?.id)) === 'ew-doc-text');
 check('toc jump crossed segments', !/Segment 1 of/.test(await page.textContent('#ew-seg-label')));
-await page.fill('#ew-doc-search-input', '## Section');
-await page.waitForFunction(() => /8 matches/.test(document.getElementById('ew-doc-search-count')?.textContent ?? ''), null, { timeout: 10000 });
+await page.focus('#ew-doc-search-input');
+await page.keyboard.type('## Sect');
+await page.waitForFunction(() => /matches/.test(document.getElementById('ew-doc-search-count')?.textContent ?? ''), null, { timeout: 10000 });
+check('typing keeps focus in the input', (await page.evaluate(() => document.activeElement?.id)) === 'ew-doc-search-input');
+await page.keyboard.type('ion');
+await page.waitForFunction(
+  () => (document.getElementById('ew-doc-search-count')?.textContent ?? '').includes('"## Section"'),
+  null,
+  { timeout: 10000 }
+);
+check('continued typing lands in the query', (await page.inputValue('#ew-doc-search-input')) === '## Section');
+await page.click('#ew-doc-search-next'); // first activation jumps to match 1
 await page.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 1 of 8'), null, { timeout: 10000 });
-check('live region announces position with snippet', true, await page.evaluate(() => document.getElementById('ew-doc-live')?.textContent));
+check('first Next goes to match 1 with snippet announced', true, await page.evaluate(() => document.getElementById('ew-doc-live')?.textContent));
+check('visible position label', (await page.textContent('#ew-doc-search-pos')).includes('Match 1 of 8'));
 await page.click('#ew-doc-search-next');
 await page.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 2 of 8'), null, { timeout: 10000 });
 check('match navigation advances', true);
@@ -135,6 +159,8 @@ const supportNoteShown = await fallbackPage.evaluate(
 check('support note shown before typing', supportNoteShown);
 await fallbackPage.fill('#ew-doc-search-input', 'Heading');
 await fallbackPage.waitForFunction(() => /2 matches/.test(document.getElementById('ew-doc-search-count')?.textContent ?? ''), null, { timeout: 10000 });
+await fallbackPage.click('#ew-doc-search-next'); // first activation -> match 1
+await fallbackPage.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 1 of 2'), null, { timeout: 10000 });
 await fallbackPage.click('#ew-doc-search-next');
 await fallbackPage.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 2 of 2'), null, { timeout: 10000 });
 check('counts and navigation work without Highlight API', true);
@@ -145,9 +171,18 @@ const axeContext = await browser.newContext();
 const axePage = await axeContext.newPage();
 await axePage.goto(`${BASE}/`, { waitUntil: 'load' });
 await axePage.waitForFunction(() => (window.__ewMetrics?.rowsRendered ?? 0) > 0, null, { timeout: 120000 });
-const axeBrowse = await new AxeBuilder({ page: axePage }).analyze();
+const axeBrowse = await new AxeBuilder({ page: axePage }).options({ rules: { 'target-size': { enabled: true } } }).analyze();
 const badBrowse = axeBrowse.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
 check('axe browse: no serious/critical', badBrowse.length === 0, JSON.stringify(badBrowse.map((v) => v.id)));
+
+// stateful run: chips + income override hint + notices in the DOM
+const firstAxeCountry = await axePage.locator('#ew-filter-country-select option').nth(1).getAttribute('value');
+await axePage.selectOption('#ew-filter-country-select', firstAxeCountry);
+await axePage.selectOption('#ew-filter-income-select', 'High income');
+await axePage.waitForFunction(() => document.querySelectorAll('.ew-chip').length === 2);
+const axeStateful = await new AxeBuilder({ page: axePage }).options({ rules: { 'target-size': { enabled: true } } }).analyze();
+const badStateful = axeStateful.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+check('axe browse with chips/override: no serious/critical', badStateful.length === 0, JSON.stringify(badStateful.map((v) => v.id)));
 
 await axePage.goto(`${BASE}/doc/synthetic-large/`, { waitUntil: 'load' });
 await axePage.waitForFunction(() => window.__ewDocMetrics !== undefined, null, { timeout: 120000 });

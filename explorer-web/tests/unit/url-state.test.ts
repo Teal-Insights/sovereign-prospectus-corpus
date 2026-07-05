@@ -42,11 +42,14 @@ it('decodes repeated keys, booleans, and 1-based page', () => {
   expect(droppedAny).toBe(false);
 });
 
-it('drops unknown values, empty values, and duplicates with a flag', () => {
-  const { state, droppedAny } = decodeBrowseState('?country=ZZ&country=KEN&country=KEN&region=', KNOWN);
+it('drops unknown and empty values with a flag; duplicates dedupe silently', () => {
+  const { state, droppedAny } = decodeBrowseState('?country=ZZ&country=KEN&region=', KNOWN);
   expect(state.countries).toEqual(['KEN']);
   expect(state.regions).toEqual([]);
   expect(droppedAny).toBe(true);
+  const dup = decodeBrowseState('?country=KEN&country=KEN', KNOWN);
+  expect(dup.state.countries).toEqual(['KEN']);
+  expect(dup.droppedAny).toBe(false);
 });
 
 it('rejects non-canonical boolean values and bad pages', () => {

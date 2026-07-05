@@ -9,6 +9,7 @@
 import {
   DOC_NOSCRIPT_NOTE,
   NO_PAGE_ANCHORS_NOTE,
+  NO_TOC_LABEL,
   PAGES_NOT_DISPLAYED_NOTE,
   PROVENANCE_NOTE,
   TOC_FILTER_PLACEHOLDER,
@@ -57,12 +58,14 @@ const { slug, hasText, textBytes, textSource, noTextReason, filingUrl } = Astro.
               type="search"
               placeholder="Find text in this prospectus..."
               autocomplete="off"
+              aria-describedby="ew-doc-search-hint"
               disabled
             />
           </label>
           <button id="ew-doc-search-prev" type="button" hidden>Previous match</button>
           <button id="ew-doc-search-next" type="button" hidden>Next match</button>
           <span id="ew-doc-search-count" class="ew-muted"></span>
+          <span id="ew-doc-search-pos" class="ew-muted"></span>
           <p id="ew-doc-search-hint" class="ew-muted" hidden></p>
         </div>
 
@@ -76,7 +79,7 @@ const { slug, hasText, textBytes, textSource, noTextReason, filingUrl } = Astro.
             placeholder={TOC_FILTER_PLACEHOLDER}
             autocomplete="off"
           />
-          <ol id="ew-doc-toc" class="ew-muted" data-empty-label="No table of contents in this document."></ol>
+          <ol id="ew-doc-toc" class="ew-muted" data-empty-label={NO_TOC_LABEL}></ol>
         </details>
 
         <p id="ew-seg-nav" hidden>

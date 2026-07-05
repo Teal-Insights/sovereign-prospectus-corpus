@@ -209,3 +209,14 @@ it('snippetAround collapses whitespace and clips at the ends', () => {
   const atStart = snippetAround('target tail', 0, 6, 20);
   expect(atStart.startsWith('target')).toBe(true);
 });
+
+it('snippetAround never cuts a surrogate pair at its edges', () => {
+  const text = `${'\u{1F4C4}'.repeat(30)}needle${'\u{1F4C4}'.repeat(30)}`;
+  const start = text.indexOf('needle');
+  const s = snippetAround(text, start, start + 6, 15);
+  expect(s.includes('\uFFFD')).toBe(false);
+  const first = s.charCodeAt(0);
+  expect(first >= 0xdc00 && first <= 0xdfff).toBe(false);
+  const last = s.charCodeAt(s.length - 1);
+  expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
+});

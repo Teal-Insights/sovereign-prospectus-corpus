@@ -93,6 +93,9 @@ let state: BrowseUrlState;
 let ready = false;
 let pendingPop = false;
 let refreshGeneration = 0;
+// Last known page count: guards a rapid double-click past the final page
+// from pushing an entry the clamp then has to replace (duplicate history).
+let lastPages = Number.POSITIVE_INFINITY;
 
 function writeUrl(push: boolean): void {
   const qs = encodeBrowseState(location.search, state);
@@ -140,7 +143,13 @@ function applyStateToControls(): void {
   scopeToggle.checked = state.includeNonSovereign;
   hiToggle.checked = state.includeHighIncome;
   const overridden = state.incomes.length > 0;
+  // Disabling a focused control (possible via popstate) strands focus.
+  if (overridden && document.activeElement === hiToggle) scopeToggle.focus();
   hiToggle.disabled = overridden;
+  // aria-describedby only while the hint applies: a permanently wired
+  // reference is read by AT even when the hint is visibility-hidden.
+  if (overridden) hiToggle.setAttribute('aria-describedby', 'ew-hi-hint');
+  else hiToggle.removeAttribute('aria-describedby');
   hiHint.classList.toggle('ew-visible', overridden);
 }
 
@@ -172,6 +181,10 @@ function toFilters(s: BrowseUrlState): BrowseFilters {
 }
 
 function renderRows(rows: BrowseRow[]): void {
+  // A popstate re-render can remove a focused row link.
+  if (tbody.contains(document.activeElement)) {
+    el<HTMLDivElement>('ew-table-region').focus({ preventScroll: true });
+  }
   tbody.innerHTML = '';
   for (const row of rows) {
     const tr = document.createElement('tr');
@@ -233,13 +246,16 @@ async function refresh(): Promise<void> {
   const filters = toFilters(state);
   try {
     const tQuery = performance.now();
-    const rows = (await runQuery(handle.conn, buildListSql(filters))) as unknown as BrowseRow[];
-    const countRows = await runQuery(handle.conn, buildStatusCountsSql(filters));
+    const [rows, countRows] = (await Promise.all([
+      runQuery(handle.conn, buildListSql(filters)),
+      runQuery(handle.conn, buildStatusCountsSql(filters)),
+    ])) as [unknown, Record<string, unknown>[]] as [BrowseRow[], Record<string, unknown>[]];
     if (generation !== refreshGeneration) return; // stale response
     if (!metrics.secondQueryMs) metrics.secondQueryMs = performance.now() - tQuery;
     const counts = countRows[0] as { matching: number; hidden_scope: number; hidden_hi: number };
     const matching = Number(counts.matching);
     const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
+    lastPages = pages;
 
     // A shared link can point past the last page; correct via replaceState
     // (never a pushed entry: a clamp loop would trap the back button).
@@ -335,6 +351,7 @@ prev.addEventListener('click', () => {
 
 next.addEventListener('click', () => {
   if (navDisabled(next)) return;
+  if (state.page + 1 > lastPages - 1) return; // stale aria-disabled double-click
   state.page += 1;
   writeUrl(true);
   void refresh();
@@ -380,8 +397,15 @@ async function main(): Promise<void> {
     await refresh();
     if (!metrics.firstQueryMs) metrics.firstQueryMs = performance.now() - tFirst;
   } catch (e) {
-    status.textContent = '';
-    showError(e, 'Could not start the in-browser query engine.');
+    const message = userMessageOf(e, 'Could not start the in-browser query engine.');
+    // #ew-status is the live region: the failure must be announced, and the
+    // filter controls must not sit there looking interactive while every
+    // interaction silently no-ops.
+    status.textContent = message;
+    renderError(notices, message);
+    for (const group of GROUPS) group.select.disabled = true;
+    scopeToggle.disabled = true;
+    hiToggle.disabled = true;
   }
 }
 

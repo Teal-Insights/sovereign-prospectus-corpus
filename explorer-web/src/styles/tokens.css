@@ -58,6 +58,8 @@
   --ew-font-size-doc: 0.875rem;
   --ew-tap-target-min: 24px;
   --ew-tap-target: 44px;
+  --ew-disabled-opacity: 0.5;
+  --ew-jump-offset: 80px;
 }
 
 @media (max-width: 640px) {

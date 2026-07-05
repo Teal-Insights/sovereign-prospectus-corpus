@@ -36,11 +36,11 @@ function readMulti(
   for (const v of raw) {
     if (v === '' || !known.includes(v)) {
       dropped = true;
-    } else if (values.includes(v)) {
-      dropped = true; // duplicate: harmless in SQL, wrong in the chips UI
-    } else {
+    } else if (!values.includes(v)) {
       values.push(v);
     }
+    // duplicates dedupe silently: nothing was semantically removed, so the
+    // removed-filter notice would overclaim (council PR gate)
   }
   return { values, dropped };
 }
