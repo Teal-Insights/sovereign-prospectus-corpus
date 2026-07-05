@@ -131,6 +131,13 @@ button {
   overflow-x: auto;
 }
 
+/* Doc metadata table: filing URLs are single unbroken tokens up to ~350
+   chars (LuxSE signed links); without a break they force the whole page
+   to ~8x viewport width on phones (S5 QA, TEA-905). */
+.ew-doc-meta td {
+  overflow-wrap: anywhere;
+}
+
 /* Visually hidden live region. Never display:none or visibility:hidden,
    which drop the region from the accessibility tree and silence it. */
 .ew-sr-only {

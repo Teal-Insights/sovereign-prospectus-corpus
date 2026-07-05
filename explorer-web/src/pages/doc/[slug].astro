@@ -35,7 +35,7 @@ const title = doc.display_name ?? doc.issuer_name ?? doc.slug;
   <h1>{title} <span class={badge.cls}>{badge.label}</span></h1>
   <p class="ew-muted">{citeAs(snapshotDate, doc.slug)}</p>
 
-  <table>
+  <table class="ew-doc-meta">
     <tbody>
       <tr><th scope="row">Issuer</th><td>{orNA(doc.issuer_name)}</td></tr>
       <tr><th scope="row">Title</th><td>{orNA(doc.title)}</td></tr>
