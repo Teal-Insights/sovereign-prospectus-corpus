@@ -1,8 +1,47 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-04 (TEA-903: explorer-web parity build)
+**Last updated:** 2026-07-04 (TEA-904: brand wrapper + deploy, build done, ship gated on Teal)
 
-## Session 2026-07-04 (latest): TEA-903 (Explorer v2, S3)
+## Session 2026-07-04 (latest): TEA-904 (Explorer v2, S4)
+
+Brand wrapper built and verified locally; everything that needs no
+dashboard is done. Ship sequence is gated on Teal's handoff list
+(TEA-904 comment has the numbered list; DNS-bearing items first).
+
+- **Open repo:** PR #91 ("S4 seams") open on
+  `lte/tea-904-s4-private-brand-wrapper-netlify-deploy`: brand slots in
+  Base.astro, display tokens, optional PUBLIC_WASM_BASE_URL, 404 page,
+  SNAPSHOT_DIR-aware assert-dist, error diagnostics, CI font tripwire.
+  All neutral no-ops; empirically proven at the plan gate before
+  application. Spec + plan + all council dispositions in
+  docs/superpowers/ (same branch). Gemini review handled; codex had not
+  responded at session end.
+- **Wrapper repo:** ~/Code/prospectus-web-ti (LOCAL ONLY; GitHub repo
+  creation is Teal's handoff item 2). Submodule pin, branded tokens
+  (all 36 names, ratios recomputed), Head/Header brand components,
+  build.sh (staging build, tokenized snapshot fetch), netlify.toml
+  (licence 301, /pipes proxy, font headers), CI, README (full licence
+  rules), upload-snapshot.sh + provision-data-host.sh +
+  iam-deploy-policy.json for the S3+CloudFront data host.
+- **Verified locally (full snapshot, branded):** 9,776 pages; Lighthouse
+  browse 96 / a11y 100 / CLS 0 (parameterized same; doc 99/100/0); axe
+  zero serious/critical; fonts exactly one request per face, same-origin
+  only; h1 = Tiempos 600.
+- **Hosting decision:** pages on Netlify; snapshot + wasm on
+  S3+CloudFront at data.tealinsights.com, pre-compressed at rest.
+  R2 is blocked (tealinsights.com DNS is Google Cloud DNS; R2 custom
+  domains need a Cloudflare zone). Full rationale in the spec.
+- **Licence findings:** the MAIN SITE leaks Klim fonts at
+  tealinsights.netlify.app today; fix PR open (tealinsights-site#1).
+  Wrapper ships the same forced 301 + previews disabled; Klim order
+  number redacted from public docs.
+- **Ship sequence (Phase C of the plan):** Teal creates the private
+  repo + AWS credential -> provision + upload -> DNS batches -> Netlify
+  site (name MUST be prospectus-tealinsights) -> merge PR #91 -> bump
+  wrapper pin to the merge SHA -> push -> first deploy -> live
+  verification -> TEA-904 comment + close.
+
+## Session 2026-07-04 (earlier): TEA-903 (Explorer v2, S3)
 
 Explorer core built to v1 Shiny parity on the S2 scaffold. PR pending
 merge go-ahead; Linear TEA-903 has the full trail; spec + plan with all
