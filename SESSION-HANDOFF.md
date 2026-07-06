@@ -1,8 +1,50 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-04 (TEA-904: brand wrapper + deploy, build done, ship gated on Teal)
+**Last updated:** 2026-07-05 (TEA-904 shipped live and closed; TEA-905 S5 QA + open-core front door, ship gated on Teal's merges)
 
-## Session 2026-07-04 (latest): TEA-904 (Explorer v2, S4)
+## Session 2026-07-05 (latest): TEA-904 live + TEA-905 (S5)
+
+Site is LIVE and verified: https://prospectus.tealinsights.com (Let's
+Encrypt TLS, snapshot 2026-07-04, 9,774 docs). TEA-904 closed with live
+numbers: Lighthouse browse 92/100/CLS 0, parameterized 93/100/0 x3, doc
+97/100/0; 27-check Playwright live pass, zero failures.
+
+- **Launch postmortem (the one real fire):** managed SimpleCORS drops
+  ACAO when the viewer sends Cache-Control/Pragma no-cache, which Chrome
+  sends for fetch cache:'no-store' (the MANIFEST-first contract) and on
+  every hard refresh. Site was dead in real browsers while every curl
+  passed. Fix live: origin-emitted CORS (bucket CORS + CORS-S3Origin ORP
+  + cache policy v2 db3070d4 with Origin in the key, RHP detached).
+  Recorded in wrapper branch `infra/cors-origin-emitted` (unmerged; can
+  ride the next wrapper deploy). Lesson now in the wrapper README:
+  probe CORS with a real browser fetch, never only curl.
+- **S5 QA (TEA-905, full checklist on the Linear issue):** two defects
+  fixed in PR #99 (LuxSE ~350-char filing URLs blew doc pages to ~3,178px
+  on phones making the 29 MB doc's gate un-tappable, also broke desktop;
+  footer provenance now links the repo). Deferred with context: #92
+  PDIP filing links all point at the generic search page, #93 one dead
+  LuxSE signed URL + link-check, #94 page-count vs page-anchor
+  dissonance, #95 image-comment noise, #96 browse copy math + silent
+  page clamp, #97 self-host duckdb parquet extension, #98 chip-inject
+  CLS on throttled deep links, #82 commented (search gap has a soft
+  clock: the July 13 talking points promise corpus-wide search next).
+- **Open-core front door (PR #100):** README explorer section with
+  neutral screenshot + quickstart VERIFIED on a fresh clone (npm ci,
+  two-file snapshot download, 9,776 pages in 5s), open-core statement
+  (memo 2026-07-04 Section 1), new NOTICE (trademarks/fonts/provenance
+  excluded from MIT), LuxSE added to the source list, logo paths fixed
+  (had been 404ing on the repo front page).
+- **Pending Teal:** merge PR #99 + #100 (codex/claude reviews
+  requested); wrapper pin bump + push after merges (a main push
+  triggers the Netlify build; that deploy carries the URL-wrap + footer
+  fixes live and can carry `infra/cors-origin-emitted`); commit + deploy
+  the SovTech card in tealinsights-site (staged on
+  `feature/tea-905-sovtech-card`; the repo guard blocks agent commits
+  there); rehearse Netlify rollback on that second deploy (TEA-904
+  deferred item). Talking points are in the PCoS Drive folder as
+  2026-07-13_Prospectus-Coffee-Talking-Points.md.
+
+## Session 2026-07-04: TEA-904 (Explorer v2, S4)
 
 Brand wrapper built and verified locally; everything that needs no
 dashboard is done. Ship sequence is gated on Teal's handoff list

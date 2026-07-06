@@ -1,0 +1,31 @@
+NOTICE
+
+Copyright (c) 2026 Teal Insights
+
+The code and documentation in this repository are licensed under the MIT
+License (see LICENSE). The MIT License covers the software. It does not
+grant rights to the following, which are expressly excluded:
+
+1. Trademarks. The "Teal Insights" name and logo identify Teal
+   Insights. You may run, modify, and redistribute the software, but you
+   may not present your deployment as a Teal Insights product or use the
+   Teal Insights name or logo to promote a fork without written
+   permission. The logo image files in this repository (under
+   demo/images/) appear for attribution in project documentation and are
+   not MIT-licensed. The NatureFinance logo appears with permission of
+   NatureFinance and is likewise not MIT-licensed.
+
+2. Fonts. The branded deployment uses commercial webfonts licensed from
+   Klim Type Foundry. Those font files have never been in this
+   repository and are not redistributable. The open application uses
+   system fonts; a fork loses nothing but the branding (see
+   explorer-web/ARCHITECTURE.md, "Theme").
+
+3. Source documents. The corpus consists of public regulatory filings
+   gathered from SEC EDGAR, the Luxembourg Stock Exchange, the FCA
+   National Storage Mechanism, and the Georgetown #PublicDebtIsPublic
+   corpus. Document text is machine-converted and provided for research
+   and search; the original filings remain the authoritative documents of
+   their issuers, and document pages link to the original filing where
+   the source provides one. Verify quotes against the original before
+   relying on them.
