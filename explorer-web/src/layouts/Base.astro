@@ -42,7 +42,10 @@ const BrandHeader = brand['../brand/Header.astro']?.default;
       <slot />
     </main>
     <footer class="ew-footer">
-      Snapshot {snapshotDate}. Data and code: sovereign-prospectus-corpus.
+      Snapshot {snapshotDate}. Data and code:{' '}
+      <a href="https://github.com/Teal-Insights/sovereign-prospectus-corpus" rel="noopener"
+        >sovereign-prospectus-corpus</a
+      >.
     </footer>
   </body>
 </html>
