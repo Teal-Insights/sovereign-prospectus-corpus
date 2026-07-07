@@ -5,3 +5,4 @@ mechanical: keep both lines. Feeds the Stage 5 scoreboard and ADM-153.
 
 | branch | model+effort | attempts | escalations | council C/I post-exec | wall time |
 |---|---|---|---|---|---|
+| B1 | opus-4.8 max | 1 | 0 | pending | ~1h |
