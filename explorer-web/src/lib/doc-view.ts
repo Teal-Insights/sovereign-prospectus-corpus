@@ -193,3 +193,64 @@ export function snippetAround(text: string, start: number, end: number, context 
   if (lastCode >= 0xd800 && lastCode <= 0xdbff) to--;
   return text.slice(from, to).replace(/\s+/g, ' ').trim();
 }
+
+// ---- rendered-mode text-node offset mapping (TEA-929) ----
+
+// Rendered mode holds a whole DOM tree in #ew-doc-text, not one text node.
+// The search haystack is the concatenation of the tree's text nodes;
+// `starts[i]` is node i's global UTF-16 start in that concatenation and
+// `lengths[i]` its length (contiguous by construction: starts[i+1] ===
+// starts[i] + lengths[i], with starts[0] === 0). Matches are stored as
+// global spans over the concatenation; a Range needs per-node positions.
+export interface NodeSpan {
+  startNode: number;
+  startOffset: number;
+  endNode: number;
+  endOffset: number;
+}
+
+// Largest i with starts[i] <= offset. starts is non-decreasing (equal runs
+// mark zero-length nodes); the largest-index rule prefers the later,
+// non-empty node at a shared boundary, so a span never starts inside an
+// empty node it could avoid.
+function nodeContaining(starts: number[], offset: number): number {
+  let lo = 0;
+  let hi = starts.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (starts[mid] <= offset) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo - 1;
+}
+
+// Map a global [start, end) UTF-16 span onto per-node Range positions. `end`
+// clamps to the total length; returns null when `start` is at or past the
+// total length, or when the span is empty after clamping. The end position
+// attaches to the node holding the last covered character, so endOffset is
+// in (0, lengths[endNode]] and every Range this produces is non-degenerate.
+export function locateSpan(
+  starts: number[],
+  lengths: number[],
+  start: number,
+  end: number
+): NodeSpan | null {
+  const n = starts.length;
+  const total = n > 0 ? starts[n - 1] + lengths[n - 1] : 0;
+  if (start >= total) return null;
+  const e = Math.min(end, total);
+  if (e <= start) return null;
+  const startNode = nodeContaining(starts, start);
+  const endNode = nodeContaining(starts, e - 1);
+  return {
+    startNode,
+    startOffset: start - starts[startNode],
+    endNode,
+    endOffset: e - starts[endNode],
+  };
+}
+
+// Escape hatch (empty by default): a slug listed here always uses the plain
+// path even when it is markdown and small enough, in case sampling flags a
+// document the renderer mangles.
+export const FORCE_PLAIN_SLUGS: ReadonlySet<string> = new Set<string>();
