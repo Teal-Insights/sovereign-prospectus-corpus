@@ -185,3 +185,8 @@ export function loadingText(bytes: number): string {
 
 export const TOC_JUMP_FALLBACK_NOTE =
   'That contents entry could not be located; showing the start of the document.';
+
+// ---- B2 additions (TEA-930): find-the-document search on browse ----
+
+export const SEARCH_LABEL = 'Search documents';
+export const SEARCH_PLACEHOLDER = 'Issuer, title, or country...';

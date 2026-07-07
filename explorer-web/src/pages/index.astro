@@ -6,6 +6,8 @@ import {
   HI_TOGGLE_LABEL,
   HI_OVERRIDE_HINT,
   NOSCRIPT_NOTE,
+  SEARCH_LABEL,
+  SEARCH_PLACEHOLDER,
   STATS_CAPTION,
   WB_VINTAGE_NOTE,
   browseSubtitle,
@@ -105,6 +107,18 @@ const QCRAFT_URL = 'https://teal-insights.github.io/QCraft-App/';
   <noscript><p class="ew-notice">{NOSCRIPT_NOTE}</p></noscript>
 
   <div id="ew-browse-notices"></div>
+
+  <div class="ew-search">
+    <label class="ew-search-label" for="ew-search-input">{SEARCH_LABEL}</label>
+    <input
+      type="search"
+      id="ew-search-input"
+      class="ew-search-input"
+      placeholder={SEARCH_PLACEHOLDER}
+      autocomplete="off"
+      enterkeyhint="search"
+    />
+  </div>
 
   <form id="ew-filters" class="ew-filters">
     <div class="ew-filter-group">
@@ -216,6 +230,20 @@ const QCRAFT_URL = 'https://teal-insights.github.io/QCraft-App/';
   .ew-about summary {
     cursor: pointer;
     font-weight: 600;
+  }
+  .ew-search {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ew-space-1);
+    margin: var(--ew-space-3) 0 0;
+  }
+  .ew-search-label {
+    font-size: var(--ew-font-size-small);
+    color: var(--ew-color-text-muted);
+  }
+  .ew-search-input {
+    max-width: 28rem;
+    padding: var(--ew-space-1) var(--ew-space-2);
   }
   .ew-filters {
     display: flex;

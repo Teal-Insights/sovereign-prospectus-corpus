@@ -211,6 +211,30 @@ const badDoc = axeDoc.violations.filter((v) => v.impact === 'serious' || v.impac
 check('axe doc: no serious/critical', badDoc.length === 0, JSON.stringify(badDoc.map((v) => v.id)));
 await axeContext.close();
 
+// ---- (h) browse search box narrows the table and round-trips (TEA-930) ----
+await page.goto(`${BASE}/`, { waitUntil: 'load' });
+await browseReady();
+const beforeSearch = await page.evaluate(() => window.__ewMetrics.rowsRendered);
+const histBeforeSearch = await page.evaluate(() => history.length);
+await page.fill('#ew-search-input', 'Philippines');
+await page.waitForFunction(
+  () => /^2 documents match/.test(document.getElementById('ew-status')?.textContent ?? ''),
+  null,
+  { timeout: 10000 }
+);
+const afterSearch = await page.evaluate(() => window.__ewMetrics.rowsRendered);
+check('search narrows the row count', beforeSearch > afterSearch && afterSearch === 2, `${beforeSearch} -> ${afterSearch}`);
+check('search writes q to the URL', new URL(page.url()).searchParams.get('q') === 'Philippines', page.url());
+const histAfterSearch = await page.evaluate(() => history.length);
+check('typing uses replaceState (no history growth)', histBeforeSearch === histAfterSearch, `${histBeforeSearch} -> ${histAfterSearch}`);
+const searchUrl = page.url();
+const restore = await browser.newPage();
+await restore.goto(searchUrl, { waitUntil: 'load' });
+await restore.waitForFunction(() => (window.__ewMetrics?.rowsRendered ?? 0) > 0, null, { timeout: 120000 });
+check('search box restores from the URL on reload', (await restore.inputValue('#ew-search-input')) === 'Philippines');
+check('restored status reflects the filtered set', /^2 documents match/.test(await restore.textContent('#ew-status')));
+await restore.close();
+
 await browser.close();
 const failed = results.filter((r) => !r.ok);
 console.log(failed.length ? `SMOKE FAILED: ${failed.length}` : 'SMOKE OK');
