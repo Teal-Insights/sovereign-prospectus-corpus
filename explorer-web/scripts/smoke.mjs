@@ -211,6 +211,67 @@ const badDoc = axeDoc.violations.filter((v) => v.impact === 'serious' || v.impac
 check('axe doc: no serious/critical', badDoc.length === 0, JSON.stringify(badDoc.map((v) => v.id)));
 await axeContext.close();
 
+// ---- (h) rendered markdown mode (B1 / TEA-929) ----
+await page.goto(`${BASE}/doc/synthetic-rich/`, { waitUntil: 'load' });
+await docReady();
+check('rendered mode: container holds a rendered tree', (await page.locator('#ew-doc-text .ew-doc-rendered').count()) === 1);
+check('rendered mode: GFM table rendered', (await page.locator('#ew-doc-text table').count()) >= 1);
+check(
+  'rendered mode: toggle shows View raw text',
+  (await page.textContent('#ew-view-toggle')) === 'View raw text' && (await page.locator('#ew-view-toggle').isVisible())
+);
+// The raw markdown is "collective **action** clauses"; the rendered
+// concatenation is "collective action clauses", so the spaced query matches
+// only after the asterisks are gone (the active-text contract).
+await page.fill('#ew-doc-search-input', 'collective action clauses');
+await page.waitForFunction(() => /match/.test(document.getElementById('ew-doc-search-count')?.textContent ?? ''), null, { timeout: 10000 });
+check('rendered search finds the bold-split phrase', /1 match/.test(await page.textContent('#ew-doc-search-count')), await page.textContent('#ew-doc-search-count'));
+await page.click('#ew-doc-search-next');
+await page.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 1 of 1'), null, { timeout: 10000 });
+const richLive = await page.textContent('#ew-doc-live');
+check(
+  'live region quotes the RENDERED snippet (no ** for a bold-split phrase)',
+  richLive.includes('collective action clauses') && !richLive.includes('**'),
+  richLive
+);
+check('current match painted in rendered mode', await page.evaluate(() => (CSS.highlights.get('ew-match-current')?.size ?? 0) === 1));
+// TOC derived from rendered headings; jump from a heading scrolls and focuses.
+await page.locator('#ew-doc-toc-details summary').click();
+const richTocRows = await page.locator('#ew-doc-toc button').count();
+check('rendered TOC derived from headings', richTocRows >= 3, `${richTocRows} rows`);
+await page.locator('#ew-doc-toc button').last().click(); // "Events of Default", far down
+await page.waitForFunction(() => window.scrollY > 0, null, { timeout: 10000 });
+check('rendered heading TOC jump scrolls', true);
+check('rendered heading TOC jump focuses text', (await page.evaluate(() => document.activeElement?.id)) === 'ew-doc-text');
+// Toggle to raw re-runs the query in raw space (the phrase no longer matches),
+// and the container is back to the single-text-node plain path.
+await page.click('#ew-view-toggle');
+await page.waitForFunction(() => document.getElementById('ew-view-toggle')?.textContent === 'View formatted text', null, { timeout: 10000 });
+await page.waitForFunction(() => (document.getElementById('ew-doc-search-count')?.textContent ?? '').includes('No exact matches'), null, { timeout: 10000 });
+check('toggle to raw re-runs the query (bold-split phrase no longer matches)', true, await page.textContent('#ew-doc-search-count'));
+check('raw mode is the single-text-node plain path', await page.evaluate(() => {
+  const c = document.getElementById('ew-doc-text');
+  return c.firstChild?.nodeType === 3 && c.dataset.segStart === '0' && !c.querySelector('.ew-doc-rendered');
+}));
+await page.click('#ew-view-toggle');
+await page.waitForFunction(() => (document.getElementById('ew-doc-search-count')?.textContent ?? '').includes('1 match'), null, { timeout: 10000 });
+check('toggle back to formatted re-matches the phrase', (await page.locator('#ew-doc-text .ew-doc-rendered').count()) === 1);
+// ?q= deep link on a rendered doc restores and navigates.
+await page.goto(`${BASE}/doc/synthetic-rich/?q=${encodeURIComponent('collective action clauses')}`, { waitUntil: 'load' });
+await docReady();
+await page.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 1 of 1'), null, { timeout: 10000 });
+check('rendered ?q= deep link restores and navigates', /1 match/.test(await page.textContent('#ew-doc-search-count')));
+
+// ---- (i) pages-source doc keeps the plain path (regression) ----
+await page.goto(`${BASE}/doc/edgar-0001193125-26-273390/`, { waitUntil: 'load' });
+await docReady();
+check('pages-source doc: no view toggle', await page.locator('#ew-view-toggle').isHidden());
+check('pages-source doc: single text node + seg-start (plain path)', await page.evaluate(() => {
+  const c = document.getElementById('ew-doc-text');
+  return c.firstChild?.nodeType === 3 && c.dataset.segStart === '0' && !c.querySelector('.ew-doc-rendered');
+}));
+check('pages-source doc: page-boundaries note present', (await page.textContent('body')).includes('page boundaries are not displayed'));
+
 await browser.close();
 const failed = results.filter((r) => !r.ok);
 console.log(failed.length ? `SMOKE FAILED: ${failed.length}` : 'SMOKE OK');
