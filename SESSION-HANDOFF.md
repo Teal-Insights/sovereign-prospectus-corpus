@@ -1,6 +1,31 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-05 (TEA-904 shipped live and closed; TEA-905 S5 QA + open-core front door, ship gated on Teal's merges)
+**Last updated:** 2026-07-06 (Stage 2 architect session: pre-Monday batch plan + executor prompts + privacy blocklist, PR #101)
+
+## Session 2026-07-06 (latest): Stage 2 for the pre-Monday batch
+
+- **PR #101** (this branch): the batch plan (B0-B8 + gated CAC spike),
+  paste-ready executor prompts, the private-blocklist loader in
+  pre_commit_private_check.py (patterns in gitignored
+  docs/private/blocklist.txt, populated locally; hook verified blocking),
+  and pre-created docs/build-metrics.md. Spec = the 2026-07-06 ideation
+  memo in the PCoS Drive folder (Stage 1 skipped on the record).
+- **Council PLAN review ran before the PR** (Codex xhigh, Gemini via agy,
+  Opus 4.8 max external, Fable chair); disposition with two rejected
+  findings is in the plan doc. Key revisions: B1 skeleton proves rendered
+  offset mapping on an EDGAR doc day one; active-text contract; B3 after
+  B2; B8 after B3 with shared WHERE; B4 tries INSTALL FROM before SET and
+  deploys alone with instant env revert; rollback drill BEFORE the B1
+  deploy, not Sunday.
+- **Linear:** TEA-928..938, one per branch + freeze/rehearsal, all under
+  the Prospectus Explorer v2 project with plan pointers.
+- **Dispatch:** paste prompts from
+  docs/superpowers/plans/2026-07-06-premonday-batch-executor-prompts.md
+  per its dispatch schedule (day one: B0, B5, B1, B2, B4). Merge PR #101
+  first so executors branch off a main that has the plan and metrics file.
+- **Pending Teal:** merge #101; run B0/B5 day-one dispatches; install the
+  wrapper privacy hook (one command, script in the session summary;
+  agent-side install was correctly blocked by permissions).
 
 ## Session 2026-07-05 (latest): TEA-904 live + TEA-905 (S5)
 
