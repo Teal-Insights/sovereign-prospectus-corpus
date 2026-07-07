@@ -194,3 +194,27 @@ Plain path spot check: `edgar-0001193125-26-232220` and
 `edgar-0001193125-26-229746` are `text_source='pages'`, so they are
 rendered-mode ineligible by the mode rule and keep the existing plain path
 byte-for-byte (no toggle, snapshot-toc offsets, single text node).
+
+### Performance budget (task 9)
+
+Measured in Playwright Chromium at 1440x900 against the full 2026-07-04
+snapshot via `npm run dev`. `renderMs` is `window.__ewDocMetrics.renderMs`,
+extended in rendered mode to cover parse + DOMPurify + inject + text-node
+index + heading TOC build. Search time is `findMatches(active.text, 'the')`
+plus painting the 2,000-range highlight cap through `locateSpan`, measured
+on the app's rendered DOM.
+
+| doc | chars | text nodes | renderMs | search "the" (ms) | matches |
+|---|---|---|---|---|---|
+| edgar-0001144204-12-057627 | 999,514 | 52,774 | 294 | 4.7 | 6,346 |
+| luxse-1784979 | 998,192 | 9,599 | 138 | 5.4 | 13,548 |
+| nsm-ni-000003908-0 | 996,780 | 21,042 | 171 | 6.2 | 10,411 |
+
+Budgets: renderMs <= 3,000 ms (max observed 294), search <= 500 ms (max
+observed 6.2), all met with large headroom. No bounded retry needed.
+
+29 MB worst case (`luxse-100387641`, 28.6M chars): unchanged behavior.
+The gate reads "Load full text (29.0 MB)"; after the click it renders via
+the plain segmented path ("Segment 1 of 61", first-segment renderMs 18.7),
+one text node with `data-seg-start`, no rendered tree, and the view toggle
+stays hidden (rendered mode ineligible above 1M units).
