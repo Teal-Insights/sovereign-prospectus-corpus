@@ -13,6 +13,7 @@ import {
   PAGES_NOT_DISPLAYED_NOTE,
   PROVENANCE_NOTE,
   TOC_FILTER_PLACEHOLDER,
+  VIEW_RAW_LABEL,
   orNA,
 } from '../lib/format';
 
@@ -89,7 +90,18 @@ const { slug, hasText, textBytes, textSource, noTextReason, filingUrl } = Astro.
         </p>
         <div id="ew-seg-notice"></div>
 
-        <div id="ew-doc-text" tabindex="-1" data-slug={slug} data-text-bytes={textBytes ?? 0} data-seg-start="0">
+        <p id="ew-view-toggle-row">
+          <button id="ew-view-toggle" type="button" hidden>{VIEW_RAW_LABEL}</button>
+        </p>
+
+        <div
+          id="ew-doc-text"
+          tabindex="-1"
+          data-slug={slug}
+          data-text-bytes={textBytes ?? 0}
+          data-text-source={textSource}
+          data-seg-start="0"
+        >
           Loading...
         </div>
       </>
