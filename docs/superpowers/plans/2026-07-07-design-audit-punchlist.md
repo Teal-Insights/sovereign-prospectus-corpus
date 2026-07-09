@@ -156,7 +156,7 @@ This subsumes B1's written defaults (72ch, bordered padded cells) and adds
 the type scale, line-height, spacing, and numeric tables the defaults left
 to this audit. Highlight and offset machinery is unaffected: layout-only.
 
-### P2 (S, route: B1) Plaintext reading measure
+### P2 (S, route: B6, re-routed from B1 by architect: CSS-only, plain surface) Plaintext reading measure
 
 `pages`-source documents (including the most recent EDGAR filings, like the
 audited Mexico 424B2) never enter rendered mode; the plain view is their
