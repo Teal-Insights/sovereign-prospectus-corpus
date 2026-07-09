@@ -11,6 +11,7 @@ const DEFAULTS = {
   includeHighIncome: false,
   page: 0,
   pageSize: 50,
+  q: '',
 };
 
 it('pins the null order and slug tiebreak', () => {
@@ -103,4 +104,76 @@ it('status counts arms flip to TRUE/FALSE when a toggle is inactive', () => {
   expect(allIn).toContain('FILTER (WHERE TRUE AND TRUE)::INTEGER AS matching');
   expect(allIn).toContain('FILTER (WHERE TRUE AND FALSE)::INTEGER AS hidden_scope');
   expect(allIn).toContain('FILTER (WHERE TRUE AND FALSE)::INTEGER AS hidden_hi');
+});
+
+// ---- B2 additions (TEA-930): find-the-document search on browse ----
+import { likeEscape } from '../../src/lib/queries';
+
+// One search term expands to an OR over the four indexed text columns, each
+// ILIKE guarded by ESCAPE '\' so likeEscape's backslash escapes are honored.
+const grp = (t: string): string =>
+  `(display_name ILIKE '%${t}%' ESCAPE '\\' OR issuer_name ILIKE '%${t}%' ESCAPE '\\' ` +
+  `OR title ILIKE '%${t}%' ESCAPE '\\' OR country_name ILIKE '%${t}%' ESCAPE '\\')`;
+
+const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
+
+it('likeEscape neutralizes LIKE wildcards and the escape char itself', () => {
+  expect(likeEscape('100%')).toBe('100\\%');
+  expect(likeEscape('a_b')).toBe('a\\_b');
+  expect(likeEscape('a\\b')).toBe('a\\\\b');
+  expect(likeEscape('plain')).toBe('plain');
+  // backslash is escaped first so a literal `\%` in the term does not become
+  // an escape sequence in the pattern.
+  expect(likeEscape('\\%')).toBe('\\\\\\%');
+});
+
+it('a single search term hits all four text columns as an OR group', () => {
+  const sql = buildListSql({ ...DEFAULTS, q: 'Philippines' });
+  expect(sql).toContain(grp('Philippines'));
+  // spelled out so the exact string is pinned independent of the helper
+  expect(sql).toContain(
+    "(display_name ILIKE '%Philippines%' ESCAPE '\\' " +
+      "OR issuer_name ILIKE '%Philippines%' ESCAPE '\\' " +
+      "OR title ILIKE '%Philippines%' ESCAPE '\\' " +
+      "OR country_name ILIKE '%Philippines%' ESCAPE '\\')"
+  );
+});
+
+it('two terms AND together (Philippines 2031 narrows in two words)', () => {
+  const sql = buildListSql({ ...DEFAULTS, q: 'Philippines 2031' });
+  expect(sql).toContain(`${grp('Philippines')} AND ${grp('2031')}`);
+});
+
+it("apostrophes in a term are escaped by sqlQuote (O'Higgins)", () => {
+  const sql = buildListSql({ ...DEFAULTS, q: "O'Higgins" });
+  expect(sql).toContain("ILIKE '%O''Higgins%' ESCAPE '\\'");
+});
+
+it('% and _ in a term are neutralized by likeEscape', () => {
+  const sql = buildListSql({ ...DEFAULTS, q: '20%_A' });
+  expect(sql).toContain("'%20\\%\\_A%'");
+});
+
+it('at most 8 terms are searched (9 terms truncate to 8)', () => {
+  const sql = buildListSql({ ...DEFAULTS, q: 't1 t2 t3 t4 t5 t6 t7 t8 t9' });
+  expect(count(sql, 'country_name ILIKE')).toBe(8);
+  expect(sql).toContain("'%t8%'");
+  expect(sql).not.toContain("'%t9%'");
+});
+
+it('whitespace-only or empty q contributes no search clause', () => {
+  expect(buildListSql({ ...DEFAULTS, q: '   ' })).not.toContain('ILIKE');
+  expect(buildListSql(DEFAULTS)).not.toContain('ILIKE');
+  // an all-whitespace q builds byte-identical SQL to no q at all
+  expect(buildListSql({ ...DEFAULTS, q: '  \t ' })).toBe(buildListSql(DEFAULTS));
+});
+
+it('the counts SQL carries the same search clauses (single seam)', () => {
+  const sql = buildStatusCountsSql({ ...DEFAULTS, q: 'bond' });
+  expect(sql).toContain(`WHERE ${grp('bond')}`);
+});
+
+it('search clauses AND with explicit filters in the counts WHERE', () => {
+  const sql = buildStatusCountsSql({ ...DEFAULTS, countries: ['KEN'], q: 'bond' });
+  expect(sql).toContain(`WHERE country_code IN ('KEN') AND ${grp('bond')}`);
 });
