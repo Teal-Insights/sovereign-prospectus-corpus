@@ -133,3 +133,14 @@ it('encoding truncates q to 200 chars so the URL matches the decoded state', () 
   const back = decodeBrowseState(`?${qs}`, KNOWN);
   expect(back.state.q.length).toBe(200);
 });
+
+it('strips control characters (NUL/SOH/DEL) from a crafted q so the SQL stays well-formed', () => {
+  // A crafted `?q=%00...` would otherwise embed a NUL in the generated SQL string
+  // literal; DuckDB parses that as an unterminated string and the browse query
+  // fails. %00 = NUL, %01 = SOH, %7f = DEL.
+  const decoded = decodeBrowseState('?q=%00abc%01%7f', KNOWN);
+  expect(decoded.state.q).toBe('abc');
+  expect(decoded.droppedAny).toBe(false); // silent hygiene, not a dropped param
+  // a normal term is untouched by the control-char strip
+  expect(decodeBrowseState('?q=Kenya', KNOWN).state.q).toBe('Kenya');
+});

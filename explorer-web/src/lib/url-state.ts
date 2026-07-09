@@ -29,8 +29,15 @@ const OWN_KEYS = [...MULTI_KEYS, 'hi', 'scope', 'page', 'q'] as const;
 // The browse search term is free text, not a validated enum: it is trimmed and
 // silently truncated (never flagged as a dropped param). The cap bounds URL
 // length and the generated SQL; the input handler applies the same limit.
+// Strip C0 control characters (except tab/newline/CR, which the term tokenizer
+// treats as whitespace) and DEL: a crafted `?q=%00...` otherwise embeds a NUL
+// in the SQL string literal, which DuckDB parses as an unterminated string and
+// the browse query fails. Keyboard input cannot produce these; the vector is a
+// crafted shared link, so the fix lives here on the decode path.
 const MAX_Q_LENGTH = 200;
-const normalizeQ = (raw: string): string => raw.trim().slice(0, MAX_Q_LENGTH);
+const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
+const normalizeQ = (raw: string): string =>
+  raw.replace(CONTROL_CHARS, '').trim().slice(0, MAX_Q_LENGTH);
 
 function readMulti(
   q: URLSearchParams,

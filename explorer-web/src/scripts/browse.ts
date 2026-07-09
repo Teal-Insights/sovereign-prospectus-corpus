@@ -123,9 +123,14 @@ function navDisabled(button: HTMLButtonElement): boolean {
 }
 
 function applyStateToControls(): void {
-  // Restore the search box from state (init and popstate). Not called on the
-  // typing path, so it never clobbers the value mid-keystroke.
-  if (searchInput.value !== state.q) searchInput.value = state.q;
+  // Restore the search box from state (init and popstate). Skip the sync while a
+  // search debounce is pending: a filter/toggle/chip change (its handler calls
+  // this) must not overwrite keystrokes that have not yet been committed to
+  // state.q, or the in-flight term is silently dropped. The pending timer then
+  // commits the typed value on top of the new filter state.
+  if (searchTimer === undefined && searchInput.value !== state.q) {
+    searchInput.value = state.q;
+  }
   for (const group of GROUPS) {
     const values = state[group.stateKey];
     group.chips.innerHTML = '';
