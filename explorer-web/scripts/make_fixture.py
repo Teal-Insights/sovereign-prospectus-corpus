@@ -100,6 +100,38 @@ def _large_text() -> tuple[str, list[dict[str, Any]]]:
     return text, toc
 
 
+def _rich_text() -> tuple[str, list[dict[str, Any]]]:
+    """Markdown-rich doc for B1 rendered mode (TEA-929): headings, a phrase
+    split across bold, a GFM table, an https link, and a Docling image
+    comment, with filler so a jump to the last heading scrolls. The bold-split
+    phrase 'collective **action** clauses' matches a spaced query only after
+    rendering strips the asterisks, exercising the active-text contract."""
+    filler = "The issuer shall pay principal and interest when due. " * 20 + "\n\n"
+    parts = [
+        "# Rich Fixture Prospectus\n\n",
+        "Front matter before the first heading is optional here.\n\n",
+        "## Terms and Conditions\n\n",
+        "The notes contain collective **action** clauses that bind every holder.\n\n",
+        "| Series | Rate | Maturity |\n",
+        "| --- | --- | --- |\n",
+        "| 2031 | 4.50% | 2031-06-15 |\n",
+        "| 2041 | 5.25% | 2041-06-15 |\n\n",
+        "See the [official filing](https://example.org/filing) for the full terms.\n\n",
+        "<!-- image -->\n\n",
+        filler,
+        "## Events of Default\n\n",
+        "An event of default occurs if any scheduled payment is missed.\n\n",
+        filler,
+    ]
+    text = "".join(parts)
+    toc = [
+        _toc_entry(text, "# Rich Fixture Prospectus", 1),
+        _toc_entry(text, "## Terms and Conditions", 2),
+        _toc_entry(text, "## Events of Default", 2),
+    ]
+    return text, toc
+
+
 def _synthetic_docs() -> list[tuple[dict[str, Any], dict[str, Any]]]:
     """(parquet row, text JSON) pairs. country_code stays NULL on purpose:
     computeFilterOptions drops null codes, keeping 'Synthetic' out of the
@@ -113,6 +145,7 @@ def _synthetic_docs() -> list[tuple[dict[str, Any], dict[str, Any]]]:
         _toc_entry(astral_text, "## Heading B", 2),
     ]
     large_text, large_toc = _large_text()
+    rich_text, rich_toc = _rich_text()
 
     def row(slug: str, title: str, text: str, text_bytes: int | None = None) -> dict[str, Any]:
         return {
@@ -165,6 +198,10 @@ def _synthetic_docs() -> list[tuple[dict[str, Any], dict[str, Any]]]:
         (
             row("synthetic-large", "Synthetic Segment Fixture", large_text),
             text_json("synthetic-large", "Synthetic Segment Fixture", large_text, large_toc),
+        ),
+        (
+            row("synthetic-rich", "Synthetic Rich Fixture", rich_text),
+            text_json("synthetic-rich", "Synthetic Rich Fixture", rich_text, rich_toc),
         ),
     ]
 

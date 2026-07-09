@@ -173,6 +173,12 @@ export function highlightCapNote(cap: number): string {
   return `Showing the first ${num(cap)} highlights in this segment.`;
 }
 
+// Rendered mode has no segments, so the cap note must not say "in this
+// segment"; the cap is over the whole document (TEA-929).
+export function highlightCapNoteWhole(cap: number): string {
+  return `Showing the first ${num(cap)} highlights.`;
+}
+
 export const TOC_FILTER_PLACEHOLDER = 'Filter contents...';
 
 export const FRONT_MATTER_LABEL = '(Front matter)';
@@ -190,3 +196,14 @@ export const TOC_JUMP_FALLBACK_NOTE =
 
 export const SEARCH_LABEL = 'Search documents';
 export const SEARCH_PLACEHOLDER = 'Issuer, title, or country...';
+
+// ---- B1 (TEA-929): rendered-mode view toggle ----
+
+// The toggle label names the mode it switches TO, matching browser
+// conventions (the button reads "View raw text" while formatted).
+export const VIEW_RAW_LABEL = 'View raw text';
+export const VIEW_FORMATTED_LABEL = 'View formatted text';
+
+export function viewModeAnnouncement(formatted: boolean): string {
+  return formatted ? 'Showing formatted text.' : 'Showing raw converted text.';
+}

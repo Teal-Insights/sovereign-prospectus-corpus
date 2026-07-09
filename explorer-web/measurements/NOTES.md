@@ -150,3 +150,71 @@ Full snapshot (9,774 docs; label s3-full-9774 in results.json):
   pages-sourced docs carry the page-boundaries note; undated PDIP docs
   render "undated"; the 2,001-row TOC (2,000 entries + front matter)
   reveals its filter input and narrows correctly.
+
+## B1 (TEA-929): rendered markdown mode
+
+### Sampling verdict (task 2 gate)
+
+Rendered 5 markdown docs per source through `renderDocMarkdown` + DOMPurify
+against the full 2026-07-04 snapshot, spread across the size distribution
+(largest eligible + NTILE buckets). Signals: tables parsed to `<table>`,
+headings to `h1..h6`, no raw HTML leak (no `<script`, no `<!--`), no
+residual markdown table rows in the rendered text, and (where a bold span
+existed) the DOM Range text equals the concatenation slice (offset 1:1).
+
+| slug | source | chars | tables | headings | verdict | notes |
+|---|---|---|---|---|---|---|
+| edgar-0001144204-12-057627 | edgar | 999,514 | 814 | 0 | PASS | no ATX headings (EDGAR uses bold+tables); TOC front-matter-only, expected |
+| edgar-0001193125-11-329610 | edgar | 279,813 | 235 | 0 | PASS | 266 bold, 43 links render |
+| edgar-0001193125-25-149644 | edgar | 44,915 | 3 | 0 | PASS | clean |
+| edgar-0001104659-23-021129 | edgar | 17,598 | 17 | 0 | PASS | rate table renders |
+| edgar-0001193125-13-147839 | edgar | 8,336 | 2 | 0 | PASS | clean |
+| luxse-1784979 | luxse | 998,192 | 21 | 466 | PASS | 28 literal `**` (legal-template markers, unpaired; faithful) |
+| luxse-2348163 | luxse | 371,228 | 70 | 127 | PASS | clean |
+| luxse-100793248 | luxse | 106,038 | 22 | 36 | PASS | offset 1:1 verified; `(**)` footnote refs literal |
+| luxse-101105579 | luxse | 20,026 | 3 | 4 | PASS | clean |
+| luxse-1000011 | luxse | 6,407 | 0 | 15 | PASS | headings only, no tables |
+| nsm-3594440 | nsm | 996,780 | 81 | 386 | PASS | clean |
+| nsm-101287803-20200330172132066 | nsm | 261,541 | 68 | 20 | PASS | clean |
+| nsm-130629681-20200330131458430-3850 | nsm | 20,292 | 4 | 9 | PASS | clean |
+| nsm-48840442-20200330164659660 | nsm | 13,542 | 6 | 7 | PASS | clean |
+| nsm-65901392-20200330172028251-87 | nsm | 8,691 | 0 | 5 | PASS | one literal `**` (footnote); faithful |
+| pdip-per87 | pdip | 995,730 | 262 | 648 | PASS | heaviest table doc sampled; clean |
+| pdip-idn48 | pdip | 152,696 | 14 | 41 | PASS | clean |
+| pdip-idn21 | pdip | 54,574 | 5 | 42 | PASS | clean |
+| pdip-idn33 | pdip | 32,200 | 2 | 26 | PASS | clean |
+| pdip-ago3 | pdip | 16,484 | 2 | 8 | PASS | clean |
+
+No source renders systematically badly; no doc added to
+`FORCE_PLAIN_SLUGS`. Literal `**` runs are unpaired asterisks in the
+machine-converted source (footnote daggers, legal-template field markers);
+CommonMark renders them as text, the same characters the plain path shows.
+
+Plain path spot check: `edgar-0001193125-26-232220` and
+`edgar-0001193125-26-229746` are `text_source='pages'`, so they are
+rendered-mode ineligible by the mode rule and keep the existing plain path
+byte-for-byte (no toggle, snapshot-toc offsets, single text node).
+
+### Performance budget (task 9)
+
+Measured in Playwright Chromium at 1440x900 against the full 2026-07-04
+snapshot via `npm run dev`. `renderMs` is `window.__ewDocMetrics.renderMs`,
+extended in rendered mode to cover parse + DOMPurify + inject + text-node
+index + heading TOC build. Search time is `findMatches(active.text, 'the')`
+plus painting the 2,000-range highlight cap through `locateSpan`, measured
+on the app's rendered DOM.
+
+| doc | chars | text nodes | renderMs | search "the" (ms) | matches |
+|---|---|---|---|---|---|
+| edgar-0001144204-12-057627 | 999,514 | 52,774 | 294 | 4.7 | 6,346 |
+| luxse-1784979 | 998,192 | 9,599 | 138 | 5.4 | 13,548 |
+| nsm-ni-000003908-0 | 996,780 | 21,042 | 171 | 6.2 | 10,411 |
+
+Budgets: renderMs <= 3,000 ms (max observed 294), search <= 500 ms (max
+observed 6.2), all met with large headroom. No bounded retry needed.
+
+29 MB worst case (`luxse-100387641`, 28.6M chars): unchanged behavior.
+The gate reads "Load full text (29.0 MB)"; after the click it renders via
+the plain segmented path ("Segment 1 of 61", first-segment renderMs 18.7),
+one text node with `data-seg-start`, no rendered tree, and the view toggle
+stays hidden (rendered mode ineligible above 1M units).

@@ -191,11 +191,18 @@ the plan-gate disposition: `docs/superpowers/plans/2026-07-04-explorer-core-pari
   replaceState; popstate-initiated renders never write history; debounced
   writes are cancelled on popstate/pagehide; no-op writes skipped; history
   calls sit in try/catch (WebKit rate limit: 100 writes/10 s).
-- **The `window.__ewDoc` contract** (for S4/TEA-907): `getRawText()` returns
-  the FULL raw string in every render mode (full or segmented) once text is
-  loaded, `null` before load and behind an unclicked gate. `#ew-doc-text`
-  always holds exactly one text node whose content is the rendered slice;
-  `data-seg-start` carries the slice's UTF-16 start offset. `?q=` is the
+- **The `window.__ewDoc` contract** (for S4/TEA-907), mode-scoped as of
+  B1/TEA-929: `getRawText()` returns the FULL raw string in EVERY mode (plain
+  full, segmented, and rendered) once text is loaded, `null` before load and
+  behind an unclicked gate. In **plain and segmented modes** (pages-source
+  docs, docs over 1M units, force-listed slugs) `#ew-doc-text` holds exactly
+  one text node whose content is the rendered slice and `data-seg-start`
+  carries the slice's UTF-16 start offset. In **rendered mode** (markdown docs
+  at or under 1M units) `#ew-doc-text` holds a rendered HTML tree wrapped in
+  `<div class="ew-doc-rendered">`; the single-text-node / `data-seg-start`
+  invariant does NOT hold, and search runs over the concatenation of the
+  rendered text nodes (so phrases split by bold in the raw markdown match).
+  Consumers detect rendered mode by the `.ew-doc-rendered` child. `?q=` is the
   only supported deep-link into a document and never bypasses the 5 MB
   click-gate (data-cost consent). In-document search controls use the
   `ew-doc-search-*` prefix; `ew-search-*` stays reserved for the slot.
