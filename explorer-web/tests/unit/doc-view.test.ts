@@ -3,10 +3,12 @@ import { expect, it } from 'vitest';
 import {
   DEFAULT_SEARCH_LIMITS,
   DEFAULT_SEGMENT_CONFIG,
+  FORCE_PLAIN_SLUGS,
   buildSearchPattern,
   computeSegments,
   countsByBins,
   findMatches,
+  locateSpan,
   needsSegments,
   sanitizeToc,
   segmentForOffset,
@@ -219,4 +221,102 @@ it('snippetAround never cuts a surrogate pair at its edges', () => {
   expect(first >= 0xdc00 && first <= 0xdfff).toBe(false);
   const last = s.charCodeAt(s.length - 1);
   expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
+});
+
+// ---- locateSpan (rendered-mode text-node offset mapping) ----
+
+// nodes of length 5, 3, 4 -> starts [0, 5, 8], total 12
+const STARTS = [0, 5, 8];
+const LENGTHS = [5, 3, 4];
+
+it('locateSpan: span within a single node', () => {
+  expect(locateSpan(STARTS, LENGTHS, 1, 4)).toEqual({
+    startNode: 0,
+    startOffset: 1,
+    endNode: 0,
+    endOffset: 4,
+  });
+});
+
+it('locateSpan: span across two nodes', () => {
+  expect(locateSpan(STARTS, LENGTHS, 3, 7)).toEqual({
+    startNode: 0,
+    startOffset: 3,
+    endNode: 1,
+    endOffset: 2,
+  });
+});
+
+it('locateSpan: span across three nodes reaching the very end', () => {
+  expect(locateSpan(STARTS, LENGTHS, 0, 12)).toEqual({
+    startNode: 0,
+    startOffset: 0,
+    endNode: 2,
+    endOffset: 4,
+  });
+});
+
+it('locateSpan: a start exactly on a node boundary picks the later node', () => {
+  expect(locateSpan(STARTS, LENGTHS, 5, 8)).toEqual({
+    startNode: 1,
+    startOffset: 0,
+    endNode: 1,
+    endOffset: 3,
+  });
+});
+
+it('locateSpan: end clamps to the total length', () => {
+  expect(locateSpan(STARTS, LENGTHS, 10, 999)).toEqual({
+    startNode: 2,
+    startOffset: 2,
+    endNode: 2,
+    endOffset: 4,
+  });
+});
+
+it('locateSpan: start at or past the total returns null', () => {
+  expect(locateSpan(STARTS, LENGTHS, 12, 15)).toBeNull();
+  expect(locateSpan(STARTS, LENGTHS, 99, 200)).toBeNull();
+});
+
+it('locateSpan: an empty span (after clamping) returns null', () => {
+  expect(locateSpan(STARTS, LENGTHS, 5, 5)).toBeNull();
+  expect(locateSpan(STARTS, LENGTHS, 6, 3)).toBeNull();
+  expect(locateSpan(STARTS, LENGTHS, 8, 8)).toBeNull();
+});
+
+it('locateSpan: zero-length nodes never trap the start or end', () => {
+  // node 1 is empty: starts [0, 5, 5], lengths [5, 0, 3], total 8
+  const starts = [0, 5, 5];
+  const lengths = [5, 0, 3];
+  // start on the shared boundary lands on the non-empty node 2
+  expect(locateSpan(starts, lengths, 5, 8)).toEqual({
+    startNode: 2,
+    startOffset: 0,
+    endNode: 2,
+    endOffset: 3,
+  });
+  // a span ending on the shared boundary stays in node 0
+  expect(locateSpan(starts, lengths, 3, 5)).toEqual({
+    startNode: 0,
+    startOffset: 3,
+    endNode: 0,
+    endOffset: 5,
+  });
+});
+
+it('locateSpan: single-node and empty-index inputs', () => {
+  expect(locateSpan([0], [4], 1, 3)).toEqual({
+    startNode: 0,
+    startOffset: 1,
+    endNode: 0,
+    endOffset: 3,
+  });
+  expect(locateSpan([0], [4], 4, 5)).toBeNull();
+  expect(locateSpan([], [], 0, 1)).toBeNull();
+});
+
+it('FORCE_PLAIN_SLUGS is empty by default', () => {
+  expect(FORCE_PLAIN_SLUGS.size).toBe(0);
+  expect(FORCE_PLAIN_SLUGS.has('anything')).toBe(false);
 });

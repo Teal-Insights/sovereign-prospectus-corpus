@@ -212,6 +212,7 @@ input[type='checkbox'] {
 #ew-doc-search-prev,
 #ew-doc-search-next,
 #ew-doc-toc button,
+#ew-view-toggle,
 .ew-check-row {
   min-height: var(--ew-tap-target-min);
 }
@@ -228,6 +229,7 @@ input[type='checkbox'] {
   #ew-doc-search-prev,
   #ew-doc-search-next,
   #ew-doc-toc button,
+  #ew-view-toggle,
   .ew-check-row {
     min-height: var(--ew-tap-target);
   }
@@ -266,4 +268,79 @@ button[aria-disabled='true'] {
   text-align: left;
   cursor: pointer;
   padding: var(--ew-space-1) 0;
+}
+
+/* Rendered-document reading typography (B0 punch list P1, routed to B1).
+   Filing content speaks the body sans and its headings sit below the page
+   h1 scale, so filing text is never confused with product furniture. This
+   subsumes B1's written defaults (72ch measure, bordered padded cells) and
+   adds the type scale, line-height, spacing, and numeric tables. Layout
+   only: the highlight and offset machinery is unaffected. */
+.ew-doc-rendered {
+  font-family: var(--ew-font-body);
+  font-size: 1rem;
+  line-height: 1.65;
+  max-width: 72ch;
+}
+.ew-doc-rendered h1,
+.ew-doc-rendered h2,
+.ew-doc-rendered h3,
+.ew-doc-rendered h4,
+.ew-doc-rendered h5,
+.ew-doc-rendered h6 {
+  font-family: var(--ew-font-body);
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 2em 0 0.5em;
+}
+.ew-doc-rendered h1 {
+  font-size: 1.375rem;
+}
+.ew-doc-rendered h2 {
+  font-size: 1.1875rem;
+}
+.ew-doc-rendered h3 {
+  font-size: 1.0625rem;
+}
+.ew-doc-rendered h4,
+.ew-doc-rendered h5,
+.ew-doc-rendered h6 {
+  font-size: 1rem;
+}
+.ew-doc-rendered p,
+.ew-doc-rendered ul,
+.ew-doc-rendered ol {
+  margin: 0 0 0.9em;
+}
+.ew-doc-rendered table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ew-font-size-small);
+  font-variant-numeric: tabular-nums;
+  margin: var(--ew-space-3) 0;
+}
+.ew-doc-rendered th,
+.ew-doc-rendered td {
+  border: 1px solid var(--ew-color-border);
+  padding: var(--ew-space-1) var(--ew-space-2);
+  text-align: left;
+  vertical-align: top;
+}
+.ew-doc-rendered th {
+  background: var(--ew-color-surface);
+  color: var(--ew-color-text);
+  font-weight: 600;
+}
+.ew-doc-rendered blockquote {
+  margin: 0 0 0.9em;
+  padding-left: var(--ew-space-3);
+  border-left: 3px solid var(--ew-color-border);
+  color: var(--ew-color-text-muted);
+}
+.ew-doc-rendered hr {
+  border: 0;
+  border-top: 1px solid var(--ew-color-border);
+  margin: var(--ew-space-4) 0;
 }

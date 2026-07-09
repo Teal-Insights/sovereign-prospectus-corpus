@@ -1,10 +1,12 @@
 ---
 // Document text region. The provenance block is pre-rendered (static HTML):
 // it must survive JS failure, printing, and archiving. Text itself is
-// fetched client-side by scripts/doc-text.ts, which renders into the single
-// #ew-doc-text container (one text node, slice-addressable; tabindex -1 is
-// REQUIRED so TOC jumps and match navigation can move keyboard focus into
-// the text) and keeps the raw string reachable via window.__ewDoc.
+// fetched client-side by scripts/doc-text.ts, which renders into the
+// #ew-doc-text container (tabindex -1 is REQUIRED so TOC jumps and match
+// navigation can move keyboard focus into the text) and keeps the raw string
+// reachable via window.__ewDoc. The container is a single text node in plain
+// and segmented modes and a rendered HTML tree in rendered mode; see the
+// mode-scoped contract in env.d.ts and ARCHITECTURE.md.
 
 import {
   DOC_NOSCRIPT_NOTE,
@@ -13,6 +15,7 @@ import {
   PAGES_NOT_DISPLAYED_NOTE,
   PROVENANCE_NOTE,
   TOC_FILTER_PLACEHOLDER,
+  VIEW_RAW_LABEL,
   orNA,
 } from '../lib/format';
 
@@ -89,7 +92,18 @@ const { slug, hasText, textBytes, textSource, noTextReason, filingUrl } = Astro.
         </p>
         <div id="ew-seg-notice"></div>
 
-        <div id="ew-doc-text" tabindex="-1" data-slug={slug} data-text-bytes={textBytes ?? 0} data-seg-start="0">
+        <p id="ew-view-toggle-row" hidden>
+          <button id="ew-view-toggle" type="button" hidden>{VIEW_RAW_LABEL}</button>
+        </p>
+
+        <div
+          id="ew-doc-text"
+          tabindex="-1"
+          data-slug={slug}
+          data-text-bytes={textBytes ?? 0}
+          data-text-source={textSource}
+          data-seg-start="0"
+        >
           Loading...
         </div>
       </>

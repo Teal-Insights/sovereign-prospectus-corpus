@@ -13,6 +13,7 @@ export interface BrowseUrlState {
   includeHighIncome: boolean;
   includeNonSovereign: boolean;
   page: number; // 0-based internal; 1-based in the URL, omitted at page 1
+  q: string; // find-the-document search term; '' means no search
 }
 
 export interface KnownOptions {
@@ -23,7 +24,20 @@ export interface KnownOptions {
 }
 
 const MULTI_KEYS = ['country', 'region', 'income', 'source'] as const;
-const OWN_KEYS = [...MULTI_KEYS, 'hi', 'scope', 'page'] as const;
+const OWN_KEYS = [...MULTI_KEYS, 'hi', 'scope', 'page', 'q'] as const;
+
+// The browse search term is free text, not a validated enum: it is trimmed and
+// silently truncated (never flagged as a dropped param). The cap bounds URL
+// length and the generated SQL; the input handler applies the same limit.
+// Strip C0 control characters (except tab/newline/CR, which the term tokenizer
+// treats as whitespace) and DEL: a crafted `?q=%00...` otherwise embeds a NUL
+// in the SQL string literal, which DuckDB parses as an unterminated string and
+// the browse query fails. Keyboard input cannot produce these; the vector is a
+// crafted shared link, so the fix lives here on the decode path.
+const MAX_Q_LENGTH = 200;
+const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
+const normalizeQ = (raw: string): string =>
+  raw.replace(CONTROL_CHARS, '').trim().slice(0, MAX_Q_LENGTH);
 
 function readMulti(
   q: URLSearchParams,
@@ -82,8 +96,19 @@ export function decodeBrowseState(
     }
   }
 
+  const qValue = normalizeQ(q.get('q') ?? '');
+
   return {
-    state: { countries, regions, incomes, sources, includeHighIncome, includeNonSovereign, page },
+    state: {
+      countries,
+      regions,
+      incomes,
+      sources,
+      includeHighIncome,
+      includeNonSovereign,
+      page,
+      q: qValue,
+    },
     droppedAny,
   };
 }
@@ -98,6 +123,8 @@ export function encodeBrowseState(currentSearch: string, state: BrowseUrlState):
   if (state.includeHighIncome) q.set('hi', '1');
   if (state.includeNonSovereign) q.set('scope', 'all');
   if (state.page > 0) q.set('page', String(state.page + 1));
+  const qValue = normalizeQ(state.q);
+  if (qValue) q.set('q', qValue);
   return q.toString();
 }
 

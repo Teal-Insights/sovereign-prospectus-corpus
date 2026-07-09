@@ -73,10 +73,13 @@ import {
   MIN_QUERY_HINT,
   SEGMENTS_NOTICE,
   STATS_CAPTION,
+  VIEW_FORMATTED_LABEL,
+  VIEW_RAW_LABEL,
   absenceCopy,
   browseSubtitle,
   chipRemoveLabel,
   highlightCapNote,
+  highlightCapNoteWhole,
   loadingText,
   matchCountCopy,
   matchPositionCopy,
@@ -84,6 +87,7 @@ import {
   segmentLabel,
   sourceDisplay,
   statusLine,
+  viewModeAnnouncement,
 } from '../../src/lib/format';
 
 const BASE_ARGS = {
@@ -197,6 +201,22 @@ it('assorted S3 strings pinned', () => {
   expect(SEGMENTS_NOTICE.toLowerCase()).toContain('do not cite');
 });
 
+// ---- B1 (TEA-929): rendered-mode view toggle copy ----
+
+it('view toggle labels are pinned', () => {
+  expect(VIEW_RAW_LABEL).toBe('View raw text');
+  expect(VIEW_FORMATTED_LABEL).toBe('View formatted text');
+});
+
+it('view mode announcement pinned in both directions', () => {
+  expect(viewModeAnnouncement(true)).toBe('Showing formatted text.');
+  expect(viewModeAnnouncement(false)).toBe('Showing raw converted text.');
+});
+
+it('whole-document highlight cap note pinned', () => {
+  expect(highlightCapNoteWhole(2000)).toBe('Showing the first 2,000 highlights.');
+});
+
 it('every exported string and exercised output is em-dash-free and never says Part', () => {
   const outputs: string[] = Object.values(fmt as Record<string, unknown>).filter(
     (v): v is string => typeof v === 'string'
@@ -211,7 +231,10 @@ it('every exported string and exercised output is em-dash-free and never says Pa
     matchPositionCopy(1, 2, true, 'snip'),
     absenceCopy('q'),
     chipRemoveLabel('Kenya'),
-    highlightCapNote(2000)
+    highlightCapNote(2000),
+    highlightCapNoteWhole(2000),
+    viewModeAnnouncement(true),
+    viewModeAnnouncement(false)
   );
   for (const s of outputs) {
     expect(s.includes('—')).toBe(false);

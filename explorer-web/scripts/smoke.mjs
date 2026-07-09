@@ -222,7 +222,130 @@ const badDoc = axeDoc.violations.filter((v) => v.impact === 'serious' || v.impac
 check('axe doc: no serious/critical', badDoc.length === 0, JSON.stringify(badDoc.map((v) => v.id)));
 await axeContext.close();
 
-// ---- (h) self-hosted parquet extension, guarded by SMOKE_EXT_BASE (TEA-932) ----
+// ---- (h) browse search box narrows the table and round-trips (TEA-930) ----
+await page.goto(`${BASE}/`, { waitUntil: 'load' });
+await browseReady();
+const beforeSearch = await page.evaluate(() => window.__ewMetrics.rowsRendered);
+const histBeforeSearch = await page.evaluate(() => history.length);
+await page.fill('#ew-search-input', 'Philippines');
+await page.waitForFunction(
+  () => /^2 documents match/.test(document.getElementById('ew-status')?.textContent ?? ''),
+  null,
+  { timeout: 10000 }
+);
+const afterSearch = await page.evaluate(() => window.__ewMetrics.rowsRendered);
+check('search narrows the row count', beforeSearch > afterSearch && afterSearch === 2, `${beforeSearch} -> ${afterSearch}`);
+check('search writes q to the URL', new URL(page.url()).searchParams.get('q') === 'Philippines', page.url());
+const histAfterSearch = await page.evaluate(() => history.length);
+check('typing uses replaceState (no history growth)', histBeforeSearch === histAfterSearch, `${histBeforeSearch} -> ${histAfterSearch}`);
+const searchUrl = page.url();
+const restore = await browser.newPage();
+await restore.goto(searchUrl, { waitUntil: 'load' });
+await restore.waitForFunction(() => (window.__ewMetrics?.rowsRendered ?? 0) > 0, null, { timeout: 120000 });
+check('search box restores from the URL on reload', (await restore.inputValue('#ew-search-input')) === 'Philippines');
+check('restored status reflects the filtered set', /^2 documents match/.test(await restore.textContent('#ew-status')));
+await restore.close();
+
+// ---- (i) a filter change inside the search debounce window keeps the pending term (TEA-930 race regression) ----
+await page.goto(`${BASE}/`, { waitUntil: 'load' });
+await browseReady();
+await page.evaluate(() => {
+  const input = document.getElementById('ew-search-input');
+  input.value = 'Philippines';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  // fire a toggle change synchronously, well inside the 250ms debounce window
+  const scope = document.getElementById('ew-scope-toggle');
+  scope.checked = true;
+  scope.dispatchEvent(new Event('change', { bubbles: true }));
+});
+let racePreserved = false;
+try {
+  // on the buggy path the term is wiped and never commits, so q never appears
+  await page.waitForFunction(
+    () => new URLSearchParams(location.search).get('q') === 'Philippines',
+    null,
+    { timeout: 5000 }
+  );
+  racePreserved =
+    (await page.inputValue('#ew-search-input')) === 'Philippines' &&
+    new URL(page.url()).searchParams.get('scope') === 'all';
+} catch {
+  racePreserved = false;
+}
+check('filter change mid-debounce keeps the pending search term', racePreserved, page.url());
+
+// ---- (j) rendered markdown mode (B1 / TEA-929) ----
+await page.goto(`${BASE}/doc/synthetic-rich/`, { waitUntil: 'load' });
+await docReady();
+check('rendered mode: container holds a rendered tree', (await page.locator('#ew-doc-text .ew-doc-rendered').count()) === 1);
+check('rendered mode: GFM table rendered', (await page.locator('#ew-doc-text table').count()) >= 1);
+check(
+  'rendered mode: toggle shows View raw text',
+  (await page.textContent('#ew-view-toggle')) === 'View raw text' && (await page.locator('#ew-view-toggle').isVisible())
+);
+// The raw markdown is "collective **action** clauses"; the rendered
+// concatenation is "collective action clauses", so the spaced query matches
+// only after the asterisks are gone (the active-text contract).
+await page.fill('#ew-doc-search-input', 'collective action clauses');
+await page.waitForFunction(() => /match/.test(document.getElementById('ew-doc-search-count')?.textContent ?? ''), null, { timeout: 10000 });
+check('rendered search finds the bold-split phrase', /1 match/.test(await page.textContent('#ew-doc-search-count')), await page.textContent('#ew-doc-search-count'));
+await page.click('#ew-doc-search-next');
+await page.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 1 of 1'), null, { timeout: 10000 });
+const richLive = await page.textContent('#ew-doc-live');
+check(
+  'live region quotes the RENDERED snippet (no ** for a bold-split phrase)',
+  richLive.includes('collective action clauses') && !richLive.includes('**'),
+  richLive
+);
+check('current match painted in rendered mode', await page.evaluate(() => (CSS.highlights.get('ew-match-current')?.size ?? 0) === 1));
+// TOC derived from rendered headings; jump from a heading scrolls and focuses.
+await page.locator('#ew-doc-toc-details summary').click();
+const richTocRows = await page.locator('#ew-doc-toc button').count();
+check('rendered TOC derived from headings', richTocRows >= 3, `${richTocRows} rows`);
+// The fixture ends with an intentionally empty heading (a blank `## `); it must
+// be skipped, so no contents row is blank and the O(text-nodes) offset fallback
+// never fires for it (council PR gate).
+check(
+  'rendered TOC skips empty headings (no blank rows)',
+  await page.evaluate(() =>
+    [...document.querySelectorAll('#ew-doc-toc button')].every((b) => (b.textContent ?? '').trim() !== '')
+  ),
+  'a blank contents row is present'
+);
+await page.locator('#ew-doc-toc button').last().click(); // "Events of Default", far down
+await page.waitForFunction(() => window.scrollY > 0, null, { timeout: 10000 });
+check('rendered heading TOC jump scrolls', true);
+check('rendered heading TOC jump focuses text', (await page.evaluate(() => document.activeElement?.id)) === 'ew-doc-text');
+// Toggle to raw re-runs the query in raw space (the phrase no longer matches),
+// and the container is back to the single-text-node plain path.
+await page.click('#ew-view-toggle');
+await page.waitForFunction(() => document.getElementById('ew-view-toggle')?.textContent === 'View formatted text', null, { timeout: 10000 });
+await page.waitForFunction(() => (document.getElementById('ew-doc-search-count')?.textContent ?? '').includes('No exact matches'), null, { timeout: 10000 });
+check('toggle to raw re-runs the query (bold-split phrase no longer matches)', true, await page.textContent('#ew-doc-search-count'));
+check('raw mode is the single-text-node plain path', await page.evaluate(() => {
+  const c = document.getElementById('ew-doc-text');
+  return c.firstChild?.nodeType === 3 && c.dataset.segStart === '0' && !c.querySelector('.ew-doc-rendered');
+}));
+await page.click('#ew-view-toggle');
+await page.waitForFunction(() => (document.getElementById('ew-doc-search-count')?.textContent ?? '').includes('1 match'), null, { timeout: 10000 });
+check('toggle back to formatted re-matches the phrase', (await page.locator('#ew-doc-text .ew-doc-rendered').count()) === 1);
+// ?q= deep link on a rendered doc restores and navigates.
+await page.goto(`${BASE}/doc/synthetic-rich/?q=${encodeURIComponent('collective action clauses')}`, { waitUntil: 'load' });
+await docReady();
+await page.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 1 of 1'), null, { timeout: 10000 });
+check('rendered ?q= deep link restores and navigates', /1 match/.test(await page.textContent('#ew-doc-search-count')));
+
+// ---- (k) pages-source doc keeps the plain path (regression) ----
+await page.goto(`${BASE}/doc/edgar-0001193125-26-273390/`, { waitUntil: 'load' });
+await docReady();
+check('pages-source doc: no view toggle', await page.locator('#ew-view-toggle').isHidden());
+check('pages-source doc: single text node + seg-start (plain path)', await page.evaluate(() => {
+  const c = document.getElementById('ew-doc-text');
+  return c.firstChild?.nodeType === 3 && c.dataset.segStart === '0' && !c.querySelector('.ew-doc-rendered');
+}));
+check('pages-source doc: page-boundaries note present', (await page.textContent('body')).includes('page boundaries are not displayed'));
+
+// ---- (l) self-hosted parquet extension, guarded by SMOKE_EXT_BASE (TEA-932) ----
 // The duckdb-wasm worker's extension fetch escapes page-scoped routing, so the
 // interception is context-level and installed BEFORE the page is created;
 // extensions.duckdb.org is aborted so a mechanism regression fails loudly (rows
