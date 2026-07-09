@@ -229,7 +229,7 @@ await axeContext.close();
 // cannot render off the blocked origin) rather than passing via the default CDN.
 const extBase = process.env.SMOKE_EXT_BASE;
 if (extBase) {
-  const extOrigin = new URL(extBase).origin;
+  const extBaseNorm = extBase.replace(/\/+$/, '');
   const extContext = await browser.newContext();
   const extRequests = [];
   await extContext.route('**/*', (route) => {
@@ -249,11 +249,13 @@ if (extBase) {
     extRendered = false;
   }
   const defaultHits = extRequests.filter((u) => u.includes('extensions.duckdb.org'));
+  // Assert the full configured base (not just its origin): a dropped path
+  // segment (e.g. missing /ext) would still hit the origin but 404 in prod.
   const mirrorHits = extRequests.filter(
-    (u) => u.startsWith(extOrigin) && u.includes('parquet.duckdb_extension.wasm')
+    (u) => u.startsWith(extBaseNorm) && u.includes('parquet.duckdb_extension.wasm')
   );
   check('ext: zero requests to extensions.duckdb.org', defaultHits.length === 0, `count=${defaultHits.length}`);
-  check('ext: parquet extension fetched from mirror origin', mirrorHits.length >= 1, mirrorHits[0] ?? '(none)');
+  check('ext: parquet extension fetched from mirror base', mirrorHits.length >= 1, mirrorHits[0] ?? '(none)');
   check('ext: rows render with extensions.duckdb.org blocked', extRendered);
   await extContext.close();
 }

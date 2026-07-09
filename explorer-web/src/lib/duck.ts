@@ -10,7 +10,8 @@ import workerMvp from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url
 import wasmMvp from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 
 import { PUBLIC_EXTENSION_BASE_URL, PUBLIC_WASM_BASE_URL } from './config';
-import { createDocsViewSql, sqlQuote } from './queries';
+import { applyExtensionRepository } from './ext-repo';
+import { createDocsViewSql } from './queries';
 import { joinUrl } from './urls';
 
 export interface DuckTimings {
@@ -38,30 +39,9 @@ const BUNDLES: duckdb.DuckDBBundles = PUBLIC_WASM_BASE_URL
       eh: { mainModule: wasmEh, mainWorker: workerEh },
     };
 
-// Redirect the parquet extension fetch away from extensions.duckdb.org (a
-// third live origin, an availability SPOF and an institutional-proxy killer)
-// to our own data host. DuckDB appends its own
-// <core-version>/<wasm-platform>/parquet.duckdb_extension.wasm suffix to the
-// repository base, keyed by the DuckDB CORE version inside the wasm build
-// (v1.4.3 for duckdb-wasm 1.32.0), NOT the npm version string. So the base
-// must be the mirror's parent of that <core-version>/<platform> tree.
-//
-// When PUBLIC_EXTENSION_BASE_URL is unset the app is byte-identical to today:
-// no pragma runs and duckdb autoloads from extensions.duckdb.org on the first
-// read_parquet. Mechanism order (the local blocked-origin proof, TEA-932 task
-// 3, verifies which one actually redirects the fetch): INSTALL ... FROM is
-// preferred (deterministic, loads at boot, no reliance on autoload
-// resolution); custom_extension_repository is the autoload fallback.
-async function applyExtensionRepository(conn: duckdb.AsyncDuckDBConnection): Promise<void> {
-  if (!PUBLIC_EXTENSION_BASE_URL) return;
-  const base = sqlQuote(PUBLIC_EXTENSION_BASE_URL);
-  try {
-    await conn.query(`INSTALL parquet FROM ${base}`);
-    await conn.query('LOAD parquet');
-  } catch {
-    await conn.query(`SET custom_extension_repository=${base}`);
-  }
-}
+// The parquet-extension self-host mechanism (INSTALL ... FROM with a
+// custom_extension_repository fallback) lives in ext-repo.ts so its branches
+// are unit-tested; see that module's header for the path model and rationale.
 
 let cached: Promise<DuckHandle> | null = null;
 
@@ -74,7 +54,7 @@ async function boot(): Promise<DuckHandle> {
   await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
   const t2 = performance.now();
   const conn = await db.connect();
-  await applyExtensionRepository(conn);
+  await applyExtensionRepository(PUBLIC_EXTENSION_BASE_URL, (sql) => conn.query(sql));
   return {
     db,
     conn,

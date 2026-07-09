@@ -58,6 +58,28 @@ if (isBuild) {
     if (e.protocol !== 'https:' && !eLocal) {
       throw new Error(`PUBLIC_EXTENSION_BASE_URL must be https (mixed content); got ${extUrl}`);
     }
+    // duckdb appends /<core>/<platform>/<name>; a trailing slash on the base
+    // yields a double-slash key that 404s (no CDN fallback catches it).
+    if (extUrl.endsWith('/')) {
+      throw new Error(
+        `PUBLIC_EXTENSION_BASE_URL must not end with a slash (duckdb appends /<core>/<platform>/<name>); got ${extUrl}`
+      );
+    }
+  }
+  // Version lockstep: the extension mirror lives under the same duckdb-wasm-<v>
+  // prefix as the wasm binaries, so a pin bump that moves one URL but not the
+  // other would silently serve a mismatched extension. If both are set, require
+  // their duckdb-wasm-<v> segments to match (fails the build loudly, mirroring
+  // build.sh's PUBLIC_WASM_BASE_URL drift guard in the wrapper).
+  if (extUrl && wasmUrl) {
+    const seg = (u) => u.match(/duckdb-wasm-[^/]+/)?.[0];
+    const wv = seg(wasmUrl);
+    const xv = seg(extUrl);
+    if (wv && xv && wv !== xv) {
+      throw new Error(
+        `PUBLIC_EXTENSION_BASE_URL (${xv}) must share the duckdb-wasm version of PUBLIC_WASM_BASE_URL (${wv}); bump them together`
+      );
+    }
   }
 }
 
