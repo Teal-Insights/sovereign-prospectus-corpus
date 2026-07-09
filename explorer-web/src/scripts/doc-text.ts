@@ -188,6 +188,7 @@ function main(): void {
   const segLabel = byId<HTMLSpanElement>('ew-seg-label')!;
   const segNotice = byId<HTMLDivElement>('ew-seg-notice')!;
   const viewToggle = byId<HTMLButtonElement>('ew-view-toggle')!;
+  const viewToggleRow = byId<HTMLParagraphElement>('ew-view-toggle-row')!;
 
   const slug = container.dataset.slug ?? '';
   const bytes = Number(container.dataset.textBytes ?? 0);
@@ -463,7 +464,11 @@ function main(): void {
     }
     tocList.appendChild(frag);
     const entryCount = active.mode === 'rendered' ? renderedTocRows.length : toc.length;
-    if (entryCount > TOC_FILTER_THRESHOLD) tocFilter.hidden = false;
+    // Reset on every (re)build: a mode toggle can swap in a shorter list, so a
+    // left-over value or a still-visible filter would contradict the freshly
+    // rebuilt, unfiltered rows (council PR gate).
+    tocFilter.value = '';
+    tocFilter.hidden = entryCount <= TOC_FILTER_THRESHOLD;
   }
 
   // Wired ONCE (a gate-retry path re-runs renderToc; a listener there would
@@ -630,14 +635,16 @@ function main(): void {
   searchNext.addEventListener('click', () => goToMatch(navigated ? matchIndex + 1 : 0));
 
   segPrev.addEventListener('click', () => {
-    if (segPrev.getAttribute('aria-disabled') === 'true') return;
+    // Rendered mode leaves segments empty; the nav is hidden there, but guard
+    // against a programmatic click reaching segments[-1] (council PR gate).
+    if (!segmented || segPrev.getAttribute('aria-disabled') === 'true') return;
     renderSegment(segIndex - 1);
     announce(segmentLabel(segIndex + 1, segments.length, segmentMatchCount()));
     scrollToOffset(segments[segIndex].start);
     focusText();
   });
   segNext.addEventListener('click', () => {
-    if (segNext.getAttribute('aria-disabled') === 'true') return;
+    if (!segmented || segNext.getAttribute('aria-disabled') === 'true') return;
     renderSegment(segIndex + 1);
     announce(segmentLabel(segIndex + 1, segments.length, segmentMatchCount()));
     scrollToOffset(segments[segIndex].start);
@@ -693,12 +700,15 @@ function main(): void {
     const rows: TocRow[] = [];
     headings.forEach((h, i) => {
       h.id = `ew-h-${i}`;
-      rows.push({
-        title: h.textContent ?? '',
-        level: Number(h.tagName[1]),
-        offset: headingOffset(h, nodeStart),
-      });
+      // Skip headings with no text: they make no meaningful contents entry, and
+      // headingOffset would fall back to an O(text-nodes) document scan for each
+      // one (quadratic across a run of blank `##` lines in machine-converted
+      // text, plus a blank row that mis-scrolls on click; council PR gate).
+      const title = h.textContent ?? '';
+      if (!title.trim()) return;
+      rows.push({ title, level: Number(h.tagName[1]), offset: headingOffset(h, nodeStart) });
     });
+    if (rows.length === 0) return;
     // Front-matter row exactly when text precedes the first heading.
     renderedTocRows =
       rows[0].offset > 0 ? [{ title: FRONT_MATTER_LABEL, level: 2, offset: 0 }, ...rows] : rows;
@@ -734,11 +744,17 @@ function main(): void {
   }
 
   function updateToggleLabel(): void {
+    // The label names the mode the button switches TO (browser find convention).
+    // No aria-pressed: a self-describing dynamic label plus a pressed state give
+    // assistive tech contradictory cues (council PR gate).
     viewToggle.textContent = formatted ? VIEW_RAW_LABEL : VIEW_FORMATTED_LABEL;
-    viewToggle.setAttribute('aria-pressed', String(!formatted));
   }
 
   function showToggle(): void {
+    // Unhide the whole row, not just the button: the row is hidden by default so
+    // ineligible plain docs do not carry an empty paragraph above the text
+    // (frozen-path polish; council PR gate).
+    viewToggleRow.hidden = false;
     viewToggle.hidden = false;
     updateToggleLabel();
   }

@@ -239,6 +239,16 @@ check('current match painted in rendered mode', await page.evaluate(() => (CSS.h
 await page.locator('#ew-doc-toc-details summary').click();
 const richTocRows = await page.locator('#ew-doc-toc button').count();
 check('rendered TOC derived from headings', richTocRows >= 3, `${richTocRows} rows`);
+// The fixture ends with an intentionally empty heading (a blank `## `); it must
+// be skipped, so no contents row is blank and the O(text-nodes) offset fallback
+// never fires for it (council PR gate).
+check(
+  'rendered TOC skips empty headings (no blank rows)',
+  await page.evaluate(() =>
+    [...document.querySelectorAll('#ew-doc-toc button')].every((b) => (b.textContent ?? '').trim() !== '')
+  ),
+  'a blank contents row is present'
+);
 await page.locator('#ew-doc-toc button').last().click(); // "Events of Default", far down
 await page.waitForFunction(() => window.scrollY > 0, null, { timeout: 10000 });
 check('rendered heading TOC jump scrolls', true);

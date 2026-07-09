@@ -212,6 +212,7 @@ input[type='checkbox'] {
 #ew-doc-search-prev,
 #ew-doc-search-next,
 #ew-doc-toc button,
+#ew-view-toggle,
 .ew-check-row {
   min-height: var(--ew-tap-target-min);
 }
@@ -228,6 +229,7 @@ input[type='checkbox'] {
   #ew-doc-search-prev,
   #ew-doc-search-next,
   #ew-doc-toc button,
+  #ew-view-toggle,
   .ew-check-row {
     min-height: var(--ew-tap-target);
   }

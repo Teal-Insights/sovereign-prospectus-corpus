@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Title</h1>
+  <p>Body</p>
+  <script>
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let node;
+    while(node = walker.nextNode()) {
+      if (node.data === '\n  ') {
+        const range = document.createRange();
+        range.setStart(node, 0);
+        range.setEnd(node, 1);
+        const rect = range.getBoundingClientRect();
+        console.log('rect top:', rect.top, 'height:', rect.height);
+      }
+    }
+  </script>
+</body>
+</html>
