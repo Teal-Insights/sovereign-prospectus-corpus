@@ -211,7 +211,59 @@ const badDoc = axeDoc.violations.filter((v) => v.impact === 'serious' || v.impac
 check('axe doc: no serious/critical', badDoc.length === 0, JSON.stringify(badDoc.map((v) => v.id)));
 await axeContext.close();
 
-// ---- (h) rendered markdown mode (B1 / TEA-929) ----
+// ---- (h) browse search box narrows the table and round-trips (TEA-930) ----
+await page.goto(`${BASE}/`, { waitUntil: 'load' });
+await browseReady();
+const beforeSearch = await page.evaluate(() => window.__ewMetrics.rowsRendered);
+const histBeforeSearch = await page.evaluate(() => history.length);
+await page.fill('#ew-search-input', 'Philippines');
+await page.waitForFunction(
+  () => /^2 documents match/.test(document.getElementById('ew-status')?.textContent ?? ''),
+  null,
+  { timeout: 10000 }
+);
+const afterSearch = await page.evaluate(() => window.__ewMetrics.rowsRendered);
+check('search narrows the row count', beforeSearch > afterSearch && afterSearch === 2, `${beforeSearch} -> ${afterSearch}`);
+check('search writes q to the URL', new URL(page.url()).searchParams.get('q') === 'Philippines', page.url());
+const histAfterSearch = await page.evaluate(() => history.length);
+check('typing uses replaceState (no history growth)', histBeforeSearch === histAfterSearch, `${histBeforeSearch} -> ${histAfterSearch}`);
+const searchUrl = page.url();
+const restore = await browser.newPage();
+await restore.goto(searchUrl, { waitUntil: 'load' });
+await restore.waitForFunction(() => (window.__ewMetrics?.rowsRendered ?? 0) > 0, null, { timeout: 120000 });
+check('search box restores from the URL on reload', (await restore.inputValue('#ew-search-input')) === 'Philippines');
+check('restored status reflects the filtered set', /^2 documents match/.test(await restore.textContent('#ew-status')));
+await restore.close();
+
+// ---- (i) a filter change inside the search debounce window keeps the pending term (TEA-930 race regression) ----
+await page.goto(`${BASE}/`, { waitUntil: 'load' });
+await browseReady();
+await page.evaluate(() => {
+  const input = document.getElementById('ew-search-input');
+  input.value = 'Philippines';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  // fire a toggle change synchronously, well inside the 250ms debounce window
+  const scope = document.getElementById('ew-scope-toggle');
+  scope.checked = true;
+  scope.dispatchEvent(new Event('change', { bubbles: true }));
+});
+let racePreserved = false;
+try {
+  // on the buggy path the term is wiped and never commits, so q never appears
+  await page.waitForFunction(
+    () => new URLSearchParams(location.search).get('q') === 'Philippines',
+    null,
+    { timeout: 5000 }
+  );
+  racePreserved =
+    (await page.inputValue('#ew-search-input')) === 'Philippines' &&
+    new URL(page.url()).searchParams.get('scope') === 'all';
+} catch {
+  racePreserved = false;
+}
+check('filter change mid-debounce keeps the pending search term', racePreserved, page.url());
+
+// ---- (j) rendered markdown mode (B1 / TEA-929) ----
 await page.goto(`${BASE}/doc/synthetic-rich/`, { waitUntil: 'load' });
 await docReady();
 check('rendered mode: container holds a rendered tree', (await page.locator('#ew-doc-text .ew-doc-rendered').count()) === 1);
@@ -272,7 +324,7 @@ await docReady();
 await page.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 1 of 1'), null, { timeout: 10000 });
 check('rendered ?q= deep link restores and navigates', /1 match/.test(await page.textContent('#ew-doc-search-count')));
 
-// ---- (i) pages-source doc keeps the plain path (regression) ----
+// ---- (k) pages-source doc keeps the plain path (regression) ----
 await page.goto(`${BASE}/doc/edgar-0001193125-26-273390/`, { waitUntil: 'load' });
 await docReady();
 check('pages-source doc: no view toggle', await page.locator('#ew-view-toggle').isHidden());
