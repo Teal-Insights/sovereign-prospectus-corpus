@@ -18,9 +18,9 @@ export interface BrowseFilters {
 }
 
 export function highIncomeExclusionActive(
-  f: Pick<BrowseFilters, 'includeHighIncome' | 'incomes'>
+  f: Pick<BrowseFilters, 'includeHighIncome' | 'incomes' | 'countries'>
 ): boolean {
-  return !f.includeHighIncome && (f.incomes ?? []).length === 0;
+  return !f.includeHighIncome && (f.incomes ?? []).length === 0 && (f.countries ?? []).length === 0;
 }
 
 // v1 semantics: COALESCE keeps 'Unknown' rows visible under the default
@@ -125,13 +125,18 @@ export function buildStatusCountsSql(f: BrowseFilters): string {
   const hiActive = highIncomeExclusionActive(f);
   const hiP = hiActive ? HI_EXCLUDE : 'TRUE';
   const isHi = hiActive ? IS_HI : 'FALSE';
+  const includedHiOverride =
+    !f.includeHighIncome && f.countries.length > 0 && f.incomes.length === 0
+      ? `count(*) FILTER (WHERE ${scopeP} AND ${IS_HI})`
+      : '0';
   const explicit = explicitConditions(f);
   const where = explicit.length ? `WHERE ${explicit.join(' AND ')}` : '';
   return `
     SELECT
       count(*) FILTER (WHERE ${scopeP} AND ${hiP})::INTEGER AS matching,
       count(*) FILTER (WHERE ${hiP} AND ${notScope})::INTEGER AS hidden_scope,
-      count(*) FILTER (WHERE ${scopeP} AND ${isHi})::INTEGER AS hidden_hi
+      count(*) FILTER (WHERE ${scopeP} AND ${isHi})::INTEGER AS hidden_hi,
+      ${includedHiOverride}::INTEGER AS included_hi_override
     FROM docs
     ${where}
   `;

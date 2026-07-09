@@ -4,15 +4,14 @@ import Base from '../layouts/Base.astro';
 import { computeFilterOptions, computeStats, loadDocuments, loadSnapshotManifest } from '../lib/build-data';
 import {
   HI_TOGGLE_LABEL,
-  HI_OVERRIDE_HINT,
   NOSCRIPT_NOTE,
   SEARCH_LABEL,
   SEARCH_PLACEHOLDER,
-  STATS_CAPTION,
   WB_VINTAGE_NOTE,
   browseSubtitle,
   scopeToggleLabel,
   sourceDisplay,
+  statsCaption,
 } from '../lib/format';
 
 const [docs, stamp] = await Promise.all([loadDocuments(), loadSnapshotManifest()]);
@@ -21,8 +20,6 @@ const options = computeFilterOptions(docs);
 const n = (v: number) => v.toLocaleString('en-US');
 
 const GITHUB_URL = 'https://github.com/Teal-Insights/sovereign-prospectus-corpus';
-const PROTOTYPE_URL = 'https://teal-insights.github.io/sovereign-prospectus-corpus/';
-const QCRAFT_URL = 'https://teal-insights.github.io/QCraft-App/';
 ---
 
 <Base
@@ -37,67 +34,46 @@ const QCRAFT_URL = 'https://teal-insights.github.io/QCraft-App/';
     <div class="ew-stat"><span class="ew-stat-value">{n(stats.docs)}</span> Documents</div>
     <div class="ew-stat"><span class="ew-stat-value">{n(stats.sources)}</span> Sources</div>
     <div class="ew-stat"><span class="ew-stat-value">{n(stats.issuers)}</span> Issuers</div>
-    <p class="ew-muted ew-stats-caption">{STATS_CAPTION}</p>
+    <p class="ew-muted ew-stats-caption">{statsCaption(stamp.snapshot_date)}</p>
   </div>
 
   <details class="ew-about">
     <summary>About this project</summary>
     <p>
-      An open-source corpus of sovereign bond prospectuses collected from the FCA National Storage
-      Mechanism, SEC EDGAR, the Sovereign Debt Forum's #PublicDebtIsPublic Dataset, and the
-      Luxembourg Stock Exchange. Built by
-      <a href="https://tealemery.com" target="_blank" rel="noopener noreferrer">Teal Insights</a>
+      The Sovereign Prospectus Explorer is an open corpus of sovereign bond
+      prospectuses and related filings, collected from the FCA National Storage
+      Mechanism, SEC EDGAR, the Luxembourg Stock Exchange, and the Sovereign
+      Debt Forum's #PublicDebtIsPublic dataset. Every document links back to its
+      source. Built by
+      <a href="https://tealinsights.com" target="_blank" rel="noopener noreferrer">Teal Insights</a>
       with support from
       <a href="https://naturefinance.net" target="_blank" rel="noopener noreferrer">NatureFinance</a>.
       <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">GitHub</a> |
       <a href={`${GITHUB_URL}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer">MIT License</a>.
     </p>
     <p>
-      This is an early-stage beta with plenty of rough edges. It grew out of community feedback on
-      a
-      <a href={PROTOTYPE_URL} target="_blank" rel="noopener noreferrer">prototype proposal</a>
-      for scaling clause identification in sovereign bond contracts. That feedback pointed to an
-      immediate pain point: just finding and navigating prospectuses across multiple sources is
-      hard. This explorer is a first down payment on what could become something much more
-      powerful, with your input.
+      These are public documents, but working with them is not easy: they sit
+      scattered across venues, behind slow search interfaces, in inconsistent
+      formats. The explorer puts them in one place with fast filtering, readable
+      text, and in-document search, so the ten pages that matter in a
+      300-page document take minutes to reach, not hours.
     </p>
-    <h3>What's next?</h3>
+    <h3>What's next</h3>
     <ul>
+      <li>Search across the full text of every document in the corpus</li>
       <li>Automated updates as new prospectuses are filed</li>
-      <li>New data sources</li>
-      <li>Filtering by document type (base prospectus, supplement, final terms, etc.)</li>
+      <li>Document-type filters (base prospectus, supplement, final terms)</li>
       <li>
-        Automated clause identification with expert validation (<a
-          href={PROTOTYPE_URL}
-          target="_blank"
-          rel="noopener noreferrer">learn more</a
-        >)
-      </li>
-      <li>
-        Part of a growing open-source SovTech ecosystem alongside tools like the
-        <a href={QCRAFT_URL} target="_blank" rel="noopener noreferrer">Q-CRAFT Explorer</a>,
-        open-source tools that elevate the sovereign debt conversation by eliminating analytical
-        toil
+        Clause identification with expert validation, measured against
+        expert-annotated baselines before any claim ships
       </li>
     </ul>
     <h3>Help shape this tool</h3>
     <p>
-      We're building this with the people who use sovereign debt data. If you have 2 minutes, we'd
-      love to hear from you:
-    </p>
-    <ol>
-      <li>What are your biggest pain points in working with sovereign bond prospectuses?</li>
-      <li>
-        Are you a sovereign debt lawyer who might be interested in "lawyer-in-the-loop" validation
-        to help automatically identify key clauses?
-      </li>
-      <li>
-        Would you be willing to have a short conversation about how this tool could be more useful
-        for your work?
-      </li>
-    </ol>
-    <p>
-      <a href="mailto:lte@tealinsights.com">Get in touch</a> or open an issue on
+      This is built with and for the people who work with sovereign debt:
+      lawyers, investors, officials, and researchers. If it could work better
+      for you, <a href="mailto:lte@tealinsights.com">tell us</a> or open an
+      issue on
       <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noopener noreferrer">GitHub</a>.
     </p>
   </details>
@@ -171,7 +147,7 @@ const QCRAFT_URL = 'https://teal-insights.github.io/QCraft-App/';
         <input type="checkbox" id="ew-hi-toggle" />
         {HI_TOGGLE_LABEL}
       </label>
-      <span id="ew-hi-hint">{HI_OVERRIDE_HINT}</span>
+      <span id="ew-hi-hint"></span>
     </div>
   </form>
   <p class="ew-muted">{WB_VINTAGE_NOTE}</p>

@@ -78,10 +78,9 @@ await page.waitForFunction(() => !location.search.includes('page=99'));
 const lenAfterClamp = await page.evaluate(() => history.length);
 check('page clamp uses replaceState (no history growth)', lenAfterNav === lenAfterClamp, `${lenAfterNav} -> ${lenAfterClamp}`);
 
-// zero results must still explain what the toggles hide (Poland scenario:
-// FIN is one sovereign High-income doc, hidden by the default exclusion).
+// zero results must still give a recovery hint.
 // browseReady() gates on rows > 0, which a zero-result page never reaches.
-await page.goto(`${BASE}/?country=FIN`, { waitUntil: 'load' });
+await page.goto(`${BASE}/?country=FIN&income=${encodeURIComponent('Lower middle income')}`, { waitUntil: 'load' });
 await page.waitForFunction(
   () => document.getElementById('ew-status')?.textContent?.includes('No documents match'),
   null,
@@ -89,8 +88,8 @@ await page.waitForFunction(
 );
 const zeroStatus = await page.textContent('#ew-status');
 check(
-  'zero results keep the would-add sentences',
-  zeroStatus.includes('No documents match') && zeroStatus.includes('would add'),
+  'zero results show recovery copy',
+  zeroStatus.includes('No documents match') && zeroStatus.includes('Remove a filter to widen the results'),
   zeroStatus.trim()
 );
 
@@ -113,6 +112,21 @@ await page.waitForFunction(() =>
   document.getElementById('ew-status')?.textContent?.includes('included by the income filter')
 );
 check('override sentence with High income selected', true);
+
+await page.goto(`${BASE}/`, { waitUntil: 'load' });
+await browseReady();
+await page.selectOption('#ew-filter-country-select', 'FIN');
+await page.waitForFunction(() =>
+  document.getElementById('ew-status')?.textContent?.includes('because their countries are selected')
+);
+check('country override rows appear', (await page.locator('#ew-rows tr').count()) > 0);
+check('hi toggle disabled under country selection', await page.locator('#ew-hi-toggle').isDisabled());
+check(
+  'country override hint visible',
+  ((await page.textContent('#ew-hi-hint')) ?? '').includes('Overridden by the country selection.')
+);
+const statusCountryHi = await page.textContent('#ew-status');
+check('country override status explains high-income inclusion', statusCountryHi.includes('because their countries are selected'), statusCountryHi.trim());
 
 // ---- (d) doc page: TOC jump focus, search, segments ----
 await page.goto(`${BASE}/doc/synthetic-large/`, { waitUntil: 'load' });

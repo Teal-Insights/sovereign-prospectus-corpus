@@ -51,10 +51,15 @@ it('docs view bootstrap SQL lives here (single named contract)', () => {
 import { buildStatusCountsSql, highIncomeExclusionActive } from '../../src/lib/queries';
 
 it('high-income exclusion truth table', () => {
-  expect(highIncomeExclusionActive({ includeHighIncome: false, incomes: [] })).toBe(true);
-  expect(highIncomeExclusionActive({ includeHighIncome: true, incomes: [] })).toBe(false);
-  expect(highIncomeExclusionActive({ includeHighIncome: false, incomes: ['Low income'] })).toBe(false);
-  expect(highIncomeExclusionActive({ includeHighIncome: true, incomes: ['High income'] })).toBe(false);
+  expect(highIncomeExclusionActive({ includeHighIncome: false, incomes: [], countries: [] })).toBe(true);
+  expect(highIncomeExclusionActive({ includeHighIncome: true, incomes: [], countries: [] })).toBe(false);
+  expect(highIncomeExclusionActive({ includeHighIncome: false, incomes: ['Low income'], countries: [] })).toBe(
+    false
+  );
+  expect(highIncomeExclusionActive({ includeHighIncome: true, incomes: ['High income'], countries: [] })).toBe(
+    false
+  );
+  expect(highIncomeExclusionActive({ includeHighIncome: false, incomes: [], countries: ['FIN'] })).toBe(false);
 });
 
 it('default list SQL excludes high income with a COALESCE null guard', () => {
@@ -73,6 +78,12 @@ it('includeHighIncome drops the exclusion without an income selection', () => {
   expect(sql).not.toContain("!= 'High income'");
 });
 
+it('specific country selection drops the high-income exclusion', () => {
+  const sql = buildListSql({ ...DEFAULTS, countries: ['FIN'] });
+  expect(sql).toContain("country_code IN ('FIN')");
+  expect(sql).not.toContain("!= 'High income'");
+});
+
 it('region filters use the Unknown COALESCE guard', () => {
   const sql = buildListSql({ ...DEFAULTS, regions: ['Sub-Saharan Africa', 'Unknown'] });
   expect(sql).toContain("COALESCE(region, 'Unknown') IN ('Sub-Saharan Africa', 'Unknown')");
@@ -84,7 +95,7 @@ it('source filter uses raw keys', () => {
   );
 });
 
-it('status counts SQL: three FILTER arms with explicit filters in the outer WHERE', () => {
+it('status counts SQL: four FILTER arms with explicit filters in the outer WHERE', () => {
   const sql = buildStatusCountsSql({ ...DEFAULTS, countries: ['KEN'] });
   expect(sql).toContain("WHERE country_code IN ('KEN')");
   expect(sql).toContain('FILTER (WHERE is_sovereign = true AND');
@@ -93,6 +104,31 @@ it('status counts SQL: three FILTER arms with explicit filters in the outer WHER
   expect(sql).toContain('::INTEGER AS matching');
   expect(sql).toContain('::INTEGER AS hidden_scope');
   expect(sql).toContain('::INTEGER AS hidden_hi');
+  expect(sql).toContain('::INTEGER AS included_hi_override');
+});
+
+it('status counts include the high-income country override only for selected countries without income filters', () => {
+  const active = buildStatusCountsSql({ ...DEFAULTS, countries: ['FIN'] });
+  expect(active).toContain(
+    "count(*) FILTER (WHERE is_sovereign = true AND COALESCE(income_group, 'Unknown') = 'High income')::INTEGER AS included_hi_override"
+  );
+
+  const defaultInactive = buildStatusCountsSql(DEFAULTS);
+  expect(defaultInactive).toContain('0::INTEGER AS included_hi_override');
+
+  const incomeInactive = buildStatusCountsSql({
+    ...DEFAULTS,
+    countries: ['FIN'],
+    incomes: ['High income'],
+  });
+  expect(incomeInactive).toContain('0::INTEGER AS included_hi_override');
+
+  const toggleInactive = buildStatusCountsSql({
+    ...DEFAULTS,
+    countries: ['FIN'],
+    includeHighIncome: true,
+  });
+  expect(toggleInactive).toContain('0::INTEGER AS included_hi_override');
 });
 
 it('status counts arms flip to TRUE/FALSE when a toggle is inactive', () => {
@@ -104,6 +140,7 @@ it('status counts arms flip to TRUE/FALSE when a toggle is inactive', () => {
   expect(allIn).toContain('FILTER (WHERE TRUE AND TRUE)::INTEGER AS matching');
   expect(allIn).toContain('FILTER (WHERE TRUE AND FALSE)::INTEGER AS hidden_scope');
   expect(allIn).toContain('FILTER (WHERE TRUE AND FALSE)::INTEGER AS hidden_hi');
+  expect(allIn).toContain('0::INTEGER AS included_hi_override');
 });
 
 // ---- B2 additions (TEA-930): find-the-document search on browse ----
@@ -176,4 +213,12 @@ it('the counts SQL carries the same search clauses (single seam)', () => {
 it('search clauses AND with explicit filters in the counts WHERE', () => {
   const sql = buildStatusCountsSql({ ...DEFAULTS, countries: ['KEN'], q: 'bond' });
   expect(sql).toContain(`WHERE country_code IN ('KEN') AND ${grp('bond')}`);
+});
+
+it('country override counts inherit search clauses through the outer WHERE', () => {
+  const sql = buildStatusCountsSql({ ...DEFAULTS, countries: ['FIN'], q: 'bond' });
+  expect(sql).toContain(
+    "count(*) FILTER (WHERE is_sovereign = true AND COALESCE(income_group, 'Unknown') = 'High income')::INTEGER AS included_hi_override"
+  );
+  expect(sql).toContain(`WHERE country_code IN ('FIN') AND ${grp('bond')}`);
 });

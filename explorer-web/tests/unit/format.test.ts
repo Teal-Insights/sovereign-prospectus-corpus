@@ -14,6 +14,7 @@ import {
   orNA,
   scopeToggleLabel,
   sovereignBadge,
+  statsCaption,
 } from '../../src/lib/format';
 
 it('formats epoch-ms (Arrow Date32) in UTC', () => expect(formatDate(1786752000000)).toBe('2026-08-15'));
@@ -50,6 +51,7 @@ it('pinned copy has no em-dash', () => {
     NOSCRIPT_NOTE,
     DOC_NOSCRIPT_NOTE,
     DRIFT_NOTICE,
+    statsCaption('2026-07-04'),
     scopeToggleLabel(1),
     loadGateLabel(1),
   ];
@@ -68,16 +70,17 @@ import {
   NO_TOC_LABEL,
   EMPTY_STATE,
   FRONT_MATTER_LABEL,
-  HI_OVERRIDE_HINT,
+  HI_OVERRIDE_HINT_COUNTRY,
+  HI_OVERRIDE_HINT_INCOME,
   HI_TOGGLE_LABEL,
   MIN_QUERY_HINT,
   SEGMENTS_NOTICE,
-  STATS_CAPTION,
   VIEW_FORMATTED_LABEL,
   VIEW_RAW_LABEL,
   absenceCopy,
   browseSubtitle,
   chipRemoveLabel,
+  filingLinkLabel,
   highlightCapNote,
   highlightCapNoteWhole,
   loadingText,
@@ -99,6 +102,7 @@ const BASE_ARGS = {
   hiddenScope: null,
   hiddenHi: null,
   hiOverride: false,
+  includedHiByCountry: null,
 };
 
 it('status line base form', () => {
@@ -127,13 +131,26 @@ it('status line renders the override sentence only when flagged', () => {
   expect(statusLine(BASE_ARGS)).not.toContain('income filter');
 });
 
+it('status line appends high-income country override count only when positive', () => {
+  expect(statusLine({ ...BASE_ARGS, includedHiByCountry: 7 })).toContain(
+    'Showing 7 high-income documents because their countries are selected.'
+  );
+  expect(statusLine({ ...BASE_ARGS, includedHiByCountry: 0 })).not.toContain(
+    'because their countries are selected'
+  );
+  expect(statusLine(BASE_ARGS)).not.toContain('because their countries are selected');
+});
+
 it('status line suppresses null hidden counts (zero maps to null upstream)', () => {
   expect(statusLine(BASE_ARGS)).not.toContain('would add');
 });
 
 it('zero results keep the marginal sentences (Poland scenario)', () => {
   const s = statusLine({ ...BASE_ARGS, matching: 0, hiddenHi: 42 });
-  expect(s).toBe('No documents match these filters. Including high-income countries would add 42.');
+  expect(s).toBe(
+    'No documents match these filters. Remove a filter to widen the results. ' +
+      'Including high-income countries would add 42.'
+  );
 });
 
 it('match position label and loading text pinned', () => {
@@ -143,7 +160,8 @@ it('match position label and loading text pinned', () => {
   expect(NO_TOC_LABEL).toBe('No table of contents in this document.');
 });
 
-it('empty state pinned', () => expect(EMPTY_STATE).toBe('No documents match these filters.'));
+it('empty state pinned', () =>
+  expect(EMPTY_STATE).toBe('No documents match these filters. Remove a filter to widen the results.'));
 
 it('subtitle is scope-honest with both build-stamped numbers', () => {
   expect(browseSubtitle(7381, 2393)).toBe(
@@ -151,7 +169,14 @@ it('subtitle is scope-honest with both build-stamped numbers', () => {
   );
 });
 
-it('stats caption pinned', () => expect(STATS_CAPTION).toBe('Full corpus.'));
+it('stats caption includes the build snapshot date', () =>
+  expect(statsCaption('2026-07-04')).toBe('Snapshot 2026-07-04. Counts cover the full corpus before filters.'));
+
+it('filing link label reflects PDIP archive provenance', () => {
+  expect(filingLinkLabel('pdip')).toBe('Via PDIP archive');
+  expect(filingLinkLabel('edgar')).toBe('Original filing');
+  expect(filingLinkLabel(null)).toBe('Original filing');
+});
 
 it('source display names', () => {
   expect(sourceDisplay('edgar')).toBe('SEC EDGAR');
@@ -193,7 +218,8 @@ it('absence copy pinned', () => {
 it('assorted S3 strings pinned', () => {
   expect(MIN_QUERY_HINT).toBe('Enter at least 2 characters to search.');
   expect(DROPPED_PARAM_NOTICE).toBe('A filter or page from this link is no longer valid and was removed.');
-  expect(HI_OVERRIDE_HINT).toBe('Overridden by the income filter selection.');
+  expect(HI_OVERRIDE_HINT_INCOME).toBe('Overridden by the income filter selection.');
+  expect(HI_OVERRIDE_HINT_COUNTRY).toBe('Overridden by the country selection.');
   expect(HI_TOGGLE_LABEL).toBe('Include high-income countries');
   expect(FRONT_MATTER_LABEL).toBe('(Front matter)');
   expect(chipRemoveLabel('Kenya')).toBe('Remove Kenya');
@@ -223,6 +249,10 @@ it('every exported string and exercised output is em-dash-free and never says Pa
   );
   outputs.push(
     statusLine({ ...BASE_ARGS, hiddenScope: 1, hiddenHi: 1, hiOverride: true }),
+    statusLine({ ...BASE_ARGS, includedHiByCountry: 1 }),
+    statsCaption('2026-07-04'),
+    filingLinkLabel('pdip'),
+    filingLinkLabel('edgar'),
     browseSubtitle(1, 1),
     sourceDisplay('edgar'),
     segmentLabel(1, 2, 3),
