@@ -170,11 +170,23 @@ See `measurements/NOTES.md` for tables and caveats; headlines:
 - **COOP/COEP:** not required (mvp/eh only). If threads are ever
   revisited, header configurability varies by host and COEP forces
   CORS-cleanliness on every subresource.
-- **Third live origin:** at runtime DuckDB-WASM fetches
-  `parquet.duckdb_extension.wasm` from extensions.duckdb.org on first
-  query (pre-existing behavior, surfaced at the S4 plan gate). The
-  deployed site depends on that origin's availability; self-hosting the
-  extension is a candidate future issue.
+- **Third live origin, now self-hostable (TEA-932):** at runtime
+  DuckDB-WASM autoloads `parquet.duckdb_extension.wasm` from
+  extensions.duckdb.org on the first query (pre-existing behavior,
+  surfaced at the S4 plan gate). When `PUBLIC_EXTENSION_BASE_URL` is set,
+  `boot()` runs `INSTALL parquet FROM <base>; LOAD parquet` right after
+  `db.connect()` (a local blocked-origin proof verified this redirects
+  the fetch to our mirror; `custom_extension_repository` is the autoload
+  fallback), so the deployed site no longer depends on that origin's
+  availability. DuckDB appends `<core-version>/<wasm-platform>/<name>` to
+  the base, keyed by the DuckDB core inside the wasm build (v1.4.3 for
+  duckdb-wasm 1.32.0), NOT the npm string; the mirror lives under the
+  versioned wasm prefix (`.../duckdb-wasm-1.32.0/ext`) so it moves
+  atomically with the pin. Unset means byte-identical open-repo behavior
+  (fetch from extensions.duckdb.org). The setup runs once on the single
+  boot connection; the app uses exactly one connection, so if a second
+  connection is ever introduced, confirm the loaded extension is visible
+  to it (or move the setup to a per-database hook).
 
 ## S3 (TEA-903): parity build contracts
 

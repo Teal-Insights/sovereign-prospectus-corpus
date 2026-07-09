@@ -46,6 +46,41 @@ if (isBuild) {
       throw new Error(`PUBLIC_WASM_BASE_URL must be https (mixed content); got ${wasmUrl}`);
     }
   }
+  const extUrl = env.PUBLIC_EXTENSION_BASE_URL;
+  if (extUrl) {
+    let e;
+    try {
+      e = new URL(extUrl);
+    } catch {
+      throw new Error(`PUBLIC_EXTENSION_BASE_URL must be an absolute URL when set; got ${extUrl}`);
+    }
+    const eLocal = LOCAL_HOSTS.includes(e.hostname);
+    if (e.protocol !== 'https:' && !eLocal) {
+      throw new Error(`PUBLIC_EXTENSION_BASE_URL must be https (mixed content); got ${extUrl}`);
+    }
+    // duckdb appends /<core>/<platform>/<name>; a trailing slash on the base
+    // yields a double-slash key that 404s (no CDN fallback catches it).
+    if (extUrl.endsWith('/')) {
+      throw new Error(
+        `PUBLIC_EXTENSION_BASE_URL must not end with a slash (duckdb appends /<core>/<platform>/<name>); got ${extUrl}`
+      );
+    }
+  }
+  // Version lockstep: the extension mirror lives under the same duckdb-wasm-<v>
+  // prefix as the wasm binaries, so a pin bump that moves one URL but not the
+  // other would silently serve a mismatched extension. If both are set, require
+  // their duckdb-wasm-<v> segments to match (fails the build loudly, mirroring
+  // build.sh's PUBLIC_WASM_BASE_URL drift guard in the wrapper).
+  if (extUrl && wasmUrl) {
+    const seg = (u) => u.match(/duckdb-wasm-[^/]+/)?.[0];
+    const wv = seg(wasmUrl);
+    const xv = seg(extUrl);
+    if (wv && xv && wv !== xv) {
+      throw new Error(
+        `PUBLIC_EXTENSION_BASE_URL (${xv}) must share the duckdb-wasm version of PUBLIC_WASM_BASE_URL (${wv}); bump them together`
+      );
+    }
+  }
 }
 
 export default defineConfig({
@@ -55,6 +90,7 @@ export default defineConfig({
     schema: {
       PUBLIC_DATA_BASE_URL: envField.string({ context: 'client', access: 'public' }),
       PUBLIC_WASM_BASE_URL: envField.string({ context: 'client', access: 'public', optional: true }),
+      PUBLIC_EXTENSION_BASE_URL: envField.string({ context: 'client', access: 'public', optional: true }),
     },
   },
   integrations: [snapshotDevMiddleware(SNAPSHOT_DIR)],

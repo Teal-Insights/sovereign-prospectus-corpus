@@ -9,7 +9,8 @@ import workerEh from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import workerMvp from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 import wasmMvp from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 
-import { PUBLIC_WASM_BASE_URL } from './config';
+import { PUBLIC_EXTENSION_BASE_URL, PUBLIC_WASM_BASE_URL } from './config';
+import { applyExtensionRepository } from './ext-repo';
 import { createDocsViewSql } from './queries';
 import { joinUrl } from './urls';
 
@@ -38,6 +39,10 @@ const BUNDLES: duckdb.DuckDBBundles = PUBLIC_WASM_BASE_URL
       eh: { mainModule: wasmEh, mainWorker: workerEh },
     };
 
+// The parquet-extension self-host mechanism (INSTALL ... FROM with a
+// custom_extension_repository fallback) lives in ext-repo.ts so its branches
+// are unit-tested; see that module's header for the path model and rationale.
+
 let cached: Promise<DuckHandle> | null = null;
 
 async function boot(): Promise<DuckHandle> {
@@ -49,6 +54,7 @@ async function boot(): Promise<DuckHandle> {
   await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
   const t2 = performance.now();
   const conn = await db.connect();
+  await applyExtensionRepository(PUBLIC_EXTENSION_BASE_URL, (sql) => conn.query(sql));
   return {
     db,
     conn,

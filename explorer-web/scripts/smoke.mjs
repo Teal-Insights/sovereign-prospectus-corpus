@@ -12,6 +12,17 @@
 // discipline (clamp via replaceState), interplay override, doc search with
 // live-region announcements, segmented rendering, the 5 MB gate with ?q=,
 // the no-Highlight-API fallback, and an axe pass.
+//
+// Optional scenario (h), guarded by SMOKE_EXT_BASE (TEA-932): proves the
+// parquet extension loads from the self-host mirror with extensions.duckdb.org
+// blocked. It needs a build made WITH PUBLIC_EXTENSION_BASE_URL=$SMOKE_EXT_BASE
+// and an extension server at that origin serving the mirrored
+// <core-version>/<wasm-platform>/parquet.duckdb_extension.wasm layout, e.g.:
+//
+//   SNAPSHOT_DIR=tests/fixtures/snapshot PUBLIC_DATA_BASE_URL=http://127.0.0.1:8081 \
+//     PUBLIC_EXTENSION_BASE_URL=http://127.0.0.1:8082 npx astro build
+//   node scripts/serve-static.mjs --dir <ext-mirror-dir> --port 8082 --cors &
+//   SMOKE_BASE=http://127.0.0.1:8080 SMOKE_EXT_BASE=http://127.0.0.1:8082 node scripts/smoke.mjs
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium } from 'playwright';
 
@@ -333,6 +344,44 @@ check('pages-source doc: single text node + seg-start (plain path)', await page.
   return c.firstChild?.nodeType === 3 && c.dataset.segStart === '0' && !c.querySelector('.ew-doc-rendered');
 }));
 check('pages-source doc: page-boundaries note present', (await page.textContent('body')).includes('page boundaries are not displayed'));
+
+// ---- (l) self-hosted parquet extension, guarded by SMOKE_EXT_BASE (TEA-932) ----
+// The duckdb-wasm worker's extension fetch escapes page-scoped routing, so the
+// interception is context-level and installed BEFORE the page is created;
+// extensions.duckdb.org is aborted so a mechanism regression fails loudly (rows
+// cannot render off the blocked origin) rather than passing via the default CDN.
+const extBase = process.env.SMOKE_EXT_BASE;
+if (extBase) {
+  const extBaseNorm = extBase.replace(/\/+$/, '');
+  const extContext = await browser.newContext();
+  const extRequests = [];
+  await extContext.route('**/*', (route) => {
+    const url = route.request().url();
+    extRequests.push(url);
+    if (url.includes('extensions.duckdb.org')) return route.abort();
+    return route.continue();
+  });
+  const extPage = await extContext.newPage();
+  let extRendered = true;
+  await extPage.goto(`${BASE}/`, { waitUntil: 'load' });
+  try {
+    await extPage.waitForFunction(() => (window.__ewMetrics?.rowsRendered ?? 0) > 0, null, {
+      timeout: 120000,
+    });
+  } catch {
+    extRendered = false;
+  }
+  const defaultHits = extRequests.filter((u) => u.includes('extensions.duckdb.org'));
+  // Assert the full configured base (not just its origin): a dropped path
+  // segment (e.g. missing /ext) would still hit the origin but 404 in prod.
+  const mirrorHits = extRequests.filter(
+    (u) => u.startsWith(extBaseNorm) && u.includes('parquet.duckdb_extension.wasm')
+  );
+  check('ext: zero requests to extensions.duckdb.org', defaultHits.length === 0, `count=${defaultHits.length}`);
+  check('ext: parquet extension fetched from mirror base', mirrorHits.length >= 1, mirrorHits[0] ?? '(none)');
+  check('ext: rows render with extensions.duckdb.org blocked', extRendered);
+  await extContext.close();
+}
 
 await browser.close();
 const failed = results.filter((r) => !r.ok);
