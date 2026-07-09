@@ -20,7 +20,7 @@ export interface BrowseFilters {
 export function highIncomeExclusionActive(
   f: Pick<BrowseFilters, 'includeHighIncome' | 'incomes' | 'countries'>
 ): boolean {
-  return !f.includeHighIncome && (f.incomes ?? []).length === 0 && (f.countries ?? []).length === 0;
+  return !f.includeHighIncome && f.incomes.length === 0 && f.countries.length === 0;
 }
 
 // v1 semantics: COALESCE keeps 'Unknown' rows visible under the default
