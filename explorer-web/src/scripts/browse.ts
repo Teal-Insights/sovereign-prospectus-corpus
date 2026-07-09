@@ -31,6 +31,9 @@ import { docPath } from '../lib/urls';
 import { renderError, renderNotice, userMessageOf } from './dom';
 
 const PAGE_SIZE = 50;
+// Typing granularity: coalesce keystrokes before touching the URL/engine.
+const SEARCH_DEBOUNCE_MS = 250;
+const MAX_Q_LENGTH = 200;
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -47,6 +50,7 @@ const next = el<HTMLButtonElement>('ew-next');
 const scopeToggle = el<HTMLInputElement>('ew-scope-toggle');
 const hiToggle = el<HTMLInputElement>('ew-hi-toggle');
 const hiHint = el<HTMLSpanElement>('ew-hi-hint');
+const searchInput = el<HTMLInputElement>('ew-search-input');
 const form = el<HTMLFormElement>('ew-filters');
 
 interface FilterGroup {
@@ -92,6 +96,7 @@ let state: BrowseUrlState;
 let ready = false;
 let pendingPop = false;
 let refreshGeneration = 0;
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
 // Last known page count: guards a rapid double-click past the final page
 // from pushing an entry the clamp then has to replace (duplicate history).
 let lastPages = Number.POSITIVE_INFINITY;
@@ -118,6 +123,14 @@ function navDisabled(button: HTMLButtonElement): boolean {
 }
 
 function applyStateToControls(): void {
+  // Restore the search box from state (init and popstate). Skip the sync while a
+  // search debounce is pending: a filter/toggle/chip change (its handler calls
+  // this) must not overwrite keystrokes that have not yet been committed to
+  // state.q, or the in-flight term is silently dropped. The pending timer then
+  // commits the typed value on top of the new filter state.
+  if (searchTimer === undefined && searchInput.value !== state.q) {
+    searchInput.value = state.q;
+  }
   for (const group of GROUPS) {
     const values = state[group.stateKey];
     group.chips.innerHTML = '';
@@ -176,6 +189,7 @@ function toFilters(s: BrowseUrlState): BrowseFilters {
     includeHighIncome: s.includeHighIncome,
     page: s.page,
     pageSize: PAGE_SIZE,
+    q: s.q,
   };
 }
 
@@ -339,6 +353,24 @@ hiToggle.addEventListener('change', () => {
   void refresh();
 });
 
+// Search box: debounced, and the ONE control that writes history via
+// replaceState (typing must not spam the back stack; matches the doc page's
+// ?q= behavior). IME composition needs no special casing: the debounce
+// coalesces the intermediate input events. applyStateToControls is not called
+// here, so the input value is never reset mid-keystroke.
+searchInput.addEventListener('input', () => {
+  if (searchTimer !== undefined) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    searchTimer = undefined;
+    const nextQ = searchInput.value.trim().slice(0, MAX_Q_LENGTH);
+    if (nextQ === state.q) return; // debounce collapsed to a no-op
+    state.q = nextQ;
+    state.page = 0;
+    writeUrl(false);
+    void refresh();
+  }, SEARCH_DEBOUNCE_MS);
+});
+
 prev.addEventListener('click', () => {
   if (navDisabled(prev)) return;
   state.page = Math.max(0, state.page - 1);
@@ -405,6 +437,7 @@ async function main(): Promise<void> {
     for (const group of GROUPS) group.select.disabled = true;
     scopeToggle.disabled = true;
     hiToggle.disabled = true;
+    searchInput.disabled = true;
   }
 }
 

@@ -15,7 +15,9 @@
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.32.0",
     "astro": "6.4.8",
-    "hyparquet": "1.26.2"
+    "dompurify": "3.4.11",
+    "hyparquet": "1.26.2",
+    "marked": "18.0.5"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.9",

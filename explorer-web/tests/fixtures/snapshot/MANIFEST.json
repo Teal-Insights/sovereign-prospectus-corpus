@@ -2,13 +2,13 @@
   "schema_version": 1,
   "snapshot_date": "2026-07-04",
   "generated_at": "2026-07-04T17:04:09+00:00",
-  "document_count": 20,
-  "text_file_count": 14,
+  "document_count": 21,
+  "text_file_count": 15,
   "documents_by_source": {
     "edgar": 8,
     "luxse": 3,
     "pdip": 6,
-    "synthetic": 3
+    "synthetic": 4
   },
   "fixture": true
 }

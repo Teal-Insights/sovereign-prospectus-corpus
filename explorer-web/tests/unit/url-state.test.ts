@@ -23,6 +23,7 @@ const EMPTY: BrowseUrlState = {
   includeHighIncome: false,
   includeNonSovereign: false,
   page: 0,
+  q: '',
 };
 
 it('decodes repeated keys, booleans, and 1-based page', () => {
@@ -38,6 +39,7 @@ it('decodes repeated keys, booleans, and 1-based page', () => {
     includeHighIncome: true,
     includeNonSovereign: true,
     page: 2,
+    q: '',
   });
   expect(droppedAny).toBe(false);
 });
@@ -96,4 +98,49 @@ it('doc q codec round-trips and preserves unknowns', () => {
   expect(decodeDocQuery(`?${qs}`)).toBe('pari passu');
   expect(encodeDocQuery(`?${qs}`, '')).toBe('v=123'); // empty q removes the key
   expect(decodeDocQuery('?v=1')).toBe('');
+});
+
+// ---- B2 additions (TEA-930): browse search term `q` ----
+
+it('decodes and round-trips the browse q param, preserving unknowns', () => {
+  const decoded = decodeBrowseState('?q=Philippines+2031&utm=x', KNOWN);
+  expect(decoded.state.q).toBe('Philippines 2031');
+  expect(decoded.droppedAny).toBe(false);
+  const qs = encodeBrowseState('?utm=x', { ...EMPTY, q: 'Philippines 2031' });
+  expect(qs).toContain('q=Philippines+2031');
+  expect(qs).toContain('utm=x');
+  expect(decodeBrowseState(`?${qs}`, KNOWN).state.q).toBe('Philippines 2031');
+});
+
+it('trims the decoded q and does not flag truncation as a dropped param', () => {
+  const decoded = decodeBrowseState('?q=++spaced++', KNOWN);
+  expect(decoded.state.q).toBe('spaced');
+  const long = 'a'.repeat(250);
+  const dl = decodeBrowseState(`?q=${long}`, KNOWN);
+  expect(dl.state.q.length).toBe(200);
+  expect(dl.droppedAny).toBe(false); // free text: silent truncation, no notice
+});
+
+it('omits q when empty and does not let a stale q survive clearing', () => {
+  expect(encodeBrowseState('', EMPTY)).toBe('');
+  expect(encodeBrowseState('?q=old', EMPTY)).toBe(''); // cleared search drops the key
+  expect(encodeBrowseState('?utm=x&q=old', EMPTY)).toBe('utm=x');
+});
+
+it('encoding truncates q to 200 chars so the URL matches the decoded state', () => {
+  const long = 'b'.repeat(250);
+  const qs = encodeBrowseState('', { ...EMPTY, q: long });
+  const back = decodeBrowseState(`?${qs}`, KNOWN);
+  expect(back.state.q.length).toBe(200);
+});
+
+it('strips control characters (NUL/SOH/DEL) from a crafted q so the SQL stays well-formed', () => {
+  // A crafted `?q=%00...` would otherwise embed a NUL in the generated SQL string
+  // literal; DuckDB parses that as an unterminated string and the browse query
+  // fails. %00 = NUL, %01 = SOH, %7f = DEL.
+  const decoded = decodeBrowseState('?q=%00abc%01%7f', KNOWN);
+  expect(decoded.state.q).toBe('abc');
+  expect(decoded.droppedAny).toBe(false); // silent hygiene, not a dropped param
+  // a normal term is untouched by the control-char strip
+  expect(decodeBrowseState('?q=Kenya', KNOWN).state.q).toBe('Kenya');
 });

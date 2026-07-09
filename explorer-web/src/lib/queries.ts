@@ -14,6 +14,7 @@ export interface BrowseFilters {
   includeHighIncome: boolean;
   page: number; // 0-based internal (1-based only in the URL codec)
   pageSize: number;
+  q: string; // free-text find-the-document search; '' means no search
 }
 
 export function highIncomeExclusionActive(
@@ -31,12 +32,46 @@ function inList(col: string, values: string[]): string {
   return `${col} IN (${values.map(sqlQuote).join(', ')})`;
 }
 
+// Free-text find-the-document search. The four columns are the human-facing
+// identity of a document (what someone types when hunting for one). ESCAPE
+// '\' pairs with likeEscape so a term containing %, _, or \ matches literally.
+const SEARCH_COLUMNS = ['display_name', 'issuer_name', 'title', 'country_name'] as const;
+const MAX_SEARCH_TERMS = 8;
+
+// Escape the LIKE metacharacters (and the escape char itself) so a term is
+// matched literally under ILIKE ... ESCAPE '\'. Backslash goes first, or the
+// escapes we add would themselves be re-escaped.
+export function likeEscape(v: string): string {
+  return v.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+}
+
+// Each whitespace-separated term becomes one OR group over SEARCH_COLUMNS;
+// terms AND together (each is a separate array element the callers join with
+// AND). Empty/whitespace q contributes nothing. Capped at MAX_SEARCH_TERMS so
+// a pasted paragraph cannot balloon the SQL.
+function searchConditions(q: string): string[] {
+  const trimmed = q.trim();
+  if (!trimmed) return [];
+  return trimmed
+    .split(/\s+/)
+    .slice(0, MAX_SEARCH_TERMS)
+    .map((term) => {
+      const pattern = sqlQuote(`%${likeEscape(term)}%`);
+      const ors = SEARCH_COLUMNS.map((col) => `${col} ILIKE ${pattern} ESCAPE '\\'`);
+      return `(${ors.join(' OR ')})`;
+    });
+}
+
 function explicitConditions(f: BrowseFilters): string[] {
   const c: string[] = [];
   if (f.countries.length) c.push(inList('country_code', f.countries));
   if (f.regions.length) c.push(inList("COALESCE(region, 'Unknown')", f.regions));
   if (f.incomes.length) c.push(inList("COALESCE(income_group, 'Unknown')", f.incomes));
   if (f.sources.length) c.push(inList('source', f.sources));
+  // SINGLE SEAM: search clauses live here, inside explicitConditions, so every
+  // builder (list, status counts, and any future aggregate layered over this
+  // WHERE) inherits them by construction rather than re-adding them.
+  c.push(...searchConditions(f.q ?? ''));
   return c;
 }
 

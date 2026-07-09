@@ -56,3 +56,15 @@ it('has a segment-scale doc (>1M units, one oversized section)', () => {
   const gaps = offs.slice(1).map((o, i) => o - offs[i]);
   expect(Math.max(...gaps, doc.text.length - offs[offs.length - 1])).toBeGreaterThan(500_000);
 });
+
+it('has a markdown-rich doc for rendered mode (bold-split phrase, table, headings)', () => {
+  const doc = readDoc('synthetic-rich');
+  // rendered-mode eligible: markdown and at or under the 1M-unit ceiling
+  expect(doc.text.length).toBeLessThan(1_000_000);
+  // a phrase split across bold in the raw markdown; matches a spaced query
+  // only after rendering strips the asterisks (the active-text contract)
+  expect(doc.text).toContain('collective **action** clauses');
+  // a GFM table so table rendering stays CI-reachable
+  expect(doc.text).toContain('| Series | Rate | Maturity |');
+  expect(doc.toc.length).toBeGreaterThanOrEqual(3);
+});
