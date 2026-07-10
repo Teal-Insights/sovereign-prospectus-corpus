@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 
-import { buildListSql, createDocsViewSql, sqlQuote } from '../../src/lib/queries';
+import { buildExportSql, buildListSql, createDocsViewSql, sqlQuote } from '../../src/lib/queries';
 
 const DEFAULTS = {
   countries: [],
@@ -221,4 +221,37 @@ it('country override counts inherit search clauses through the outer WHERE', () 
     "count(*) FILTER (WHERE is_sovereign = true AND COALESCE(income_group, 'Unknown') = 'High income')::INTEGER AS included_hi_override"
   );
   expect(sql).toContain(`WHERE country_code IN ('FIN') AND ${grp('bond')}`);
+});
+
+// ---- B8 additions (TEA-936): current-filter CSV export ----
+
+function whereClause(sql: string): string {
+  const match = sql.match(/\n    (WHERE .*)\n    ORDER BY/);
+  expect(match, `SQL has no WHERE clause before ORDER BY:\n${sql}`).not.toBeNull();
+  return match![1];
+}
+
+it('export SQL uses the 10001-row cap and never paginates with an offset', () => {
+  const sql = buildExportSql(DEFAULTS);
+
+  expect(sql).toContain('LIMIT 10001');
+  expect(sql).not.toMatch(/\bOFFSET\b/);
+});
+
+it('export SQL includes the same q search clauses as the table', () => {
+  const sql = buildExportSql({ ...DEFAULTS, q: 'bond 2031' });
+
+  expect(sql).toContain(`${grp('bond')} AND ${grp('2031')}`);
+});
+
+it('export and list SQL emit byte-identical WHERE clauses for countries, q, and toggles', () => {
+  const filters = {
+    ...DEFAULTS,
+    countries: ['FIN', 'KEN'],
+    q: 'bond 2031',
+    includeNonSovereign: true,
+    includeHighIncome: true,
+  };
+
+  expect(whereClause(buildExportSql(filters))).toBe(whereClause(buildListSql(filters)));
 });

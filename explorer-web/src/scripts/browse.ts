@@ -6,10 +6,12 @@
 // (first Lighthouse commitment).
 
 import { PUBLIC_DATA_BASE_URL } from '../lib/config';
+import { toCsv, type ExportRow } from '../lib/csv';
 import { initDuckDB, registerDocumentsParquet, type DuckHandle } from '../lib/duck';
 import {
   DRIFT_NOTICE,
   DROPPED_PARAM_NOTICE,
+  EXPORT_TRUNCATED_NOTE,
   HI_OVERRIDE_HINT_COUNTRY,
   HI_OVERRIDE_HINT_INCOME,
   chipRemoveLabel,
@@ -20,6 +22,7 @@ import {
   statusLine,
 } from '../lib/format';
 import {
+  buildExportSql,
   buildListSql,
   buildStatusCountsSql,
   highIncomeExclusionActive,
@@ -53,6 +56,7 @@ const scopeToggle = el<HTMLInputElement>('ew-scope-toggle');
 const hiToggle = el<HTMLInputElement>('ew-hi-toggle');
 const hiHint = el<HTMLSpanElement>('ew-hi-hint');
 const searchInput = el<HTMLInputElement>('ew-search-input');
+const exportButton = el<HTMLButtonElement>('ew-export');
 const form = el<HTMLFormElement>('ew-filters');
 
 interface FilterGroup {
@@ -99,6 +103,7 @@ let ready = false;
 let pendingPop = false;
 let refreshGeneration = 0;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+let exportNotice: Element | null = null;
 // Last known page count: guards a rapid double-click past the final page
 // from pushing an entry the clamp then has to replace (duplicate history).
 let lastPages = Number.POSITIVE_INFINITY;
@@ -380,15 +385,22 @@ hiToggle.addEventListener('change', () => {
 // ?q= behavior). IME composition needs no special casing: the debounce
 // coalesces the intermediate input events. applyStateToControls is not called
 // here, so the input value is never reset mid-keystroke.
+function commitSearchInput(): boolean {
+  if (searchTimer !== undefined) clearTimeout(searchTimer);
+  searchTimer = undefined;
+  const nextQ = searchInput.value.trim().slice(0, MAX_Q_LENGTH);
+  if (nextQ === state.q) return false;
+  state.q = nextQ;
+  state.page = 0;
+  writeUrl(false);
+  return true;
+}
+
 searchInput.addEventListener('input', () => {
   if (searchTimer !== undefined) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     searchTimer = undefined;
-    const nextQ = searchInput.value.trim().slice(0, MAX_Q_LENGTH);
-    if (nextQ === state.q) return; // debounce collapsed to a no-op
-    state.q = nextQ;
-    state.page = 0;
-    writeUrl(false);
+    if (!commitSearchInput()) return; // debounce collapsed to a no-op
     void refresh();
   }, SEARCH_DEBOUNCE_MS);
 });
@@ -406,6 +418,50 @@ next.addEventListener('click', () => {
   state.page += 1;
   writeUrl(true);
   void refresh();
+});
+
+exportButton.addEventListener('click', async () => {
+  if (!ready) return;
+  if (commitSearchInput()) void refresh();
+  exportButton.disabled = true;
+  exportNotice?.remove();
+  exportNotice = null;
+  try {
+    const rows = (await runQuery(
+      handle.conn,
+      buildExportSql(toFilters(state))
+    )) as unknown as ExportRow[];
+    const result = toCsv(rows, location.origin);
+    const snapshotDate = document.body.dataset.buildSnapshotDate;
+    if (!snapshotDate) throw new Error('missing build snapshot date');
+
+    const url = URL.createObjectURL(new Blob([result.csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `prospectus-explorer-export-${snapshotDate}.csv`;
+    link.hidden = true;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+    if (result.truncated) {
+      renderNotice(notices, EXPORT_TRUNCATED_NOTE);
+      exportNotice = notices.lastElementChild;
+      const renderedNotice = exportNotice;
+      setTimeout(() => {
+        renderedNotice?.remove();
+        if (exportNotice === renderedNotice) exportNotice = null;
+      }, 10_000);
+    }
+  } catch (e) {
+    const exportError = document.createElement('div');
+    notices.appendChild(exportError);
+    renderError(exportError, userMessageOf(e, 'Export failed.'));
+    exportNotice = exportError;
+  } finally {
+    exportButton.disabled = false;
+  }
 });
 
 window.addEventListener('popstate', () => {
@@ -446,6 +502,7 @@ async function main(): Promise<void> {
     metrics.registerMs = performance.now() - tRegister;
     const tFirst = performance.now();
     ready = true;
+    exportButton.disabled = false;
     if (pendingPop) pendingPop = false; // state is already current; fall through
     await refresh();
     if (!metrics.firstQueryMs) metrics.firstQueryMs = performance.now() - tFirst;

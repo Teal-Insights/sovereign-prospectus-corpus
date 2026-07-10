@@ -24,6 +24,7 @@
 //   node scripts/serve-static.mjs --dir <ext-mirror-dir> --port 8082 --cors &
 //   SMOKE_BASE=http://127.0.0.1:8080 SMOKE_EXT_BASE=http://127.0.0.1:8082 node scripts/smoke.mjs
 import { AxeBuilder } from '@axe-core/playwright';
+import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
 const BASE = process.env.SMOKE_BASE ?? 'http://127.0.0.1:8080';
@@ -32,6 +33,49 @@ const check = (name, ok, detail = '') => {
   results.push({ name, ok, detail });
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ` :: ${detail}` : ''}`);
 };
+
+function parseCsv(csv) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let quoted = false;
+  for (let i = 0; i < csv.length; i++) {
+    const char = csv[i];
+    if (quoted) {
+      if (char === '"' && csv[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        field += char;
+      }
+    } else if (char === '"') {
+      quoted = true;
+    } else if (char === ',') {
+      row.push(field);
+      field = '';
+    } else if (char === '\r' && csv[i + 1] === '\n') {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+      i++;
+    } else if (char === '\n') {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += char;
+    }
+  }
+  if (field || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -52,12 +96,48 @@ const status1 = await page.textContent('#ew-status');
 check('status line matrix', /documents match, newest first/.test(status1), status1.trim());
 check('marginal hidden sentences', status1.includes('would add'), '');
 
-const firstCountry = await page.locator('#ew-filter-country-select option').nth(1).getAttribute('value');
+const firstCountryOption = page.locator('#ew-filter-country-select option').nth(1);
+const firstCountry = await firstCountryOption.getAttribute('value');
+const firstCountryLabel = ((await firstCountryOption.textContent()) ?? '').trim();
 await page.selectOption('#ew-filter-country-select', firstCountry);
 await page.waitForFunction(() => new URLSearchParams(location.search).has('country'));
 check('country chip in URL', true, page.url());
 check('unknown param survives interaction', new URL(page.url()).searchParams.get('utm') === 'x');
 check('chip rendered', (await page.locator('#ew-filter-country-chips .ew-chip').count()) === 1);
+
+// The export query must use the current filter state, not the visible page.
+// Capture the real Blob download and inspect the generated file.
+await page.waitForFunction(() => !document.getElementById('ew-export')?.disabled);
+const [exportDownload] = await Promise.all([
+  page.waitForEvent('download'),
+  page.click('#ew-export'),
+]);
+const exportFailure = await exportDownload.failure();
+check('export: Blob download completes', exportFailure === null, exportFailure ?? '');
+const exportPath = await exportDownload.path();
+const exportCsv = exportPath === null ? '' : await readFile(exportPath, 'utf8');
+check('export: download path is available', exportPath !== null);
+const exportRows = parseCsv(exportCsv);
+const expectedExportHeader =
+  'publication_date,issuer,display_name,title,country,region,income_group,doc_type,source,is_sovereign,document_url,filing_url';
+check(
+  'export: CSV header is correct',
+  exportRows[0]?.join(',') === expectedExportHeader,
+  exportRows[0]?.join(',')
+);
+const exportedDocuments = exportRows.slice(1);
+check('export: filtered CSV contains rows', exportedDocuments.length > 0, `rows=${exportedDocuments.length}`);
+check(
+  'export: every row honors the selected country',
+  exportedDocuments.every((row) => row[4] === firstCountryLabel),
+  `country=${firstCountryLabel}`
+);
+const snapshotDate = await page.locator('body').getAttribute('data-build-snapshot-date');
+check(
+  'export: filename uses the build snapshot date',
+  exportDownload.suggestedFilename() === `prospectus-explorer-export-${snapshotDate}.csv`,
+  exportDownload.suggestedFilename()
+);
 const metrics = await page.evaluate(() => window.__ewMetrics);
 check('metrics populated', Boolean(metrics && metrics.bundleName && metrics.totalToFirstRenderMs > 0));
 
@@ -259,6 +339,28 @@ await restore.waitForFunction(() => (window.__ewMetrics?.rowsRendered ?? 0) > 0,
 check('search box restores from the URL on reload', (await restore.inputValue('#ew-search-input')) === 'Philippines');
 check('restored status reflects the filtered set', /^2 documents match/.test(await restore.textContent('#ew-status')));
 await restore.close();
+
+// Export must flush a visible search term even when its debounce has not fired.
+await page.goto(`${BASE}/`, { waitUntil: 'load' });
+await browseReady();
+const pendingSearchDownloadPromise = page.waitForEvent('download');
+await page.evaluate(() => {
+  const input = document.getElementById('ew-search-input');
+  input.value = 'Philippines';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  document.getElementById('ew-export').click();
+});
+const pendingSearchDownload = await pendingSearchDownloadPromise;
+const pendingSearchPath = await pendingSearchDownload.path();
+const pendingSearchCsv = pendingSearchPath === null ? '' : await readFile(pendingSearchPath, 'utf8');
+const pendingSearchRows = parseCsv(pendingSearchCsv).slice(1);
+check(
+  'export flushes a pending search term',
+  pendingSearchRows.length === 2 &&
+    pendingSearchRows.every((row) => row.slice(0, 5).some((value) => value.includes('Philippines'))),
+  `rows=${pendingSearchRows.length}`
+);
+check('pending export writes q to the URL', new URL(page.url()).searchParams.get('q') === 'Philippines');
 
 // ---- (i) a filter change inside the search debounce window keeps the pending term (TEA-930 race regression) ----
 await page.goto(`${BASE}/`, { waitUntil: 'load' });
