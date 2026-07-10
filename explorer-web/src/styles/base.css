@@ -116,12 +116,19 @@ button {
 
 /* Raw document text. pre-wrap is load-bearing (offset addressing and the
    facsimile-honest render depend on it); overflow-wrap prevents long
-   unbroken table rows and URLs from forcing page-wide horizontal scroll. */
+   unbroken table rows and URLs from forcing page-wide horizontal scroll.
+   max-width + line-height are the plaintext reading measure (B0 punch P2,
+   re-routed to B6, CSS-only): pages-source docs never enter rendered mode,
+   so the plain view is their permanent reading surface. Width and leading
+   only; pre-wrap, overflow-wrap, the mono face, and the offset contract
+   are untouched. Mobile is already narrower than 80ch, so no media query. */
 #ew-doc-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-family: var(--ew-font-mono);
   font-size: var(--ew-font-size-doc);
+  max-width: 80ch;
+  line-height: 1.6;
 }
 
 /* Reserved table layout (second Lighthouse commitment; moved here from the
