@@ -397,6 +397,49 @@ if (extBase) {
   await extContext.close();
 }
 
+// ---- (m) mobile viewport: no horizontal page scroll on the demo screens
+// (B7, TEA-935). Wide content (the browse table, rendered-doc tables) scrolls
+// inside its own region, so the page's documentElement must never exceed the
+// viewport at 390x844. The gate screen is asserted too so the S5 long-URL wrap
+// regression stays covered on phones, and the gate button keeps a tappable
+// target. A fresh context carries the 390x844 viewport; the desktop page above
+// is left untouched. ----
+const mobileCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const mobile = await mobileCtx.newPage();
+const noHScroll = () =>
+  mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+const scrollDims = () =>
+  mobile.evaluate(() => `${document.documentElement.scrollWidth} <= ${window.innerWidth}`);
+// target-size stays enabled so a shrunk control (chip close, gate button, TOC
+// entry) fails here at phone width, not just in the desktop axe pass above.
+const mobileAxe = async (label) => {
+  const res = await new AxeBuilder({ page: mobile }).options({ rules: { 'target-size': { enabled: true } } }).analyze();
+  const bad = res.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+  check(`axe ${label} (390x844): no serious/critical`, bad.length === 0, JSON.stringify(bad.map((v) => v.id)));
+};
+
+await mobile.goto(`${BASE}/`, { waitUntil: 'load' });
+await mobile.waitForFunction(() => (window.__ewMetrics?.rowsRendered ?? 0) > 0, null, { timeout: 120000 });
+check('mobile browse: no horizontal page scroll at 390x844', await noHScroll(), await scrollDims());
+await mobileAxe('browse');
+
+await mobile.goto(`${BASE}/doc/synthetic-rich/`, { waitUntil: 'load' });
+await mobile.waitForFunction(() => window.__ewDocMetrics !== undefined, null, { timeout: 120000 });
+check('mobile rendered doc: no horizontal page scroll at 390x844', await noHScroll(), await scrollDims());
+await mobileAxe('rendered doc');
+
+await mobile.goto(`${BASE}/doc/synthetic-gate/`, { waitUntil: 'load' });
+await mobile.waitForSelector('#ew-doc-text button', { timeout: 120000 });
+check('mobile gate doc: no horizontal page scroll at 390x844 (S5 wrap regression)', await noHScroll(), await scrollDims());
+const gateBox = await mobile.locator('#ew-doc-text button').boundingBox();
+check(
+  'mobile gate button stays a tappable target (>=44px in one dimension)',
+  gateBox !== null && (gateBox.width >= 44 || gateBox.height >= 44),
+  gateBox ? `${Math.round(gateBox.width)}x${Math.round(gateBox.height)}` : '(no box)'
+);
+await mobileAxe('gate doc');
+await mobileCtx.close();
+
 await browser.close();
 const failed = results.filter((r) => !r.ok);
 console.log(failed.length ? `SMOKE FAILED: ${failed.length}` : 'SMOKE OK');

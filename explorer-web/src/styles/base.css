@@ -132,10 +132,15 @@ button {
 }
 
 /* Reserved table layout (second Lighthouse commitment; moved here from the
-   index.astro inline style) plus a mobile safety rail. */
+   index.astro inline style) plus a mobile safety rail. The browse table is
+   wider than a phone viewport once the date/issuer/country/status columns are
+   laid out, so it scrolls inside this region rather than pushing the page
+   (B7, TEA-935); -webkit-overflow-scrolling gives iOS Safari momentum scroll
+   inside the region. The page itself never scrolls sideways. */
 #ew-table-region {
   min-height: var(--ew-table-min-height);
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Doc metadata table: filing URLs are single unbroken tokens up to ~350
@@ -210,7 +215,10 @@ input[type='checkbox'] {
 
 /* Target sizes: 24px floor always, 44px on small screens (WCAG 2.5.8 and
    touch comfort). .ew-check-row is the checkbox LABEL row so the clickable
-   area grows, not the input. */
+   area grows, not the input. #ew-doc-text button is the large-document load
+   gate (and its retry twin); it is the only button rendered into the text
+   container, so on the demo path a phone gets a full 44px tall tap target on
+   the 29 MB gate, not just its wide label (B7, TEA-935). */
 .ew-chip button,
 #ew-prev,
 #ew-next,
@@ -220,6 +228,7 @@ input[type='checkbox'] {
 #ew-doc-search-next,
 #ew-doc-toc button,
 #ew-view-toggle,
+#ew-doc-text button,
 .ew-check-row {
   min-height: var(--ew-tap-target-min);
 }
@@ -237,6 +246,7 @@ input[type='checkbox'] {
   #ew-doc-search-next,
   #ew-doc-toc button,
   #ew-view-toggle,
+  #ew-doc-text button,
   .ew-check-row {
     min-height: var(--ew-tap-target);
   }
