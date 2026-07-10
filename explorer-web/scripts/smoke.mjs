@@ -499,6 +499,64 @@ if (extBase) {
   await extContext.close();
 }
 
+// ---- (m) mobile viewport: no horizontal page scroll on the demo screens
+// (B7, TEA-935). Wide content (the browse table, rendered-doc tables) scrolls
+// inside its own region, so the page's documentElement must never exceed the
+// viewport at 390x844. A doc with a ~300-char unbroken filing URL is asserted
+// too, so the S5 long-URL wrap fix (.ew-doc-meta td { overflow-wrap: anywhere })
+// stays locked on phones: without it that URL blows the page out to many times
+// the viewport width. The gate button keeps a 44px-tall tap target. A fresh
+// context carries the 390x844 viewport; the desktop page above is left
+// untouched. ----
+const mobileCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const mobile = await mobileCtx.newPage();
+const noHScroll = () =>
+  mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+const scrollDims = () =>
+  mobile.evaluate(() => `${document.documentElement.scrollWidth} <= ${window.innerWidth}`);
+// target-size stays enabled so a shrunk control (chip close, gate button, TOC
+// entry) fails here at phone width, not just in the desktop axe pass above.
+const mobileAxe = async (label) => {
+  const res = await new AxeBuilder({ page: mobile }).options({ rules: { 'target-size': { enabled: true } } }).analyze();
+  const bad = res.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+  check(`axe ${label} (390x844): no serious/critical`, bad.length === 0, JSON.stringify(bad.map((v) => v.id)));
+};
+
+await mobile.goto(`${BASE}/`, { waitUntil: 'load' });
+await mobile.waitForFunction(() => (window.__ewMetrics?.rowsRendered ?? 0) > 0, null, { timeout: 120000 });
+check('mobile browse: no horizontal page scroll at 390x844', await noHScroll(), await scrollDims());
+await mobileAxe('browse');
+
+await mobile.goto(`${BASE}/doc/synthetic-rich/`, { waitUntil: 'load' });
+await mobile.waitForFunction(() => window.__ewDocMetrics !== undefined, null, { timeout: 120000 });
+check('mobile rendered doc: no horizontal page scroll at 390x844', await noHScroll(), await scrollDims());
+await mobileAxe('rendered doc');
+
+// luxse-100026526 renders a ~298-char unbroken filing URL in .ew-doc-meta, so
+// it is the doc that actually exercises the S5 wrap fix at phone width (the
+// synthetic docs have filing_url = null and cannot). This assertion fails if
+// .ew-doc-meta td loses overflow-wrap: anywhere, which is what makes it a lock.
+await mobile.goto(`${BASE}/doc/luxse-100026526/`, { waitUntil: 'load' });
+await mobile.waitForFunction(() => window.__ewDocMetrics !== undefined, null, { timeout: 120000 });
+check('mobile long-URL doc: no horizontal page scroll at 390x844 (S5 wrap regression)', await noHScroll(), await scrollDims());
+await mobileAxe('long-URL doc');
+
+await mobile.goto(`${BASE}/doc/synthetic-gate/`, { waitUntil: 'load' });
+await mobile.waitForSelector('#ew-doc-text button', { timeout: 120000 });
+check('mobile gate doc: no horizontal page scroll at 390x844', await noHScroll(), await scrollDims());
+// The B7 fix raised the gate button from 34px to 44px tall; assert the height
+// specifically (the label is always wider than 44px, so an || width check would
+// pass even if the min-height rule regressed). box-sizing: border-box makes the
+// bounding-box height the min-height floor, so >= 44 is exact, not sub-pixel.
+const gateBox = await mobile.locator('#ew-doc-text button').boundingBox();
+check(
+  'mobile gate button is a 44px-tall tap target',
+  gateBox !== null && gateBox.height >= 44,
+  gateBox ? `${Math.round(gateBox.width)}x${Math.round(gateBox.height)}` : '(no box)'
+);
+await mobileAxe('gate doc');
+await mobileCtx.close();
+
 await browser.close();
 const failed = results.filter((r) => !r.ok);
 console.log(failed.length ? `SMOKE FAILED: ${failed.length}` : 'SMOKE OK');
