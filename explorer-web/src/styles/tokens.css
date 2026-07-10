@@ -64,7 +64,11 @@
   --ew-tap-target-min: 24px;
   --ew-tap-target: 44px;
   --ew-disabled-opacity: 0.5;
-  --ew-jump-offset: 80px;
+  /* Clearance for TOC jumps and match scrolls (read by doc-text.ts
+     jumpOffsetPx). With P7's sticky doc-search bar this must clear the bar,
+     not just the header. Re-measured in the neutral build at 1440px: header
+     42px + stuck search bar 74px (count row visible) + breathing. */
+  --ew-jump-offset: 140px;
 }
 
 @media (max-width: 640px) {
