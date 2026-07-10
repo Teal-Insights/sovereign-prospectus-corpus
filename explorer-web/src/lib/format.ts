@@ -208,6 +208,12 @@ export const TOC_JUMP_FALLBACK_NOTE =
 export const SEARCH_LABEL = 'Search documents';
 export const SEARCH_PLACEHOLDER = 'Issuer, title, or country...';
 
+// ---- B8 additions (TEA-936): filtered table export ----
+
+export const EXPORT_LABEL = 'Download CSV';
+export const EXPORT_TRUNCATED_NOTE =
+  'Export capped at 10,000 rows; narrow the filters for a complete set.';
+
 // ---- B1 (TEA-929): rendered-mode view toggle ----
 
 // The toggle label names the mode it switches TO, matching browser

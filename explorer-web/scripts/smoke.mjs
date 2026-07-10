@@ -24,6 +24,7 @@
 //   node scripts/serve-static.mjs --dir <ext-mirror-dir> --port 8082 --cors &
 //   SMOKE_BASE=http://127.0.0.1:8080 SMOKE_EXT_BASE=http://127.0.0.1:8082 node scripts/smoke.mjs
 import { AxeBuilder } from '@axe-core/playwright';
+import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
 const BASE = process.env.SMOKE_BASE ?? 'http://127.0.0.1:8080';
@@ -32,6 +33,49 @@ const check = (name, ok, detail = '') => {
   results.push({ name, ok, detail });
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ` :: ${detail}` : ''}`);
 };
+
+function parseCsv(csv) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let quoted = false;
+  for (let i = 0; i < csv.length; i++) {
+    const char = csv[i];
+    if (quoted) {
+      if (char === '"' && csv[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        field += char;
+      }
+    } else if (char === '"') {
+      quoted = true;
+    } else if (char === ',') {
+      row.push(field);
+      field = '';
+    } else if (char === '\r' && csv[i + 1] === '\n') {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+      i++;
+    } else if (char === '\n') {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += char;
+    }
+  }
+  if (field || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -52,12 +96,48 @@ const status1 = await page.textContent('#ew-status');
 check('status line matrix', /documents match, newest first/.test(status1), status1.trim());
 check('marginal hidden sentences', status1.includes('would add'), '');
 
-const firstCountry = await page.locator('#ew-filter-country-select option').nth(1).getAttribute('value');
+const firstCountryOption = page.locator('#ew-filter-country-select option').nth(1);
+const firstCountry = await firstCountryOption.getAttribute('value');
+const firstCountryLabel = ((await firstCountryOption.textContent()) ?? '').trim();
 await page.selectOption('#ew-filter-country-select', firstCountry);
 await page.waitForFunction(() => new URLSearchParams(location.search).has('country'));
 check('country chip in URL', true, page.url());
 check('unknown param survives interaction', new URL(page.url()).searchParams.get('utm') === 'x');
 check('chip rendered', (await page.locator('#ew-filter-country-chips .ew-chip').count()) === 1);
+
+// The export query must use the current filter state, not the visible page.
+// Capture the real Blob download and inspect the generated file.
+await page.waitForFunction(() => !document.getElementById('ew-export')?.disabled);
+const [exportDownload] = await Promise.all([
+  page.waitForEvent('download'),
+  page.click('#ew-export'),
+]);
+const exportFailure = await exportDownload.failure();
+check('export: Blob download completes', exportFailure === null, exportFailure ?? '');
+const exportPath = await exportDownload.path();
+const exportCsv = exportPath === null ? '' : await readFile(exportPath, 'utf8');
+check('export: download path is available', exportPath !== null);
+const exportRows = parseCsv(exportCsv);
+const expectedExportHeader =
+  'publication_date,issuer,display_name,title,country,region,income_group,doc_type,source,is_sovereign,document_url,filing_url';
+check(
+  'export: CSV header is correct',
+  exportRows[0]?.join(',') === expectedExportHeader,
+  exportRows[0]?.join(',')
+);
+const exportedDocuments = exportRows.slice(1);
+check('export: filtered CSV contains rows', exportedDocuments.length > 0, `rows=${exportedDocuments.length}`);
+check(
+  'export: every row honors the selected country',
+  exportedDocuments.every((row) => row[4] === firstCountryLabel),
+  `country=${firstCountryLabel}`
+);
+const snapshotDate = await page.locator('body').getAttribute('data-build-snapshot-date');
+check(
+  'export: filename uses the build snapshot date',
+  exportDownload.suggestedFilename() === `prospectus-explorer-export-${snapshotDate}.csv`,
+  exportDownload.suggestedFilename()
+);
 const metrics = await page.evaluate(() => window.__ewMetrics);
 check('metrics populated', Boolean(metrics && metrics.bundleName && metrics.totalToFirstRenderMs > 0));
 
@@ -260,6 +340,28 @@ check('search box restores from the URL on reload', (await restore.inputValue('#
 check('restored status reflects the filtered set', /^2 documents match/.test(await restore.textContent('#ew-status')));
 await restore.close();
 
+// Export must flush a visible search term even when its debounce has not fired.
+await page.goto(`${BASE}/`, { waitUntil: 'load' });
+await browseReady();
+const pendingSearchDownloadPromise = page.waitForEvent('download');
+await page.evaluate(() => {
+  const input = document.getElementById('ew-search-input');
+  input.value = 'Philippines';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  document.getElementById('ew-export').click();
+});
+const pendingSearchDownload = await pendingSearchDownloadPromise;
+const pendingSearchPath = await pendingSearchDownload.path();
+const pendingSearchCsv = pendingSearchPath === null ? '' : await readFile(pendingSearchPath, 'utf8');
+const pendingSearchRows = parseCsv(pendingSearchCsv).slice(1);
+check(
+  'export flushes a pending search term',
+  pendingSearchRows.length === 2 &&
+    pendingSearchRows.every((row) => row.slice(0, 5).some((value) => value.includes('Philippines'))),
+  `rows=${pendingSearchRows.length}`
+);
+check('pending export writes q to the URL', new URL(page.url()).searchParams.get('q') === 'Philippines');
+
 // ---- (i) a filter change inside the search debounce window keeps the pending term (TEA-930 race regression) ----
 await page.goto(`${BASE}/`, { waitUntil: 'load' });
 await browseReady();
@@ -400,10 +502,12 @@ if (extBase) {
 // ---- (m) mobile viewport: no horizontal page scroll on the demo screens
 // (B7, TEA-935). Wide content (the browse table, rendered-doc tables) scrolls
 // inside its own region, so the page's documentElement must never exceed the
-// viewport at 390x844. The gate screen is asserted too so the S5 long-URL wrap
-// regression stays covered on phones, and the gate button keeps a tappable
-// target. A fresh context carries the 390x844 viewport; the desktop page above
-// is left untouched. ----
+// viewport at 390x844. A doc with a ~300-char unbroken filing URL is asserted
+// too, so the S5 long-URL wrap fix (.ew-doc-meta td { overflow-wrap: anywhere })
+// stays locked on phones: without it that URL blows the page out to many times
+// the viewport width. The gate button keeps a 44px-tall tap target. A fresh
+// context carries the 390x844 viewport; the desktop page above is left
+// untouched. ----
 const mobileCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const mobile = await mobileCtx.newPage();
 const noHScroll = () =>
@@ -428,13 +532,26 @@ await mobile.waitForFunction(() => window.__ewDocMetrics !== undefined, null, { 
 check('mobile rendered doc: no horizontal page scroll at 390x844', await noHScroll(), await scrollDims());
 await mobileAxe('rendered doc');
 
+// luxse-100026526 renders a ~298-char unbroken filing URL in .ew-doc-meta, so
+// it is the doc that actually exercises the S5 wrap fix at phone width (the
+// synthetic docs have filing_url = null and cannot). This assertion fails if
+// .ew-doc-meta td loses overflow-wrap: anywhere, which is what makes it a lock.
+await mobile.goto(`${BASE}/doc/luxse-100026526/`, { waitUntil: 'load' });
+await mobile.waitForFunction(() => window.__ewDocMetrics !== undefined, null, { timeout: 120000 });
+check('mobile long-URL doc: no horizontal page scroll at 390x844 (S5 wrap regression)', await noHScroll(), await scrollDims());
+await mobileAxe('long-URL doc');
+
 await mobile.goto(`${BASE}/doc/synthetic-gate/`, { waitUntil: 'load' });
 await mobile.waitForSelector('#ew-doc-text button', { timeout: 120000 });
-check('mobile gate doc: no horizontal page scroll at 390x844 (S5 wrap regression)', await noHScroll(), await scrollDims());
+check('mobile gate doc: no horizontal page scroll at 390x844', await noHScroll(), await scrollDims());
+// The B7 fix raised the gate button from 34px to 44px tall; assert the height
+// specifically (the label is always wider than 44px, so an || width check would
+// pass even if the min-height rule regressed). box-sizing: border-box makes the
+// bounding-box height the min-height floor, so >= 44 is exact, not sub-pixel.
 const gateBox = await mobile.locator('#ew-doc-text button').boundingBox();
 check(
-  'mobile gate button stays a tappable target (>=44px in one dimension)',
-  gateBox !== null && (gateBox.width >= 44 || gateBox.height >= 44),
+  'mobile gate button is a 44px-tall tap target',
+  gateBox !== null && gateBox.height >= 44,
   gateBox ? `${Math.round(gateBox.width)}x${Math.round(gateBox.height)}` : '(no box)'
 );
 await mobileAxe('gate doc');
