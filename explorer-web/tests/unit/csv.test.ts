@@ -102,3 +102,31 @@ it('normalizes a trailing slash in the site origin', () => {
   expect(csv).toContain(',https://prospectus.example/doc/edgar-0001/,');
   expect(csv).not.toContain('prospectus.example//doc');
 });
+
+it('prefixes a leading = so a spreadsheet does not evaluate the cell as a formula', () => {
+  const { csv } = toCsv([{ ...ROW, title: '=1+1' }], 'https://prospectus.example');
+
+  expect(csv).toContain(",'=1+1,");
+  expect(csv).not.toContain(',=1+1,');
+});
+
+it('guards every spreadsheet formula-trigger prefix (= + - @ tab CR)', () => {
+  for (const prefix of ['=', '+', '-', '@', '\t', '\r']) {
+    const { csv } = toCsv([{ ...ROW, issuer_name: `${prefix}danger` }], 'https://prospectus.example');
+
+    expect(csv).toContain(`'${prefix}danger`);
+  }
+});
+
+it('quotes and guards a formula field that also contains a comma', () => {
+  const { csv } = toCsv([{ ...ROW, title: '=SUM(A1,A2)' }], 'https://prospectus.example');
+
+  expect(csv).toContain(`"'=SUM(A1,A2)"`);
+});
+
+it('leaves an ordinary leading character untouched (no spurious guard quote)', () => {
+  const { csv } = toCsv([{ ...ROW, title: 'Bonds 2031' }], 'https://prospectus.example');
+
+  expect(csv).toContain(',Bonds 2031,');
+  expect(csv).not.toContain("'Bonds");
+});

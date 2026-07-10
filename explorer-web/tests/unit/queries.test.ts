@@ -255,3 +255,23 @@ it('export and list SQL emit byte-identical WHERE clauses for countries, q, and 
 
   expect(whereClause(buildExportSql(filters))).toBe(whereClause(buildListSql(filters)));
 });
+
+it('export and list WHERE stay identical with the sovereign filter and the M4 high-income country override active', () => {
+  // The all-toggles-on case above leaves the WHERE with only country + q
+  // clauses. This case (default sovereign scope, a selected country, high income
+  // still excluded) exercises the two toggle-driven clauses the other case does
+  // not: `is_sovereign = true` is present AND HI_EXCLUDE is suppressed by the
+  // country override (M4). Both builders must stay byte-identical here too.
+  const filters = {
+    ...DEFAULTS,
+    countries: ['SGP'],
+    q: 'bond',
+    includeNonSovereign: false,
+    includeHighIncome: false,
+  };
+
+  const where = whereClause(buildExportSql(filters));
+  expect(where).toBe(whereClause(buildListSql(filters)));
+  expect(where).toContain('is_sovereign = true');
+  expect(where).not.toContain("!= 'High income'");
+});

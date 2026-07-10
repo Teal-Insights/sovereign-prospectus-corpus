@@ -28,10 +28,21 @@ const HEADER = [
   'filing_url',
 ];
 
+// Neutralize spreadsheet formula injection (OWASP CSV injection). title,
+// issuer_name, and display_name originate from third-party issuer filings
+// (EDGAR / NSM / RNS), so a cell whose value begins with = + - @ (or a tab or
+// carriage return) could be evaluated as a live formula when the file is opened
+// in Excel or Google Sheets. Prefixing a single quote forces text
+// interpretation: the spreadsheet hides the quote and shows the true value, so
+// the guard preserves on-screen fidelity better than leaving a formula to be
+// evaluated. It touches only cells that would otherwise be read as a formula
+// (rare in this corpus) and only in the export artifact, never the corpus
+// itself. See TEA-936 / #116.
 function csvField(value: string | boolean | null): string {
   if (value === null) return '';
-  const text = String(value);
-  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  const raw = String(value);
+  const guarded = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  return /[",\r\n]/.test(guarded) ? `"${guarded.replaceAll('"', '""')}"` : guarded;
 }
 
 export function toCsv(
