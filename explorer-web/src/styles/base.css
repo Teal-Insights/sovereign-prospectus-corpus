@@ -413,3 +413,16 @@ input[type='text'] {
   color: var(--ew-color-text-muted);
   padding: 0;
 }
+
+/* Compact the doc metadata block (B0 punch P6, route B6). The table spans
+   the full content column, so its hairline borders run edge to edge and
+   push the reading surface far down the page; cap it and shrink the type so
+   the reading surface pulls up. Cell padding stays from the shared th/td
+   rule; the long-URL cell keeps overflow-wrap: anywhere from S5. */
+.ew-doc-meta {
+  max-width: 48rem;
+  font-size: var(--ew-font-size-small);
+}
+.ew-doc-meta th {
+  white-space: nowrap;
+}
