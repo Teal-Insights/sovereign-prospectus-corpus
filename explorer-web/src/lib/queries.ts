@@ -97,11 +97,14 @@ export function createDocsViewSql(parquetName: string): string {
   return `CREATE OR REPLACE VIEW docs AS SELECT * FROM read_parquet(${sqlQuote(parquetName)})`;
 }
 
-export function buildListSql(f: BrowseFilters): string {
+function listWhereClause(f: BrowseFilters): string {
   const conditions = explicitConditions(f);
   if (!f.includeNonSovereign) conditions.push('is_sovereign = true');
   if (highIncomeExclusionActive(f)) conditions.push(HI_EXCLUDE);
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  return conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+}
+
+export function buildListSql(f: BrowseFilters): string {
   // strftime keeps dates as ISO strings end to end; Arrow JS's Date32
   // representation has varied across versions (Date objects vs epoch-ms).
   return `
@@ -109,9 +112,22 @@ export function buildListSql(f: BrowseFilters): string {
            strftime(publication_date, '%Y-%m-%d') AS publication_date,
            country_name, doc_type, source, is_sovereign
     FROM docs
-    ${where}
+    ${listWhereClause(f)}
     ORDER BY publication_date DESC NULLS LAST, slug DESC
     LIMIT ${f.pageSize} OFFSET ${f.page * f.pageSize}
+  `;
+}
+
+export function buildExportSql(f: BrowseFilters): string {
+  return `
+    SELECT slug, display_name, issuer_name, title,
+           strftime(publication_date, '%Y-%m-%d') AS publication_date,
+           country_name, region, income_group, doc_type, source,
+           is_sovereign, filing_url
+    FROM docs
+    ${listWhereClause(f)}
+    ORDER BY publication_date DESC NULLS LAST, slug DESC
+    LIMIT 10001
   `;
 }
 

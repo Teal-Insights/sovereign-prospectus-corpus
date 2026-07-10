@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 
-import { buildListSql, createDocsViewSql, sqlQuote } from '../../src/lib/queries';
+import { buildExportSql, buildListSql, createDocsViewSql, sqlQuote } from '../../src/lib/queries';
 
 const DEFAULTS = {
   countries: [],
@@ -221,4 +221,57 @@ it('country override counts inherit search clauses through the outer WHERE', () 
     "count(*) FILTER (WHERE is_sovereign = true AND COALESCE(income_group, 'Unknown') = 'High income')::INTEGER AS included_hi_override"
   );
   expect(sql).toContain(`WHERE country_code IN ('FIN') AND ${grp('bond')}`);
+});
+
+// ---- B8 additions (TEA-936): current-filter CSV export ----
+
+function whereClause(sql: string): string {
+  const match = sql.match(/\n    (WHERE .*)\n    ORDER BY/);
+  expect(match, `SQL has no WHERE clause before ORDER BY:\n${sql}`).not.toBeNull();
+  return match![1];
+}
+
+it('export SQL uses the 10001-row cap and never paginates with an offset', () => {
+  const sql = buildExportSql(DEFAULTS);
+
+  expect(sql).toContain('LIMIT 10001');
+  expect(sql).not.toMatch(/\bOFFSET\b/);
+});
+
+it('export SQL includes the same q search clauses as the table', () => {
+  const sql = buildExportSql({ ...DEFAULTS, q: 'bond 2031' });
+
+  expect(sql).toContain(`${grp('bond')} AND ${grp('2031')}`);
+});
+
+it('export and list SQL emit byte-identical WHERE clauses for countries, q, and toggles', () => {
+  const filters = {
+    ...DEFAULTS,
+    countries: ['FIN', 'KEN'],
+    q: 'bond 2031',
+    includeNonSovereign: true,
+    includeHighIncome: true,
+  };
+
+  expect(whereClause(buildExportSql(filters))).toBe(whereClause(buildListSql(filters)));
+});
+
+it('export and list WHERE stay identical with the sovereign filter and the M4 high-income country override active', () => {
+  // The all-toggles-on case above leaves the WHERE with only country + q
+  // clauses. This case (default sovereign scope, a selected country, high income
+  // still excluded) exercises the two toggle-driven clauses the other case does
+  // not: `is_sovereign = true` is present AND HI_EXCLUDE is suppressed by the
+  // country override (M4). Both builders must stay byte-identical here too.
+  const filters = {
+    ...DEFAULTS,
+    countries: ['SGP'],
+    q: 'bond',
+    includeNonSovereign: false,
+    includeHighIncome: false,
+  };
+
+  const where = whereClause(buildExportSql(filters));
+  expect(where).toBe(whereClause(buildListSql(filters)));
+  expect(where).toContain('is_sovereign = true');
+  expect(where).not.toContain("!= 'High income'");
 });

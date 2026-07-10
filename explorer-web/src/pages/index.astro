@@ -3,6 +3,7 @@ import SearchSlot from '../components/SearchSlot.astro';
 import Base from '../layouts/Base.astro';
 import { computeFilterOptions, computeStats, loadDocuments, loadSnapshotManifest } from '../lib/build-data';
 import {
+  EXPORT_LABEL,
   HI_TOGGLE_LABEL,
   NOSCRIPT_NOTE,
   SEARCH_LABEL,
@@ -153,6 +154,8 @@ const GITHUB_URL = 'https://github.com/Teal-Insights/sovereign-prospectus-corpus
   <p class="ew-muted">{WB_VINTAGE_NOTE}</p>
 
   <p id="ew-status" class="ew-muted" aria-live="polite">Loading the document index...</p>
+
+  <p><button id="ew-export" type="button" disabled>{EXPORT_LABEL}</button></p>
 
   <div id="ew-table-region" tabindex="-1">
     <table id="ew-table" hidden>
