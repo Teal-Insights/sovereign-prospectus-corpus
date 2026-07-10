@@ -27,8 +27,8 @@
   --ew-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --ew-font-size-base: 1rem;
   --ew-font-size-small: 0.875rem;
-  --ew-font-size-h1: 1.5rem;
-  --ew-font-size-h2: 1.25rem;
+  --ew-font-size-h1: 2rem;
+  --ew-font-size-h2: 1.375rem;
   --ew-line-height: 1.55;
   /* S4 (TEA-904): display face for h1/h2. Neutral default = the body
      stack at UA bold weight, byte-identical to the pre-token rendering;
@@ -70,6 +70,9 @@
 @media (max-width: 640px) {
   :root {
     --ew-font-size-doc: 0.9375rem;
+    /* One step down from the 2rem desktop h1 (B0 punch P5): long all-caps
+       issuer titles need the smaller display size at phone width. */
+    --ew-font-size-h1: 1.625rem;
   }
 }
 

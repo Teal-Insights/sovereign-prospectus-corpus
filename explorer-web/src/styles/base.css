@@ -426,3 +426,9 @@ input[type='text'] {
 .ew-doc-meta th {
   white-space: nowrap;
 }
+
+/* Balance long all-caps issuer titles across lines at the larger display
+   scale (B0 punch P5; the token bump lives in tokens.css). */
+h1 {
+  text-wrap: balance;
+}
