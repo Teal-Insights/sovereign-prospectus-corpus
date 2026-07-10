@@ -77,6 +77,10 @@
     /* One step down from the 2rem desktop h1 (B0 punch P5): long all-caps
        issuer titles need the smaller display size at phone width. */
     --ew-font-size-h1: 1.625rem;
+    /* P7's sticky search bar is desktop-only (min-width 641px), so on phones
+       the jump only needs to clear the non-sticky header; keep the pre-P7
+       80px to avoid an oversized empty gap above jump targets. */
+    --ew-jump-offset: 80px;
   }
 }
 
