@@ -11,4 +11,4 @@ mechanical: keep both lines. Feeds the Stage 5 scoreboard and ADM-153.
 | B5 | codex high | 1 | 0 | 0C/2I (fixed in-branch, 1 round) | 36m |
 | B4 | opus-4.8 max | 1 | 0 | 9C/2I: 7 fixed in-branch, 2 deferred (#107, #108) | ~40 min |
 | B3 | codex high | 1 | 0 | 0C/1I: 1 deferred (#110); 1 convergent finding refuted on verify | ~35m |
-| B6 | opus-4.8 max | 1 | 0 | pending | ~40m |
+| B6 | opus-4.8 max | 1 | 0 | 0C/0I (1 convergent IMPORTANT refuted on verify: sticky bar measured 132px <= 140px offset); MINORs deferred (#114 disabled-input, #115 sticky-offset robustness, #112 og:url) | ~40m |
