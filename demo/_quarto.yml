@@ -16,6 +16,13 @@ book:
     - appendix-technical.qmd
     - appendix-sovtech.qmd
   page-navigation: true
+  sidebar:
+    tools:
+      - icon: house-fill
+        text: "Teal Insights home"
+        href: https://tealinsights.com
+  page-footer:
+    left: 'Built by <a href="https://tealinsights.com">Teal Insights</a> · <a href="https://prospectus.tealinsights.com">Sovereign Prospectus Database</a>'
 
 bibliography: references.bib
 
