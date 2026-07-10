@@ -377,3 +377,39 @@ input[type='text'] {
     min-height: var(--ew-tap-target);
   }
 }
+
+/* Browse table rhythm and badge calm-down (B0 punch P4, route B6). Dates
+   and source labels stop wrapping mid-string so row heights stay even;
+   header cells read as quiet uppercase labels; rows get a hover cue. The
+   fifty identical green Sovereign pills become quiet muted text, so the
+   Non-sovereign and Unverified exceptions (which keep their pills) are what
+   stand out. The doc-page h1 badge keeps its single pill but drops the
+   inherited display serif. The td cells already carry ew-col-* classes from
+   browse.ts, so this is style-only. Weight 500 exercises the soehne-kraftig
+   face the wrapper already loads. nowrap is phone-safe: ew-col-source is
+   hidden at 640px and the date column costs ~90px of 390. */
+.ew-col-date {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ew-col-source {
+  white-space: nowrap;
+}
+#ew-table th {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+#ew-rows tr:hover td {
+  background: var(--ew-color-surface);
+}
+.ew-badge {
+  font-family: var(--ew-font-body);
+  font-weight: 500;
+}
+#ew-rows .ew-badge--sovereign {
+  background: transparent;
+  color: var(--ew-color-text-muted);
+  padding: 0;
+}
