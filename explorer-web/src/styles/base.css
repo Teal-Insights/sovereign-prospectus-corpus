@@ -116,12 +116,19 @@ button {
 
 /* Raw document text. pre-wrap is load-bearing (offset addressing and the
    facsimile-honest render depend on it); overflow-wrap prevents long
-   unbroken table rows and URLs from forcing page-wide horizontal scroll. */
+   unbroken table rows and URLs from forcing page-wide horizontal scroll.
+   max-width + line-height are the plaintext reading measure (B0 punch P2,
+   re-routed to B6, CSS-only): pages-source docs never enter rendered mode,
+   so the plain view is their permanent reading surface. Width and leading
+   only; pre-wrap, overflow-wrap, the mono face, and the offset contract
+   are untouched. Mobile is already narrower than 80ch, so no media query. */
 #ew-doc-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-family: var(--ew-font-mono);
   font-size: var(--ew-font-size-doc);
+  max-width: 80ch;
+  line-height: 1.6;
 }
 
 /* Reserved table layout (second Lighthouse commitment; moved here from the
@@ -343,4 +350,85 @@ button[aria-disabled='true'] {
   border: 0;
   border-top: 1px solid var(--ew-color-border);
   margin: var(--ew-space-4) 0;
+}
+
+/* Text inputs, styled like the rest of the control set (B0 punch P3,
+   route B6). Left to browser defaults they render as unstyled Arial fields
+   (21px tall, 2px inset border) on a page where every button and select is
+   token-styled, so the doc search field reads as broken and sits below the
+   24px target floor. #ew-search-input on browse inherits this by
+   construction. */
+input[type='search'],
+input[type='text'] {
+  font: inherit;
+  padding: var(--ew-space-1) var(--ew-space-2);
+  border: 1px solid var(--ew-color-border-strong);
+  border-radius: var(--ew-radius);
+  background: var(--ew-color-bg);
+  color: var(--ew-color-text);
+  min-height: var(--ew-tap-target-min);
+}
+#ew-doc-search-input {
+  width: min(28rem, 100%);
+}
+@media (max-width: 640px) {
+  input[type='search'],
+  input[type='text'] {
+    min-height: var(--ew-tap-target);
+  }
+}
+
+/* Browse table rhythm and badge calm-down (B0 punch P4, route B6). Dates
+   and source labels stop wrapping mid-string so row heights stay even;
+   header cells read as quiet uppercase labels; rows get a hover cue. The
+   fifty identical green Sovereign pills become quiet muted text, so the
+   Non-sovereign and Unverified exceptions (which keep their pills) are what
+   stand out. The doc-page h1 badge keeps its single pill but drops the
+   inherited display serif. The td cells already carry ew-col-* classes from
+   browse.ts, so this is style-only. Weight 500 exercises the soehne-kraftig
+   face the wrapper already loads. nowrap is phone-safe: ew-col-source is
+   hidden at 640px and the date column costs ~90px of 390. */
+.ew-col-date {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ew-col-source {
+  white-space: nowrap;
+}
+#ew-table th {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+#ew-rows tr:hover td {
+  background: var(--ew-color-surface);
+}
+.ew-badge {
+  font-family: var(--ew-font-body);
+  font-weight: 500;
+}
+#ew-rows .ew-badge--sovereign {
+  background: transparent;
+  color: var(--ew-color-text-muted);
+  padding: 0;
+}
+
+/* Compact the doc metadata block (B0 punch P6, route B6). The table spans
+   the full content column, so its hairline borders run edge to edge and
+   push the reading surface far down the page; cap it and shrink the type so
+   the reading surface pulls up. Cell padding stays from the shared th/td
+   rule; the long-URL cell keeps overflow-wrap: anywhere from S5. */
+.ew-doc-meta {
+  max-width: 48rem;
+  font-size: var(--ew-font-size-small);
+}
+.ew-doc-meta th {
+  white-space: nowrap;
+}
+
+/* Balance long all-caps issuer titles across lines at the larger display
+   scale (B0 punch P5; the token bump lives in tokens.css). */
+h1 {
+  text-wrap: balance;
 }

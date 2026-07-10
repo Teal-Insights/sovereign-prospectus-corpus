@@ -6,8 +6,15 @@ interface Props {
   title: string;
   snapshotDate: string;
   generatedAt: string;
+  description?: string;
 }
-const { title, snapshotDate, generatedAt } = Astro.props;
+
+// Default social/description text (B0 punch P9). A URL shared in a chat app
+// this week unfurls from these tags; doc pages pass distinct titles, so
+// og:title differentiates per document.
+const DEFAULT_DESCRIPTION =
+  'An open, searchable corpus of sovereign bond prospectuses and related filings from the FCA NSM, SEC EDGAR, the Luxembourg Stock Exchange, and the #PublicDebtIsPublic dataset.';
+const { title, snapshotDate, generatedAt, description = DEFAULT_DESCRIPTION } = Astro.props;
 
 // Brand slots (S4 theme contract): a private wrapper may drop
 // Head.astro / Header.astro into src/brand/ at build time. Absent files
@@ -26,6 +33,12 @@ const BrandHeader = brand['../brand/Header.astro']?.default;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:site_name" content="Sovereign Prospectus Explorer" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
     {BrandHead && <BrandHead />}
   </head>
   <body data-build-generated-at={generatedAt} data-build-snapshot-date={snapshotDate}>

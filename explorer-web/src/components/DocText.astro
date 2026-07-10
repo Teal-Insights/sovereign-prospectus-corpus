@@ -149,4 +149,22 @@ const filingLabel = filingLinkLabel(source);
     align-items: center;
     gap: var(--ew-space-2);
   }
+
+  /* Sticky in-document search controls on desktop (B0 punch P7, route B6).
+     In a 31,000px-tall document the search input, Previous/Next, and the
+     match-position indicator scroll thousands of pixels above the viewport;
+     pin them so mouse users keep the buttons and everyone keeps the count.
+     --ew-jump-offset is re-measured in tokens.css to clear this bar so TOC
+     jumps and match scrolls land below it. Desktop only: at phone width a
+     sticky bar plus the keyboard would eat the reading viewport. */
+  @media (min-width: 641px) {
+    .ew-doc-search {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--ew-color-bg);
+      padding: var(--ew-space-2) 0;
+      border-bottom: 1px solid var(--ew-color-border);
+    }
+  }
 </style>
