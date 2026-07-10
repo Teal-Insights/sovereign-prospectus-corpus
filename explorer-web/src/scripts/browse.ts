@@ -435,7 +435,14 @@ exportButton.addEventListener('click', async () => {
     const snapshotDate = document.body.dataset.buildSnapshotDate;
     if (!snapshotDate) throw new Error('missing build snapshot date');
 
-    const url = URL.createObjectURL(new Blob([result.csv], { type: 'text/csv;charset=utf-8' }));
+    // Prepend a UTF-8 BOM so Excel-on-Windows detects UTF-8 and renders
+    // non-ASCII sovereign names correctly instead of mojibake. This is a
+    // download-encoding concern, so it lives at the Blob boundary, not in
+    // toCsv's logical serialization (whose byte-exact tests stay untouched).
+    // See #120 / TEA-936.
+    const url = URL.createObjectURL(
+      new Blob(['\ufeff', result.csv], { type: 'text/csv;charset=utf-8' })
+    );
     const link = document.createElement('a');
     link.href = url;
     link.download = `prospectus-explorer-export-${snapshotDate}.csv`;
