@@ -351,3 +351,29 @@ button[aria-disabled='true'] {
   border-top: 1px solid var(--ew-color-border);
   margin: var(--ew-space-4) 0;
 }
+
+/* Text inputs, styled like the rest of the control set (B0 punch P3,
+   route B6). Left to browser defaults they render as unstyled Arial fields
+   (21px tall, 2px inset border) on a page where every button and select is
+   token-styled, so the doc search field reads as broken and sits below the
+   24px target floor. #ew-search-input on browse inherits this by
+   construction. */
+input[type='search'],
+input[type='text'] {
+  font: inherit;
+  padding: var(--ew-space-1) var(--ew-space-2);
+  border: 1px solid var(--ew-color-border-strong);
+  border-radius: var(--ew-radius);
+  background: var(--ew-color-bg);
+  color: var(--ew-color-text);
+  min-height: var(--ew-tap-target-min);
+}
+#ew-doc-search-input {
+  width: min(28rem, 100%);
+}
+@media (max-width: 640px) {
+  input[type='search'],
+  input[type='text'] {
+    min-height: var(--ew-tap-target);
+  }
+}
