@@ -117,7 +117,12 @@ check('export: Blob download completes', exportFailure === null, exportFailure ?
 const exportPath = await exportDownload.path();
 const exportCsv = exportPath === null ? '' : await readFile(exportPath, 'utf8');
 check('export: download path is available', exportPath !== null);
-const exportRows = parseCsv(exportCsv);
+check(
+  'export: file starts with a UTF-8 BOM (Excel non-ASCII fidelity, #120)',
+  exportCsv.startsWith('\ufeff'),
+  JSON.stringify(exportCsv.slice(0, 1))
+);
+const exportRows = parseCsv(exportCsv.replace(/^\ufeff/, ''));
 const expectedExportHeader =
   'publication_date,issuer,display_name,title,country,region,income_group,doc_type,source,is_sovereign,document_url,filing_url';
 check(
