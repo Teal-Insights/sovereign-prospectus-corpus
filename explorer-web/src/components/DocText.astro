@@ -16,6 +16,7 @@ import {
   PROVENANCE_NOTE,
   TOC_FILTER_PLACEHOLDER,
   VIEW_RAW_LABEL,
+  filingLinkLabel,
   orNA,
 } from '../lib/format';
 
@@ -26,8 +27,10 @@ interface Props {
   textSource: string | null;
   noTextReason: string | null;
   filingUrl: string | null;
+  source: string | null;
 }
-const { slug, hasText, textBytes, textSource, noTextReason, filingUrl } = Astro.props;
+const { slug, hasText, textBytes, textSource, noTextReason, filingUrl, source } = Astro.props;
+const filingLabel = filingLinkLabel(source);
 ---
 
 <section aria-labelledby="ew-doc-text-heading">
@@ -44,7 +47,7 @@ const { slug, hasText, textBytes, textSource, noTextReason, filingUrl } = Astro.
           {filingUrl && (
             <>
               {' '}
-              <a href={filingUrl} rel="noopener">Original filing</a>.
+              <a href={filingUrl} rel="noopener">{filingLabel}</a>.
             </>
           )}
           {' '}Text source: {orNA(textSource)}.

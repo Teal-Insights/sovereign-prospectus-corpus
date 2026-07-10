@@ -84,6 +84,7 @@ export interface StatusLineArgs {
   // null = the exclusion is inactive OR would add zero; sentence suppressed.
   hiddenScope: number | null;
   hiddenHi: number | null;
+  includedHiByCountry: number | null;
   // true ONLY when 'High income' is among the selected incomes while the
   // include-high-income toggle is off (broader wording would assert
   // inclusion of documents the income filter itself excludes).
@@ -108,16 +109,25 @@ export function statusLine(a: StatusLineArgs): string {
   if (a.hiOverride) {
     s += ' High-income documents are included by the income filter.';
   }
+  if (a.includedHiByCountry !== null && a.includedHiByCountry > 0) {
+    s += ` Showing ${num(a.includedHiByCountry)} high-income documents because their countries are selected.`;
+  }
   return s;
 }
 
-export const EMPTY_STATE = 'No documents match these filters.';
+export const EMPTY_STATE = 'No documents match these filters. Remove a filter to widen the results.';
 
 export function browseSubtitle(sovereign: number, related: number): string {
   return `Browse ${num(sovereign)} sovereign bond prospectuses and ${num(related)} related filings.`;
 }
 
-export const STATS_CAPTION = 'Full corpus.';
+export function statsCaption(snapshotDate: string): string {
+  return `Snapshot ${snapshotDate}. Counts cover the full corpus before filters.`;
+}
+
+export function filingLinkLabel(source: string | null | undefined): string {
+  return source === 'pdip' ? 'Via PDIP archive' : 'Original filing';
+}
 
 export function segmentLabel(k: number, n: number, matchCount?: number | null): string {
   const base = `Segment ${num(k)} of ${num(n)}`;
@@ -161,7 +171,8 @@ export const PAGES_NOT_DISPLAYED_NOTE =
 export const HIGHLIGHT_SUPPORT_NOTE =
   'Match highlighting needs a newer browser; match counts and navigation still work.';
 
-export const HI_OVERRIDE_HINT = 'Overridden by the income filter selection.';
+export const HI_OVERRIDE_HINT_INCOME = 'Overridden by the income filter selection.';
+export const HI_OVERRIDE_HINT_COUNTRY = 'Overridden by the country selection.';
 
 export const HI_TOGGLE_LABEL = 'Include high-income countries';
 

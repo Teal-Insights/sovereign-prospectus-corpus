@@ -10,6 +10,8 @@ import { initDuckDB, registerDocumentsParquet, type DuckHandle } from '../lib/du
 import {
   DRIFT_NOTICE,
   DROPPED_PARAM_NOTICE,
+  HI_OVERRIDE_HINT_COUNTRY,
+  HI_OVERRIDE_HINT_INCOME,
   chipRemoveLabel,
   formatDate,
   orNA,
@@ -154,7 +156,9 @@ function applyStateToControls(): void {
   }
   scopeToggle.checked = state.includeNonSovereign;
   hiToggle.checked = state.includeHighIncome;
-  const overridden = state.incomes.length > 0;
+  const overriddenByIncome = state.incomes.length > 0;
+  const overriddenByCountry = state.countries.length > 0;
+  const overridden = overriddenByIncome || overriddenByCountry;
   // Disabling a focused control (possible via popstate) strands focus.
   if (overridden && document.activeElement === hiToggle) scopeToggle.focus();
   hiToggle.disabled = overridden;
@@ -162,6 +166,11 @@ function applyStateToControls(): void {
   // reference is read by AT even when the hint is visibility-hidden.
   if (overridden) hiToggle.setAttribute('aria-describedby', 'ew-hi-hint');
   else hiToggle.removeAttribute('aria-describedby');
+  hiHint.textContent = overriddenByIncome
+    ? HI_OVERRIDE_HINT_INCOME
+    : overriddenByCountry
+      ? HI_OVERRIDE_HINT_COUNTRY
+      : '';
   hiHint.classList.toggle('ew-visible', overridden);
 }
 
@@ -265,7 +274,12 @@ async function refresh(): Promise<void> {
     ])) as [unknown, Record<string, unknown>[]] as [BrowseRow[], Record<string, unknown>[]];
     if (generation !== refreshGeneration) return; // stale response
     if (!metrics.secondQueryMs) metrics.secondQueryMs = performance.now() - tQuery;
-    const counts = countRows[0] as { matching: number; hidden_scope: number; hidden_hi: number };
+    const counts = countRows[0] as {
+      matching: number;
+      hidden_scope: number;
+      hidden_hi: number;
+      included_hi_override: number;
+    };
     const matching = Number(counts.matching);
     const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
     lastPages = pages;
@@ -295,6 +309,13 @@ async function refresh(): Promise<void> {
       highIncomeExclusionActive(filters) && Number(counts.hidden_hi) > 0
         ? Number(counts.hidden_hi)
         : null;
+    const includedHiByCountry =
+      !state.includeHighIncome &&
+      state.countries.length > 0 &&
+      state.incomes.length === 0 &&
+      Number(counts.included_hi_override) > 0
+        ? Number(counts.included_hi_override)
+        : null;
     status.textContent = statusLine({
       matching,
       shownFrom: offset + 1,
@@ -304,6 +325,7 @@ async function refresh(): Promise<void> {
       hiddenScope,
       hiddenHi,
       hiOverride: !state.includeHighIncome && state.incomes.includes('High income'),
+      includedHiByCountry,
     });
     setNav(prev, state.page === 0);
     setNav(next, state.page >= pages - 1);

@@ -5,6 +5,7 @@ import { loadDocuments, loadSnapshotManifest, type DocRow } from '../../lib/buil
 import {
   WB_VINTAGE_NOTE,
   citeAs,
+  filingLinkLabel,
   formatBytes,
   formatDate,
   orNA,
@@ -28,6 +29,7 @@ interface Props {
 const { doc, snapshotDate, generatedAt } = Astro.props;
 const badge = sovereignBadge(doc.is_sovereign);
 const title = doc.display_name ?? doc.issuer_name ?? doc.slug;
+const filingLabel = filingLinkLabel(doc.source);
 ---
 
 <Base title={`${title} | Sovereign Prospectus Explorer`} snapshotDate={snapshotDate} generatedAt={generatedAt}>
@@ -46,10 +48,10 @@ const title = doc.display_name ?? doc.issuer_name ?? doc.slug;
       <tr><th scope="row">Income group</th><td>{orNA(doc.income_group)} <span class="ew-muted">*</span></td></tr>
       <tr><th scope="row">Lending category</th><td>{orNA(doc.lending_category)} <span class="ew-muted">*</span></td></tr>
       <tr><th scope="row">Source</th><td>{sourceDisplay(doc.source)}</td></tr>
-      <tr><th scope="row">Pages</th><td>{orNA(doc.page_count)}</td></tr>
+      {typeof doc.page_count === 'number' && doc.page_count > 0 && <tr><th scope="row">Pages</th><td>{doc.page_count}</td></tr>}
       <tr><th scope="row">Text size</th><td>{formatBytes(doc.text_bytes)}</td></tr>
       <tr>
-        <th scope="row">Original filing</th>
+        <th scope="row">{filingLabel}</th>
         <td>{doc.filing_url ? <a href={doc.filing_url} rel="noopener">{doc.filing_url}</a> : 'n/a'}</td>
       </tr>
     </tbody>
@@ -63,5 +65,6 @@ const title = doc.display_name ?? doc.issuer_name ?? doc.slug;
     textSource={doc.text_source}
     noTextReason={doc.no_text_reason}
     filingUrl={doc.filing_url}
+    source={doc.source}
   />
 </Base>
