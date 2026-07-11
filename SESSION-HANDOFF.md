@@ -1,6 +1,33 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-06 (Stage 2 architect session: pre-Monday batch plan + executor prompts + privacy blocklist, PR #101)
+**Last updated:** 2026-07-10 (Stage 5 integration audit: batch verified, one fix PR, fix list staged)
+
+## Session 2026-07-10 (latest): Stage 5 integration audit of the pre-Monday batch
+
+- **Verdict:** the batch composed. Fresh-checkout suites all green (vitest
+  163, astro check clean, two-origin smoke, pytest 471, production
+  live-smoke 3/3); wrapper pin = corpus main; council seams (shared WHERE,
+  active-text contract, frozen plain path) verified sound in code by four
+  fresh-context reviewers plus chair spot-checks. Grades hold the A/A-
+  baseline on all seven dimensions; no full council convened.
+- **One real finding (fixed in this PR):** `#ew-doc-text`'s load-bearing
+  `white-space: pre-wrap` inherited into `.ew-doc-rendered`, double-spacing
+  every rendered doc (verified live: 5291px -> 3352px on a real EDGAR doc,
+  tables ~2x). Fix is a two-declaration reset in the `.ew-doc-rendered`
+  block plus a red-green computed-style smoke lock and the inverse raw-mode
+  guard. Offsets and the search haystack are untouched (paint-only change).
+- **Fix list (full memo in the PCoS Drive folder,
+  2026-07-10_Prospectus-Stage5-Integration-Audit.md):** (1) this PR, gate
+  then final pin bump; (2) rollback drill BEFORE the freeze (its scheduled
+  pre-B1-deploy moment vanished when cadence slots collapsed); (3) punch W3
+  mobile pre-table chrome, dropped without trail, issue filed with
+  paste-ready prompt; (4) wrapper privacy pre-commit hook still not
+  installed (one command, Teal); (5) MINOR bundle issue (export ORDER BY
+  parity test, smoke-header scenario letter, check() detail-on-PASS,
+  axe-core caret pin).
+- **Scoreboard:** 9/9 branches first-attempt, 0 escalations; post-audit
+  residual 0 CRITICAL / 1 IMPORTANT (fixed); executor seats
+  subscription-covered. Posted to ADM-153 and the project status update.
 
 ## Session 2026-07-06 (latest): Stage 2 for the pre-Monday batch
 

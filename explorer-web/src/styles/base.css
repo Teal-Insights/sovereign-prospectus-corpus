@@ -298,6 +298,15 @@ button[aria-disabled='true'] {
   font-size: 1rem;
   line-height: 1.65;
   max-width: 72ch;
+  /* Reset the plain path's facsimile properties, which inherit from
+     #ew-doc-text: under pre-wrap, the newline text nodes marked emits between
+     block elements (kept in the search haystack by design) paint as phantom
+     blank lines and blow up table heights; anywhere breaks ordinary prose
+     mid-word. Normal flow + break-word keep long unbroken strings contained
+     without either artifact. Offsets are untouched: this changes paint, not
+     text nodes. */
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 .ew-doc-rendered h1,
 .ew-doc-rendered h2,
