@@ -204,27 +204,38 @@ the plan-gate disposition: `docs/superpowers/plans/2026-07-04-explorer-core-pari
   writes are cancelled on popstate/pagehide; no-op writes skipped; history
   calls sit in try/catch (WebKit rate limit: 100 writes/10 s).
 - **The `window.__ewDoc` contract** (for S4/TEA-907), mode-scoped as of
-  B1/TEA-929: `getRawText()` returns the FULL raw string in EVERY mode (plain
-  full, segmented, and rendered) once text is loaded, `null` before load and
-  behind an unclicked gate. In **plain and segmented modes** (pages-source
-  docs, docs over 1M units, force-listed slugs) `#ew-doc-text` holds exactly
-  one text node whose content is the rendered slice and `data-seg-start`
-  carries the slice's UTF-16 start offset. In **rendered mode** (markdown docs
-  at or under 1M units) `#ew-doc-text` holds a rendered HTML tree wrapped in
-  `<div class="ew-doc-rendered">`; the single-text-node / `data-seg-start`
-  invariant does NOT hold, and search runs over the concatenation of the
-  rendered text nodes (so phrases split by bold in the raw markdown match).
-  Consumers detect rendered mode by the `.ew-doc-rendered` child. `?q=` is the
-  only supported deep-link into a document and never bypasses the 5 MB
-  click-gate (data-cost consent). In-document search controls use the
-  `ew-doc-search-*` prefix; `ew-search-*` stays reserved for the slot.
+  B1/TEA-929 and extended to segmented docs by TEA-989: `getRawText()`
+  returns the FULL raw string in EVERY mode (plain full, segmented, rendered,
+  and seg-rendered) once text is loaded, `null` before load and behind an
+  unclicked gate. In **plain and segmented-plain modes** (pages-source docs,
+  force-listed slugs, and the raw view of any doc) `#ew-doc-text` holds
+  exactly one text node whose content is the rendered slice and
+  `data-seg-start` carries the slice's UTF-16 start offset. In **rendered
+  modes** (markdown docs of any size) `#ew-doc-text` holds a rendered HTML
+  tree wrapped in `<div class="ew-doc-rendered">` - the whole doc at or under
+  1M units, the ACTIVE SEGMENT above (per-segment rendering); the
+  single-text-node / `data-seg-start` invariant does NOT hold. At or under 1M
+  units search runs over the concatenation of the rendered text nodes (so
+  phrases split by bold in the raw markdown match); above 1M units search
+  stays in RAW whole-doc space (offsets must span segments) while painting
+  re-runs the query over the active segment's rendered text - the count is
+  raw-truth, the paint is rendered-truth, and the raw toggle remains the
+  exact-machinery view. Consumers detect rendered modes by the
+  `.ew-doc-rendered` child. `?q=` is the only supported deep-link into a
+  document and never bypasses the 5 MB click-gate (data-cost consent).
+  In-document search controls use the `ew-doc-search-*` prefix; `ew-search-*`
+  stays reserved for the slot.
 - **Large documents** render in segments above 1M UTF-16 units (620 docs):
-  TOC-boundary packing to 500K-unit targets, oversized sections cut at the
-  last newline before each step (hard cuts never split surrogate pairs),
-  fixed cuts for the 12 no-TOC large docs. Segment math is pure and
-  DOM-free (`lib/doc-view.ts`). The UI says "Segment k of n", never "Part"
-  (prospectuses contain literal PART I/II headings; test-guarded), with a
-  notice that segments are a display convenience and not citable.
+  TOC-boundary packing to 500K-unit targets, oversized sections cut on
+  markdown-safe boundaries (TEA-989: a blank-line block boundary outside
+  ```/~~~ fences; failing that a newline never between two table rows;
+  failing that the last newline, with hard cuts that never split surrogate
+  pairs), fixed cuts for the 12 no-TOC large docs. Segment math is pure and
+  DOM-free (`lib/doc-view.ts`). Markdown-source large docs default to the
+  per-segment RENDERED view with the raw toggle; pages-source large docs stay
+  plain. The UI says "Segment k of n", never "Part" (prospectuses contain
+  literal PART I/II headings; test-guarded), with a notice that segments are
+  a display convenience and not citable.
 - **In-document search compute guards:** minimum query length 2; a hard
   20,000-match compute cap with look-ahead-one honesty ("20,000+") and
   per-section/per-segment counts SUPPRESSED when capped; bare-index match

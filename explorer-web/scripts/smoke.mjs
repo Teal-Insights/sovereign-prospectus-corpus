@@ -216,6 +216,29 @@ check('country override status explains high-income inclusion', statusCountryHi.
 // ---- (d) doc page: TOC jump focus, search, segments ----
 await page.goto(`${BASE}/doc/synthetic-large/`, { waitUntil: 'load' });
 await docReady();
+// TEA-989: markdown docs over 1M units now default to the per-segment
+// FORMATTED view. This scenario locks the RAW segmented plain path, so it
+// first asserts the new default + toggle, then switches to raw; everything
+// below runs against the byte-for-byte plain machinery exactly as before.
+check(
+  'segmented markdown doc defaults to formatted with a raw toggle (TEA-989)',
+  (await page.locator('#ew-doc-text .ew-doc-rendered').count()) === 1 &&
+    (await page.textContent('#ew-view-toggle')) === 'View raw text' &&
+    (await page.locator('#ew-view-toggle').isVisible())
+);
+await page.click('#ew-view-toggle');
+await page.waitForFunction(
+  () => document.getElementById('ew-view-toggle')?.textContent === 'View formatted text',
+  null,
+  { timeout: 10000 }
+);
+check(
+  'segmented doc raw mode restores the single-text-node plain path',
+  await page.evaluate(() => {
+    const c = document.getElementById('ew-doc-text');
+    return c.firstChild?.nodeType === 3 && c.dataset.segStart === '0' && !c.querySelector('.ew-doc-rendered');
+  })
+);
 check('segmented mode', /Segment 1 of \d+/.test(await page.textContent('#ew-seg-label')));
 check('provenance notice visible', (await page.textContent('body')).includes('Text is machine-converted'));
 check('seg prev starts aria-disabled', (await page.getAttribute('#ew-seg-prev', 'aria-disabled')) === 'true');
@@ -593,6 +616,114 @@ check(
   'computed white-space on #ew-doc-text is not pre-wrap in raw mode'
 );
 await flowPage.close();
+
+// ---- (n) per-segment rendered mode for >1M markdown docs (TEA-989). The
+// synthetic-seg-rich fixture (1.04M units) carries a 20K GFM table straddling
+// the first default cut, a code fence straddling the second, headings + a
+// small table in segment 1, and a unique needle sentence + final heading in
+// the LAST segment, so every assertion below exercises the real segmented
+// path: rendered active segment, raw whole-doc search, cross-segment match
+// navigation, offset-TOC jumps onto rendered headings, and the byte-exact raw
+// toggle. ----
+await page.goto(`${BASE}/doc/synthetic-seg-rich/`, { waitUntil: 'load' });
+await docReady();
+check('seg-rendered: segment nav present', /Segment 1 of \d+/.test(await page.textContent('#ew-seg-label')), await page.textContent('#ew-seg-label'));
+check('seg-rendered: active segment holds a rendered tree', (await page.locator('#ew-doc-text .ew-doc-rendered').count()) === 1);
+check(
+  'seg-rendered: toggle shows View raw text',
+  (await page.textContent('#ew-view-toggle')) === 'View raw text' && (await page.locator('#ew-view-toggle').isVisible())
+);
+check(
+  'seg-rendered: no literal "## " text node in the rendered container',
+  await page.evaluate(() => {
+    const root = document.querySelector('#ew-doc-text .ew-doc-rendered');
+    if (!root) return false;
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = w.nextNode())) {
+      if (n.data.includes('## ')) return false;
+    }
+    return true;
+  })
+);
+check('seg-rendered: segment-1 heading rendered as h2', (await page.locator('#ew-doc-text h2').count()) >= 1);
+check('seg-rendered: segment-1 GFM table rendered', (await page.locator('#ew-doc-text table').count()) >= 1);
+check(
+  'seg-rendered: white-space reset applies to the segment wrapper',
+  await page.evaluate(() => {
+    const el = document.querySelector('#ew-doc-text .ew-doc-rendered');
+    return el !== null && getComputedStyle(el).whiteSpace === 'normal';
+  })
+);
+// Cross-segment search: the needle lives only in the last segment; search is
+// raw whole-doc, so the count spans segments and the jump renders the target
+// segment FORMATTED with the current match painted and announced.
+await page.fill('#ew-doc-search-input', 'quantum sovereign covenant');
+await page.waitForFunction(() => /1 match/.test(document.getElementById('ew-doc-search-count')?.textContent ?? ''), null, { timeout: 10000 });
+check('seg-rendered: raw whole-doc search finds the cross-segment needle', true, await page.textContent('#ew-doc-search-count'));
+await page.click('#ew-doc-search-next');
+await page.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 1 of 1'), null, { timeout: 10000 });
+check('seg-rendered: match jump switched segments', !/Segment 1 of/.test(await page.textContent('#ew-seg-label')), await page.textContent('#ew-seg-label'));
+check('seg-rendered: target segment is rendered, not raw', (await page.locator('#ew-doc-text .ew-doc-rendered').count()) === 1);
+check('seg-rendered: current match painted', await page.evaluate(() => (CSS.highlights.get('ew-match-current')?.size ?? 0) === 1));
+check('seg-rendered: match jump scrolled', await page.evaluate(() => window.scrollY > 0));
+const segLive = await page.textContent('#ew-doc-live');
+check('seg-rendered: live region quotes the needle snippet', segLive.includes('quantum sovereign covenant'), segLive);
+// Offset-based TOC spans segments: the final heading renders its segment and
+// the viewport lands on the rendered heading element (nthTitleIndex anchor).
+await page.goto(`${BASE}/doc/synthetic-seg-rich/`, { waitUntil: 'load' });
+await docReady();
+await page.locator('#ew-doc-toc-details summary').click();
+await page.locator('#ew-doc-toc button').last().click(); // "Final Provisions"
+await page.waitForFunction(() => window.scrollY > 0, null, { timeout: 10000 });
+check('seg-rendered: TOC jump crossed segments', !/Segment 1 of/.test(await page.textContent('#ew-seg-label')), await page.textContent('#ew-seg-label'));
+check(
+  'seg-rendered: TOC jump landed on the rendered heading',
+  await page.evaluate(() => {
+    const h = [...document.querySelectorAll('#ew-doc-text h2')].find(
+      (el) => (el.textContent ?? '').trim() === 'Final Provisions'
+    );
+    if (!h) return false;
+    const top = h.getBoundingClientRect().top;
+    return top >= 0 && top <= 200; // just below the sticky search bar offset
+  })
+);
+check('seg-rendered: TOC jump focuses text', (await page.evaluate(() => document.activeElement?.id)) === 'ew-doc-text');
+// Raw toggle on a segmented doc: the current segment becomes ONE text node
+// whose content is the byte-exact raw slice at data-seg-start.
+await page.click('#ew-view-toggle');
+await page.waitForFunction(() => document.getElementById('ew-view-toggle')?.textContent === 'View formatted text', null, { timeout: 10000 });
+check(
+  'seg-rendered raw toggle: byte-exact plain segment slice',
+  await page.evaluate(() => {
+    const c = document.getElementById('ew-doc-text');
+    if (!c || c.firstChild?.nodeType !== 3 || c.querySelector('.ew-doc-rendered')) return false;
+    const segStart = Number(c.dataset.segStart ?? -1);
+    const raw = window.__ewDoc?.getRawText() ?? null;
+    const t = c.firstChild.data;
+    return segStart >= 0 && raw !== null && raw.slice(segStart, segStart + t.length) === t;
+  })
+);
+await page.click('#ew-view-toggle');
+await page.waitForFunction(() => document.querySelectorAll('#ew-doc-text .ew-doc-rendered').length === 1, null, { timeout: 10000 });
+check('seg-rendered: toggle back re-renders the segment formatted', true);
+// ?q= deep link restores and navigates cross-segment in formatted mode.
+await page.goto(`${BASE}/doc/synthetic-seg-rich/?q=${encodeURIComponent('quantum sovereign covenant')}`, { waitUntil: 'load' });
+await docReady();
+await page.waitForFunction(() => (document.getElementById('ew-doc-live')?.textContent ?? '').includes('Match 1 of 1'), null, { timeout: 10000 });
+check(
+  'seg-rendered: ?q= deep link lands on the cross-segment match formatted',
+  !/Segment 1 of/.test(await page.textContent('#ew-seg-label')) && (await page.locator('#ew-doc-text .ew-doc-rendered').count()) === 1
+);
+// axe on the seg-rendered page (fresh context, mirroring the (g) pattern).
+const axeSegCtx = await browser.newContext();
+const axeSegPage = await axeSegCtx.newPage();
+await axeSegPage.goto(`${BASE}/doc/synthetic-seg-rich/`, { waitUntil: 'load' });
+await axeSegPage.waitForFunction(() => window.__ewDocMetrics !== undefined, null, { timeout: 120000 });
+const axeSeg = await new AxeBuilder({ page: axeSegPage }).analyze();
+const badSeg = axeSeg.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+check('axe seg-rendered doc: no serious/critical', badSeg.length === 0, JSON.stringify(badSeg.map((v) => v.id)));
+await axeSegCtx.close();
 
 await browser.close();
 const failed = results.filter((r) => !r.ok);
