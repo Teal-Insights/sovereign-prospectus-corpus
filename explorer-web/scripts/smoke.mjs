@@ -576,16 +576,20 @@ await flowPage.goto(`${BASE}/doc/synthetic-rich/`, { waitUntil: 'load' });
 await flowPage.waitForSelector('#ew-doc-text .ew-doc-rendered', { timeout: 120000 });
 check(
   'rendered tree uses normal flow (white-space reset)',
-  await flowPage.evaluate(
-    () => getComputedStyle(document.querySelector('#ew-doc-text .ew-doc-rendered')).whiteSpace === 'normal'
-  ),
+  await flowPage.evaluate(() => {
+    const el = document.querySelector('#ew-doc-text .ew-doc-rendered');
+    return el !== null && getComputedStyle(el).whiteSpace === 'normal';
+  }),
   'computed white-space on .ew-doc-rendered is not normal'
 );
 await flowPage.click('#ew-view-toggle');
 await flowPage.waitForFunction(() => !document.querySelector('#ew-doc-text .ew-doc-rendered'), null, { timeout: 10000 });
 check(
   'raw mode keeps the facsimile pre-wrap on #ew-doc-text',
-  await flowPage.evaluate(() => getComputedStyle(document.getElementById('ew-doc-text')).whiteSpace === 'pre-wrap'),
+  await flowPage.evaluate(() => {
+    const el = document.getElementById('ew-doc-text');
+    return el !== null && getComputedStyle(el).whiteSpace === 'pre-wrap';
+  }),
   'computed white-space on #ew-doc-text is not pre-wrap in raw mode'
 );
 await flowPage.close();
