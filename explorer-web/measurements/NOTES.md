@@ -218,3 +218,34 @@ The gate reads "Load full text (29.0 MB)"; after the click it renders via
 the plain segmented path ("Segment 1 of 61", first-segment renderMs 18.7),
 one text node with `data-seg-start`, no rendered tree, and the view toggle
 stays hidden (rendered mode ineligible above 1M units).
+
+## TEA-989: per-segment rendered mode for >1M markdown docs
+
+Measured 2026-07-11 in Playwright Chromium at 1440x900 against the full
+2026-07-04 snapshot (astro build served two-origin, ports 8080/8082).
+`segRenderMs` is `window.__ewDocMetrics.segRenderMs` (markdown parse +
+DOMPurify + inject + segment text-node index); long tasks observed via
+PerformanceObserver on segment switches.
+
+| doc | chars | segments | first renderMs | segRenderMs range | max long task |
+|---|---|---|---|---|---|
+| luxse-733453 (largest 1-2M) | 1,940,290 | 5 | 56 | 19-47 | 99 ms |
+| luxse-101208127 (Ecuador, 4.3M) | 4,328,716 | 9 | 44 | 22-36 | 77 ms |
+| edgar-0000950123-05-000302 | 2,255,390 | 5 | 47 | 43 (seg 1) | - |
+| nsm-ni-000100288-0 | 1,890,471 | 4 | 43 | 38 (seg 1) | - |
+| pdip-chn1 | 2,905,216 | 6 | 39 | 34 (seg 1) | - |
+| luxse-103992153 (21.9M, gated) | 21,860,184 | 45 | 72 | 50 (seg 1) | gate->rendered 338 ms wall |
+
+Every measured segment render sits in the 19-72 ms band with a worst
+observed long task of 99 ms on a segment switch: no perceptible jank, two
+orders of magnitude inside the B1 3,000 ms budget. Spot checks (one >1M doc
+per source, rendered segment 1): EDGAR renders 88 tables/0 headings
+(bold+table house style, consistent with the B1 sampling), NSM 35 tables/
+175 headings, PDIP 21/307, LuxSE 66/218; no console errors, no raw
+markdown syntax in any rendered segment. Production comparison on
+luxse-101208127 (before: raw `##`/`<!-- image -->` monospace; after:
+rendered headings, lists, tables) captured for the PR. Lighthouse
+accessibility on the seg-rendered doc page: 100 (system Chrome headless,
+same invocation as S2/S3). The 29 MB worst case stays behind the click
+gate; its markdown source now renders formatted per segment after consent,
+first segment in 50 ms.
