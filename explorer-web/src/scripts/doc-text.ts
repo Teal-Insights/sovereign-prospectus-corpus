@@ -3,17 +3,30 @@
 // share one search/highlight/TOC machine through the active-text contract
 // (TEA-929): every haystack and offset lives in `active.text` for the current
 // mode.
-//   - PLAIN mode (pages-source docs, docs over 1M units, force-listed slugs):
-//     the raw text renders into the single #ew-doc-text container (one text
-//     node; offsets map 1:1 to the node), segmented above 1M units, with
-//     search over the FULL raw string and CSS Custom Highlight paints bounded
-//     to the rendered segment. Behavior is unchanged.
+//   - PLAIN mode (pages-source docs, force-listed slugs, and the raw view of
+//     any doc): the raw text renders into the single #ew-doc-text container
+//     (one text node; offsets map 1:1 to the node), segmented above 1M units,
+//     with search over the FULL raw string and CSS Custom Highlight paints
+//     bounded to the rendered segment. Behavior is unchanged.
 //   - RENDERED mode (markdown docs at or under 1M units): the markdown renders
 //     to a DOM tree inside #ew-doc-text; the haystack is the concatenation of
 //     that tree's text nodes (indexed by a TreeWalker), so phrases split by
 //     bold in the raw markdown now match, and highlight ranges span node
 //     boundaries. The TOC is derived from the rendered headings. A toggle
 //     switches to plain (raw) mode and back.
+//   - SEG-RENDERED mode (markdown docs over 1M units, TEA-989): segments are
+//     computed over the RAW text with markdown-safe cuts, and only the ACTIVE
+//     segment renders as markdown (same renderer + DOMPurify + .ew-doc-rendered
+//     wrapper as rendered mode). Search, match counts, TOC offsets, and
+//     segment attribution all stay in RAW whole-doc space so offsets span
+//     segments; the rendered-segment DOM gets its own text-node index, and
+//     painting re-runs the query over the segment's rendered text. The current
+//     match maps raw->rendered by ordinal (pickRenderedOrdinal); TOC clicks
+//     anchor on the matching rendered heading (nthTitleIndex). Consequence,
+//     accepted and documented: the COUNT is raw-truth while the PAINT is
+//     rendered-truth, so a bold-split phrase can paint without being counted
+//     (and a query over markdown syntax counts without painting); the raw
+//     toggle remains the exact-machinery view.
 // The live region #ew-doc-live is the accessible channel: highlight paints
 // are not reliably exposed to AT. Typing never navigates: only explicit
 // actions (match/segment buttons, TOC entries, the view toggle, a q= restore)
@@ -48,6 +61,8 @@ import {
   findMatches,
   locateSpan,
   needsSegments,
+  nthTitleIndex,
+  pickRenderedOrdinal,
   sanitizeToc,
   segmentForOffset,
   snippetAround,
@@ -84,16 +99,26 @@ let navigated = false;
 // state right after a Next click that landed inside the debounce window).
 let lastRanQuery: string | null = null;
 
-// Active-text contract (TEA-929). Every haystack and every offset consumer
-// reads `active.text` for the current mode. In plain/segmented mode
-// active.text is the full raw string (search spans segment boundaries). In
-// rendered mode active.text is the concatenation of the rendered DOM text
-// nodes (markdown syntax stripped), indexed 1:1 by the three arrays below;
-// offsets map onto renderedNodes so every Range is valid.
-let active: { text: string; mode: 'plain' | 'rendered' } = { text: '', mode: 'plain' };
+// Active-text contract (TEA-929, extended by TEA-989). Every haystack and
+// every offset consumer reads `active.text` for the current mode. In
+// plain/segmented AND seg-rendered modes active.text is the full raw string
+// (search spans segment boundaries). In rendered mode active.text is the
+// concatenation of the rendered DOM text nodes (markdown syntax stripped),
+// indexed 1:1 by the three arrays below; offsets map onto renderedNodes so
+// every Range is valid. In seg-rendered mode the SAME three arrays index the
+// ACTIVE SEGMENT's rendered tree, whose concatenation lives in
+// segRenderedText (NOT active.text); segMatches holds the query re-run over
+// that segment-local rendered text for painting.
+let active: { text: string; mode: 'plain' | 'rendered' | 'seg-rendered' } = {
+  text: '',
+  mode: 'plain',
+};
 let renderedNodes: Text[] = [];
 let renderedStarts: number[] = [];
 let renderedLengths: number[] = [];
+let segRenderedText = '';
+let segMatches: SearchMatches | null = null;
+let lastSegRenderMs: number | null = null;
 // Whether rendered mode is available for this doc (drives the toggle) and,
 // when it is, whether the formatted view is currently shown.
 let renderedEligible = false;
@@ -221,20 +246,25 @@ function main(): void {
     return range;
   }
 
+  // Range over a span expressed in the rendered text-node index's space
+  // (whole doc in rendered mode, the active segment in seg-rendered mode).
+  function renderedRange(start: number, end: number): Range | null {
+    const loc = locateSpan(renderedStarts, renderedLengths, start, end);
+    if (!loc) return null;
+    const range = document.createRange();
+    range.setStart(renderedNodes[loc.startNode], loc.startOffset);
+    range.setEnd(renderedNodes[loc.endNode], loc.endOffset);
+    return range;
+  }
+
   // Mode-aware Range builder over an [start, end) span in active.text. In
   // rendered mode the span maps onto the rendered text-node index (matches can
   // cross node boundaries; Range supports that). In plain mode it delegates to
   // the single-text-node path (segment-windowed), so plain behavior is
-  // unchanged.
+  // unchanged. NOT valid in seg-rendered mode (active.text offsets are raw
+  // and have no direct DOM mapping there): callers must branch first.
   function spanRange(start: number, end: number): Range | null {
-    if (active.mode === 'rendered') {
-      const loc = locateSpan(renderedStarts, renderedLengths, start, end);
-      if (!loc) return null;
-      const range = document.createRange();
-      range.setStart(renderedNodes[loc.startNode], loc.startOffset);
-      range.setEnd(renderedNodes[loc.endNode], loc.endOffset);
-      return range;
-    }
+    if (active.mode === 'rendered') return renderedRange(start, end);
     const node = textNode();
     if (!node) return null;
     return rangeFor(node, segStartOffset(), start, end);
@@ -251,12 +281,33 @@ function main(): void {
     return lo;
   }
 
+  // Seg-rendered current-match resolution (TEA-989): the current raw match's
+  // ordinal among raw matches inside the active segment, mapped onto the
+  // segment's rendered matches. Null when the current match is in another
+  // segment, unmappable, or the mode does not apply.
+  function segCurrentRenderedIdx(): number | null {
+    if (active.mode !== 'seg-rendered' || !matches || matchIndex < 0 || !segMatches) return null;
+    const seg = segments[segIndex];
+    const off = matches.starts[matchIndex];
+    if (off < seg.start || off >= seg.end) return null;
+    const first = lowerBound(matches.starts, seg.start);
+    const rawCount = lowerBound(matches.starts, seg.end) - first;
+    return pickRenderedOrdinal(matchIndex - first, rawCount, segMatches.starts.length);
+  }
+
   function selectionFallback(): void {
     // Always clear first: a stale selection visually asserts a match that
     // no longer exists (council PR gate).
     const sel = window.getSelection();
     sel?.removeAllRanges();
     if (!matches || matchIndex < 0 || !navigated) return;
+    if (active.mode === 'seg-rendered') {
+      const idx = segCurrentRenderedIdx();
+      if (idx === null || !segMatches) return;
+      const r = renderedRange(segMatches.starts[idx], segMatches.ends[idx]);
+      if (r) sel?.addRange(r);
+      return;
+    }
     const r = spanRange(matches.starts[matchIndex], matches.ends[matchIndex]);
     if (r) sel?.addRange(r);
   }
@@ -268,7 +319,9 @@ function main(): void {
       searchHint.hidden = false;
     } else if (capNoteShown) {
       // Rendered mode has no segments, so the cap note must not say
-      // "in this segment" (the cap is over the whole document).
+      // "in this segment" (the cap is over the whole document). Plain
+      // segmented AND seg-rendered paints are segment-bounded, so both use
+      // the segment-scoped copy.
       searchHint.textContent =
         active.mode === 'rendered'
           ? highlightCapNoteWhole(HIGHLIGHT_CAP)
@@ -318,6 +371,32 @@ function main(): void {
         const r = spanRange(starts[matchIndex], ends[matchIndex]);
         if (r) currentHl.add(r);
       }
+    } else if (active.mode === 'seg-rendered') {
+      // Raw offsets have no DOM mapping in the rendered segment, so painting
+      // uses segMatches (the query re-run over the segment's rendered text).
+      // Painted only while the raw search has matches: a zero raw count shows
+      // the absence copy, and painting rendered-only occurrences under it
+      // would contradict the visible count (TEA-989 count/paint contract).
+      const cur = segCurrentRenderedIdx();
+      if (segMatches && starts.length > 0) {
+        let painted = 0;
+        for (let i = 0; i < segMatches.starts.length; i++) {
+          if (i === cur) continue; // current match lives only in ew-match-current
+          if (painted >= HIGHLIGHT_CAP) {
+            capNoteShown = true;
+            break;
+          }
+          const r = renderedRange(segMatches.starts[i], segMatches.ends[i]);
+          if (r) {
+            matchHl.add(r);
+            painted++;
+          }
+        }
+        if (cur !== null) {
+          const r = renderedRange(segMatches.starts[cur], segMatches.ends[cur]);
+          if (r) currentHl.add(r);
+        }
+      }
     } else {
       const node = textNode();
       if (!node) {
@@ -356,18 +435,41 @@ function main(): void {
     return Number.isFinite(parsed) ? parsed : 80;
   }
 
+  // Total UTF-16 length indexed by the rendered text-node arrays (the whole
+  // doc in rendered mode, the active segment in seg-rendered mode).
+  function renderedTotal(): number {
+    const n = renderedStarts.length;
+    return n > 0 ? renderedStarts[n - 1] + renderedLengths[n - 1] : 0;
+  }
+
+  // Scroll to an offset in the rendered index's space via a one-unit Range; a
+  // Range across nodes is fine here since we only read its top edge.
+  function scrollToRenderedOffset(off: number): void {
+    const clamped = Math.min(Math.max(off, 0), Math.max(renderedTotal() - 1, 0));
+    const r = renderedRange(clamped, clamped + 1);
+    if (!r) return;
+    const rect = r.getBoundingClientRect();
+    window.scrollTo({ top: rect.top + window.scrollY - jumpOffsetPx() });
+  }
+
+  // Raw offset -> approximate offset in the active segment's rendered text.
+  // Rendering strips markdown syntax monotonically, so the proportional
+  // position is close; exact anchors (mapped matches, heading elements) are
+  // preferred by their callers and this is the fallback.
+  function segApproxRenderedOffset(off: number): number {
+    const seg = segments[segIndex];
+    const span = Math.max(seg.end - seg.start, 1);
+    const local = Math.min(Math.max(off - seg.start, 0), span);
+    return Math.round((local / span) * segRenderedText.length);
+  }
+
   function scrollToOffset(off: number): void {
     if (active.mode === 'rendered') {
-      // Scroll to the text node holding `off` via a one-unit Range; a Range
-      // across nodes is fine here since we only read its top edge.
-      const clamped = Math.min(Math.max(off, 0), Math.max(active.text.length - 1, 0));
-      const loc = locateSpan(renderedStarts, renderedLengths, clamped, clamped + 1);
-      if (!loc) return;
-      const range = document.createRange();
-      range.setStart(renderedNodes[loc.startNode], loc.startOffset);
-      range.setEnd(renderedNodes[loc.endNode], loc.endOffset);
-      const rect = range.getBoundingClientRect();
-      window.scrollTo({ top: rect.top + window.scrollY - jumpOffsetPx() });
+      scrollToRenderedOffset(off);
+      return;
+    }
+    if (active.mode === 'seg-rendered') {
+      scrollToRenderedOffset(segApproxRenderedOffset(off));
       return;
     }
     const node = textNode();
@@ -397,14 +499,79 @@ function main(): void {
     segLabel.textContent = segmentLabel(segIndex + 1, segments.length, segmentMatchCount());
   }
 
-  function renderSegment(i: number): void {
+  function renderSegmentPlain(i: number): void {
     if (rawText === null) return;
     segIndex = Math.min(Math.max(i, 0), segments.length - 1);
     const seg = segments[segIndex];
+    // Byte-for-byte raw contract: the segment slice, verbatim, as one text node.
     container!.textContent = rawText.slice(seg.start, seg.end);
     container!.dataset.segStart = String(seg.start);
+    active = { text: rawText, mode: 'plain' };
+    segMatches = null;
     updateSegNav();
     applyHighlights();
+  }
+
+  // TEA-989: the active segment as rendered markdown. Same two XSS layers and
+  // the same .ew-doc-rendered wrapper as whole-doc rendered mode (so the
+  // Stage 5 I-1 white-space reset and the B0/B6 typography apply), scoped to
+  // the segment. The rendered text-node index and the segment-local rendered
+  // matches are rebuilt here because both are per-segment state.
+  function renderSegmentRendered(i: number): void {
+    if (rawText === null) return;
+    segIndex = Math.min(Math.max(i, 0), segments.length - 1);
+    const seg = segments[segIndex];
+    const t0 = performance.now();
+    const clean = DOMPurify.sanitize(renderDocMarkdown(rawText.slice(seg.start, seg.end)), {
+      ADD_ATTR: ['rel'],
+    });
+    const wrapper = document.createElement('div');
+    wrapper.className = 'ew-doc-rendered';
+    wrapper.innerHTML = clean;
+    container!.replaceChildren(wrapper);
+    // The single-text-node / data-seg-start invariant is plain-mode-only
+    // (mode-scoped contract in env.d.ts / ARCHITECTURE.md).
+    delete container!.dataset.segStart;
+    segRenderedText = buildRenderedIndex();
+    active = { text: rawText, mode: 'seg-rendered' };
+    segMatches =
+      lastRanQuery !== null && matches !== null ? findMatches(segRenderedText, lastRanQuery) : null;
+    lastSegRenderMs = performance.now() - t0;
+    if (window.__ewDocMetrics) window.__ewDocMetrics.segRenderMs = lastSegRenderMs;
+    updateSegNav();
+    applyHighlights();
+  }
+
+  function renderSegment(i: number): void {
+    if (renderedEligible && formatted) renderSegmentRendered(i);
+    else renderSegmentPlain(i);
+  }
+
+  // TEA-989: TOC clicks on a rendered segment anchor on the heading ELEMENT
+  // whose text matches the clicked snapshot-toc title (k-th among same-title
+  // rows within the segment, so repeated "(continued)" titles resolve).
+  // Returns false when no rendered heading matches; the caller falls back to
+  // the proportional scroll.
+  function segHeadingScroll(off: number, label: string): boolean {
+    const seg = segments[segIndex];
+    let ordinal = -1;
+    let count = 0;
+    for (const row of tocRows()) {
+      if (row.offset < seg.start || row.offset >= seg.end || row.title !== label) continue;
+      if (row.offset === off) ordinal = count;
+      count++;
+    }
+    if (ordinal < 0) return false;
+    const headings = [...container!.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')];
+    const idx = nthTitleIndex(
+      headings.map((h) => h.textContent ?? ''),
+      label,
+      ordinal
+    );
+    if (idx === null) return false;
+    const rect = headings[idx].getBoundingClientRect();
+    window.scrollTo({ top: rect.top + window.scrollY - jumpOffsetPx() });
+    return true;
   }
 
   function jumpToOffset(off: number, label?: string): void {
@@ -420,7 +587,9 @@ function main(): void {
       const target = segmentForOffset(segments, off);
       if (target !== segIndex) renderSegment(target);
     }
-    scrollToOffset(off);
+    if (!(active.mode === 'seg-rendered' && label && segHeadingScroll(off, label))) {
+      scrollToOffset(off);
+    }
     focusText();
     if (label) {
       announce(
@@ -517,22 +686,26 @@ function main(): void {
     } else {
       applyHighlights();
     }
-    scrollToOffset(off);
+    // Seg-rendered (TEA-989): when the current raw match maps onto a rendered
+    // match, scroll to it exactly and quote the RENDERED snippet (no markdown
+    // syntax); otherwise fall back to the proportional scroll and raw snippet.
+    let snippet = snippetAround(active.text, off, matches.ends[matchIndex]);
+    const segIdx = segCurrentRenderedIdx();
+    if (active.mode === 'seg-rendered' && segIdx !== null && segMatches) {
+      scrollToRenderedOffset(segMatches.starts[segIdx]);
+      snippet = snippetAround(segRenderedText, segMatches.starts[segIdx], segMatches.ends[segIdx]);
+    } else {
+      scrollToOffset(off);
+    }
     focusText();
     updateSegNav();
     searchPos.textContent = matchPositionLabel(matchIndex + 1, n, matches.capped);
-    announce(
-      matchPositionCopy(
-        matchIndex + 1,
-        n,
-        matches.capped,
-        snippetAround(active.text, off, matches.ends[matchIndex])
-      )
-    );
+    announce(matchPositionCopy(matchIndex + 1, n, matches.capped, snippet));
   }
 
   function clearSearchUi(): void {
     matches = null;
+    segMatches = null;
     matchIndex = -1;
     navigated = false;
     searchCount.textContent = '';
@@ -564,6 +737,9 @@ function main(): void {
       return;
     }
     matches = found;
+    // Seg-rendered painting needs the query re-run over the active segment's
+    // rendered text (raw offsets have no DOM mapping there).
+    segMatches = active.mode === 'seg-rendered' ? findMatches(segRenderedText, q) : null;
     matchIndex = 0;
     navigated = false;
     const total = found.starts.length;
@@ -657,8 +833,10 @@ function main(): void {
   // whitespace-only nodes: the newlines marked emits between block elements
   // become natural word separators in the haystack. NEVER inject synthetic
   // characters into the concatenation; offsets must map 1:1 onto the DOM text
-  // nodes or every Range breaks.
-  function buildRenderedIndex(): void {
+  // nodes or every Range breaks. Returns the concatenation; the caller
+  // decides where it lives (active.text in rendered mode, segRenderedText in
+  // seg-rendered mode).
+  function buildRenderedIndex(): string {
     renderedNodes = [];
     renderedStarts = [];
     renderedLengths = [];
@@ -674,7 +852,7 @@ function main(): void {
       parts.push(t.data);
       acc += t.data.length;
     }
-    active = { text: parts.join(''), mode: 'rendered' };
+    return parts.join('');
   }
 
   // A heading's offset is its first text node's global start; a heading with
@@ -728,13 +906,14 @@ function main(): void {
     // misread it (mode-scoped contract in env.d.ts / ARCHITECTURE.md).
     delete container!.dataset.segStart;
     segmented = false;
-    buildRenderedIndex();
+    active = { text: buildRenderedIndex(), mode: 'rendered' };
     buildRenderedToc();
   }
 
   function renderPlainFull(): void {
-    // Rendered-eligible docs are always at or under 1M units, so plain mode
-    // for them is the single-node full render (never segmented).
+    // Only reachable for docs at or under 1M units (setMode routes segmented
+    // docs through renderSegment), so plain mode here is the single-node full
+    // render, never segmented.
     segmented = false;
     segments = [{ start: 0, end: rawText!.length }];
     segIndex = 0;
@@ -762,17 +941,21 @@ function main(): void {
   // The toggle re-renders the container in the other mode, rebuilds the TOC,
   // re-runs the last executed query with typing-path semantics (no scroll, no
   // focus steal), resets match navigation to un-navigated, and announces the
-  // mode change. It is session-local and never written to the URL.
+  // mode change. It is session-local and never written to the URL. On a
+  // segmented doc (TEA-989) both modes share the same raw-space segments and
+  // the current segment index; only the current segment's presentation flips.
   function setMode(nextFormatted: boolean): void {
     if (nextFormatted === formatted) return;
     formatted = nextFormatted;
-    if (formatted) renderRendered();
+    matches = null;
+    segMatches = null;
+    matchIndex = -1;
+    navigated = false;
+    if (segmented) renderSegment(segIndex);
+    else if (formatted) renderRendered();
     else renderPlainFull();
     renderToc();
     updateToggleLabel();
-    matches = null;
-    matchIndex = -1;
-    navigated = false;
     if (lastRanQuery !== null && lastRanQuery.trim()) {
       runSearch(lastRanQuery);
     } else {
@@ -808,22 +991,24 @@ function main(): void {
       rawText = result.doc.text;
       toc = sanitizeToc(result.doc.toc ?? [], rawText.length);
       segmented = needsSegments(rawText.length);
-      // Rendered mode iff the text is markdown AND fits the full-render
-      // ceiling AND is not force-listed. Everything else keeps the plain path
-      // with zero behavior change.
-      renderedEligible = textSource === 'markdown' && !segmented && !FORCE_PLAIN_SLUGS.has(slug);
-      active = { text: rawText, mode: 'plain' }; // default; renderRendered overrides
+      // Rendered presentation iff the text is markdown and not force-listed
+      // (TEA-989: size no longer disqualifies; over the full-render ceiling
+      // the rendering is per-segment). Pages-source docs and force-listed
+      // slugs keep the plain path with zero behavior change.
+      renderedEligible = textSource === 'markdown' && !FORCE_PLAIN_SLUGS.has(slug);
+      active = { text: rawText, mode: 'plain' }; // default; rendered modes override
 
-      // renderMs covers parse + inject + index build in rendered mode, and the
-      // segment/full render in plain mode.
+      // renderMs covers parse + inject + index build in rendered modes, and
+      // the segment/full render in plain mode.
       const t0 = performance.now();
-      if (renderedEligible) {
-        formatted = true;
-        renderRendered();
-      } else if (segmented) {
+      if (segmented) {
         segments = computeSegments(rawText, toc);
         renderNotice(segNotice, SEGMENTS_NOTICE);
+        if (renderedEligible) formatted = true;
         renderSegment(0);
+      } else if (renderedEligible) {
+        formatted = true;
+        renderRendered();
       } else {
         segments = [{ start: 0, end: rawText.length }];
         segIndex = 0;
@@ -839,6 +1024,7 @@ function main(): void {
         fetchMs: result.fetchMs,
         parseMs: result.parseMs,
         renderMs,
+        segRenderMs: lastSegRenderMs,
         stringLength: result.stringLength,
       };
 

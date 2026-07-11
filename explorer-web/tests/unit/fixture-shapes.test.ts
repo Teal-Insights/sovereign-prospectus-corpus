@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 import { asyncBufferFromFile, parquetReadObjects } from 'hyparquet';
 import { expect, it } from 'vitest';
 
+import { DEFAULT_SEGMENT_CONFIG, computeSegments } from '../../src/lib/doc-view';
+
 const FIX = new URL('../fixtures/snapshot/', import.meta.url).pathname;
 
 interface TocEntryJson {
@@ -55,6 +57,42 @@ it('has a segment-scale doc (>1M units, one oversized section)', () => {
   const offs = doc.toc.map((e) => e.offset_utf16);
   const gaps = offs.slice(1).map((o, i) => o - offs[i]);
   expect(Math.max(...gaps, doc.text.length - offs[offs.length - 1])).toBeGreaterThan(500_000);
+});
+
+it('has a segmented markdown-rich doc whose default cuts are markdown-safe (TEA-989)', () => {
+  const doc = readDoc('synthetic-seg-rich');
+  expect(doc.text.length).toBeGreaterThan(1_000_000);
+  // adversarial content the cut logic must dodge, plus the smoke needles
+  const tStart = doc.text.indexOf('| Tranche | Coupon |');
+  const tEnd = doc.text.indexOf('\n\n', tStart) + 1; // straddling table's last row
+  const fStart = doc.text.indexOf('```');
+  const fEnd = doc.text.indexOf('```', fStart + 3) + 3;
+  expect(tStart).toBeGreaterThan(0);
+  expect(fStart).toBeGreaterThan(0);
+  expect(doc.text).toContain('collective **action** clauses');
+  expect(doc.text).toContain('quantum sovereign covenant');
+  // the table must straddle the 500K default cut so the fixture actually
+  // exercises the markdown-safe cut logic
+  expect(tStart).toBeLessThan(500_000);
+  expect(tEnd).toBeGreaterThan(500_000);
+  const segments = computeSegments(doc.text, doc.toc, DEFAULT_SEGMENT_CONFIG);
+  expect(segments.length).toBeGreaterThanOrEqual(3);
+  for (const s of segments.slice(1)) {
+    // no boundary lands inside the table or the fence
+    expect(s.start <= tStart || s.start > tEnd).toBe(true);
+    expect(s.start <= fStart || s.start > fEnd).toBe(true);
+  }
+  // the fence straddles the second cut's window and forces a dodge: at least
+  // one boundary sits at or before the fence start while the fence itself
+  // ends past that boundary plus nothing between the rows
+  expect(fEnd).toBeGreaterThan(segments[2].start);
+  // the last segment carries the needle and the final heading for the
+  // cross-segment search and TOC smoke scenarios
+  const last = segments[segments.length - 1];
+  const needleAt = doc.text.indexOf('quantum sovereign covenant');
+  const finalHeadingAt = doc.text.indexOf('## Final Provisions');
+  expect(needleAt).toBeGreaterThanOrEqual(last.start);
+  expect(finalHeadingAt).toBeGreaterThanOrEqual(last.start);
 });
 
 it('has a markdown-rich doc for rendered mode (bold-split phrase, table, headings)', () => {

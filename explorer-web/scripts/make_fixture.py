@@ -122,12 +122,67 @@ def _rich_text() -> tuple[str, list[dict[str, Any]]]:
         "## Events of Default\n\n",
         "An event of default occurs if any scheduled payment is missed.\n\n",
         filler,
+        # Intentionally EMPTY trailing heading: the committed fixture carries
+        # it so smoke can assert empty headings are skipped in the rendered
+        # TOC (council PR gate, TEA-929). It was hand-added after generation
+        # and is back-ported here so regeneration keeps the coverage (TEA-989).
+        "## \n",
     ]
     text = "".join(parts)
     toc = [
         _toc_entry(text, "# Rich Fixture Prospectus", 1),
         _toc_entry(text, "## Terms and Conditions", 2),
         _toc_entry(text, "## Events of Default", 2),
+    ]
+    return text, toc
+
+
+def _seg_rich_text() -> tuple[str, list[dict[str, Any]]]:
+    """>1M-unit markdown doc for per-segment rendered mode (TEA-989): a ~20K
+    GFM table straddling the 500K default cut, a fenced code block straddling
+    the second cut, a bold-split phrase plus a small table in segment 1, and a
+    needle sentence + final heading in the last segment. Placements are
+    validated against DEFAULT_SEGMENT_CONFIG by fixture-shapes.test.ts. The
+    filler must stay free of '#', '|', backticks, and the needle words."""
+    para = (
+        "The issuer shall duly and punctually pay principal of and interest on "
+        "the notes when and as the same become due and payable. " * 3
+    ).strip() + "\n\n"
+
+    parts: list[str] = [
+        "# Segmented Rich Fixture\n\n",
+        "## Alpha Terms\n\n",
+        "The notes contain collective **action** clauses that bind every holder.\n\n",
+        "| Series | Rate |\n| --- | --- |\n| 2031 | 4.50% |\n\n",
+    ]
+
+    def pad_to(target: int) -> None:
+        need = target - sum(len(p) for p in parts)
+        if need > 0:
+            parts.append(para * (need // len(para) + 1))
+
+    pad_to(495_000)
+    tranche_rows = "\n".join(
+        f"| T{i:04d} | {4 + i % 3}.{i % 100:02d}% | 20{30 + i % 20} | {'x' * 24} |"
+        for i in range(400)
+    )
+    parts.append(
+        f"| Tranche | Coupon | Maturity | Note |\n| --- | --- | --- | --- |\n{tranche_rows}\n\n"
+    )
+    pad_to(988_000)
+    fence_body = "\n".join(f"schedule line {i}: {'y' * 40}" for i in range(300))
+    parts.append(f"```\n{fence_body}\n```\n\n")
+    pad_to(1_020_000)
+    parts.append("## Final Provisions\n\n")
+    parts.append("The quantum sovereign covenant appears here and nowhere else.\n\n")
+    pad_to(1_040_000)
+    text = "".join(parts)
+    # Alpha Terms stays OUT of the toc on purpose: a toc offset that close to
+    # the start would become a section boundary and produce a tiny first
+    # segment; the rendered segment still shows it as a heading.
+    toc = [
+        _toc_entry(text, "# Segmented Rich Fixture", 1),
+        _toc_entry(text, "## Final Provisions", 2),
     ]
     return text, toc
 
@@ -146,6 +201,7 @@ def _synthetic_docs() -> list[tuple[dict[str, Any], dict[str, Any]]]:
     ]
     large_text, large_toc = _large_text()
     rich_text, rich_toc = _rich_text()
+    seg_rich_text, seg_rich_toc = _seg_rich_text()
 
     def row(slug: str, title: str, text: str, text_bytes: int | None = None) -> dict[str, Any]:
         return {
@@ -202,6 +258,15 @@ def _synthetic_docs() -> list[tuple[dict[str, Any], dict[str, Any]]]:
         (
             row("synthetic-rich", "Synthetic Rich Fixture", rich_text),
             text_json("synthetic-rich", "Synthetic Rich Fixture", rich_text, rich_toc),
+        ),
+        (
+            row("synthetic-seg-rich", "Synthetic Segmented Rich Fixture", seg_rich_text),
+            text_json(
+                "synthetic-seg-rich",
+                "Synthetic Segmented Rich Fixture",
+                seg_rich_text,
+                seg_rich_toc,
+            ),
         ),
     ]
 

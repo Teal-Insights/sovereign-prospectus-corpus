@@ -46,7 +46,74 @@ export function needsSegments(textLength: number, cfg: SegmentConfig = DEFAULT_S
   return textLength > cfg.fullRenderMax;
 }
 
+function lineIsBlank(text: string, start: number, end: number): boolean {
+  for (let i = start; i < end; i++) {
+    const c = text.charCodeAt(i);
+    if (c !== 0x20 && c !== 0x09 && c !== 0x0d) return false;
+  }
+  return true;
+}
+
+// First non-space/tab index of the line, or `end` when none.
+function lineContentStart(text: string, start: number, end: number): number {
+  let i = start;
+  while (i < end && (text.charCodeAt(i) === 0x20 || text.charCodeAt(i) === 0x09)) i++;
+  return i;
+}
+
+function lineIsTableRow(text: string, start: number, end: number): boolean {
+  return text.charCodeAt(lineContentStart(text, start, end)) === 0x7c; // '|'
+}
+
+function lineIsFenceDelimiter(text: string, start: number, end: number): boolean {
+  const i = lineContentStart(text, start, end);
+  const c = text.charCodeAt(i);
+  if (c !== 0x60 && c !== 0x7e) return false; // '`' or '~'
+  return i + 2 < end && text.charCodeAt(i + 1) === c && text.charCodeAt(i + 2) === c;
+}
+
+// TEA-989: segment cuts must be markdown-safe. Rendered mode parses each
+// segment independently, so a cut inside a fenced code block or a GFM table
+// mangles both neighbors. Three tiers, the LATEST valid candidate at or
+// before `at` wins:
+//   1. a block boundary: the start of a line whose previous line is blank,
+//      outside any ```/~~~ fence (blank lines terminate GFM tables and
+//      paragraphs, so tier 1 can never split either);
+//   2. no blank line in the window: a line start outside a fence where the
+//      two adjacent lines are not both table rows (never cuts BETWEEN table
+//      rows; cutting AT a table's first row is safe);
+//   3. pathological (e.g. one window-sized line): the last newline, then a
+//      hard cut guarded against splitting a surrogate pair.
+// Fence state is tracked from the window start; window starts are themselves
+// prior safe cuts (or converter-emitted heading offsets), which sit outside
+// fences, so the induction holds for balanced fences. An unbalanced stray
+// delimiter degrades this window to tier 3 (the pre-TEA-989 behavior).
+// The line scan is bounded by `at`, so computeSegments stays O(text length).
 function findCut(text: string, from: number, at: number): number {
+  let blankCut = -1;
+  let calmCut = -1;
+  let inFence = false;
+  let prevBlank = false;
+  let prevTable = false;
+  let ls = from;
+  while (ls < at) {
+    let le = ls;
+    while (le < at && text.charCodeAt(le) !== 0x0a) le++;
+    const truncated = le >= at && !(le < text.length && text.charCodeAt(le) === 0x0a);
+    const blank = truncated ? false : lineIsBlank(text, ls, le);
+    const table = lineIsTableRow(text, ls, le);
+    if (ls > from && !inFence) {
+      if (prevBlank) blankCut = ls;
+      if (!(prevTable && table)) calmCut = ls;
+    }
+    if (lineIsFenceDelimiter(text, ls, le)) inFence = !inFence;
+    prevBlank = blank;
+    prevTable = table;
+    if (le >= at) break; // the line runs past the window; no later line start fits
+    ls = le + 1;
+  }
+  if (blankCut > from) return blankCut;
+  if (calmCut > from) return calmCut;
   const nl = text.lastIndexOf('\n', at - 1);
   if (nl > from) return nl + 1;
   const c = text.charCodeAt(at - 1);
@@ -248,6 +315,50 @@ export function locateSpan(
     endNode,
     endOffset: e - starts[endNode],
   };
+}
+
+// ---- per-segment rendered mode (TEA-989) ----
+
+// Segmented docs search RAW whole-doc text (offsets must span segments), but
+// the active segment displays a rendered tree whose text differs from the raw
+// slice (markdown syntax stripped). There is no exact raw-to-rendered offset
+// map, so the CURRENT match is located by ordinal: the raw match's position
+// among raw matches inside the segment maps onto the segment's rendered
+// matches. Identity when the counts agree (the overwhelmingly common case);
+// proportional-nearest when formatting splits or syntax-only matches make the
+// counts diverge; null when the rendered segment has no matches to map onto.
+export function pickRenderedOrdinal(
+  rawOrdinal: number,
+  rawCount: number,
+  renderedCount: number
+): number | null {
+  if (renderedCount <= 0 || rawCount <= 0) return null;
+  if (rawOrdinal < 0 || rawOrdinal >= rawCount) return null;
+  if (rawCount === renderedCount) return rawOrdinal;
+  if (rawCount === 1) return 0;
+  const t = rawOrdinal / (rawCount - 1);
+  return Math.min(renderedCount - 1, Math.max(0, Math.round(t * (renderedCount - 1))));
+}
+
+function normalizeTitle(s: string): string {
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+// TOC clicks on a rendered segment anchor on the heading ELEMENT whose text
+// matches the clicked snapshot-toc title; `ordinal` disambiguates repeated
+// titles ("(continued)" sections) counted among same-title entries within the
+// segment. Comparison is whitespace-normalized on both sides. Returns the
+// index into `titles` (rendered headings in document order) or null.
+export function nthTitleIndex(titles: string[], title: string, ordinal: number): number | null {
+  const wanted = normalizeTitle(title);
+  let seen = 0;
+  for (let i = 0; i < titles.length; i++) {
+    if (normalizeTitle(titles[i]) === wanted) {
+      if (seen === ordinal) return i;
+      seen++;
+    }
+  }
+  return null;
 }
 
 // Escape hatch (empty by default): a slug listed here always uses the plain
