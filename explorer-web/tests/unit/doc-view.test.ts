@@ -10,6 +10,8 @@ import {
   findMatches,
   locateSpan,
   needsSegments,
+  nthTitleIndex,
+  pickRenderedOrdinal,
   sanitizeToc,
   segmentForOffset,
   snippetAround,
@@ -319,4 +321,142 @@ it('locateSpan: single-node and empty-index inputs', () => {
 it('FORCE_PLAIN_SLUGS is empty by default', () => {
   expect(FORCE_PLAIN_SLUGS.size).toBe(0);
   expect(FORCE_PLAIN_SLUGS.has('anything')).toBe(false);
+});
+
+// ---- TEA-989: markdown-safe segment cuts ----
+
+function boundaries(segments: Segment[]): number[] {
+  return segments.slice(1).map((s) => s.start);
+}
+
+const PARA = `${'p'.repeat(58)}\n\n`; // one paragraph block: 58 chars + newline + blank line
+// multi-line paragraph: inner newlines are NOT block boundaries
+const MULTILINE_PARA = `${'a'.repeat(19)}\n${'b'.repeat(19)}\n${'c'.repeat(19)}\n\n`; // 61 chars
+
+it('prefers a blank-line block boundary over a mid-paragraph newline', () => {
+  const text = MULTILINE_PARA.repeat(10); // 610 chars, blocks every 61
+  const segments = computeSegments(text, [], cfg(150));
+  assertTiling(segments, text.length);
+  expect(segments.length).toBeGreaterThan(2);
+  for (const b of boundaries(segments)) {
+    // every segment starts at a block start, right after a blank line,
+    // never at one of the paragraph-internal newlines
+    expect(text.slice(b - 2, b)).toBe('\n\n');
+  }
+});
+
+it('never cuts inside a GFM table straddling the target', () => {
+  const prefix = PARA.repeat(3); // 180 chars
+  const rows = Array.from({ length: 12 }, (_, i) => `| row${i} | ${'v'.repeat(10)} |`).join('\n');
+  const table = `| a | b |\n| --- | --- |\n${rows}\n`;
+  const text = `${prefix}${table}\n${PARA.repeat(3)}`;
+  const tStart = prefix.length;
+  const tEnd = tStart + table.length;
+  const segments = computeSegments(text, [], cfg(300)); // target lands mid-table
+  assertTiling(segments, text.length);
+  const bs = boundaries(segments);
+  expect(bs.length).toBeGreaterThan(0);
+  for (const b of bs) {
+    expect(b <= tStart || b > tEnd).toBe(true);
+  }
+  // the cut before the table lands exactly on the table's block start
+  expect(bs).toContain(tStart);
+});
+
+it('never cuts inside a fenced code block, even at blank lines within the fence', () => {
+  const prefix = PARA.repeat(3); // 180 chars
+  const fence = '```\ncode a\n\ncode b\n\n' + 'z'.repeat(120) + '\ncode c\n```\n';
+  const text = `${prefix}${fence}\n${PARA.repeat(3)}`;
+  const fStart = prefix.length;
+  const fEnd = fStart + fence.length;
+  const segments = computeSegments(text, [], cfg(250)); // target lands mid-fence
+  assertTiling(segments, text.length);
+  const bs = boundaries(segments);
+  expect(bs.length).toBeGreaterThan(0);
+  for (const b of bs) {
+    // the blank lines INSIDE the fence must never be chosen
+    expect(b <= fStart || b > fEnd).toBe(true);
+  }
+  expect(bs).toContain(fStart);
+});
+
+it('with no blank lines, falls back to a newline that never splits table rows', () => {
+  const lines = Array.from({ length: 10 }, (_, i) => `plain line ${i} ${'w'.repeat(8)}`).join('\n');
+  const table = `| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n`;
+  const text = `${lines}\n${table}`;
+  const tStart = lines.length + 1;
+  const segments = computeSegments(text, [], cfg(tStart + 20)); // target inside the table
+  assertTiling(segments, text.length);
+  const bs = boundaries(segments);
+  expect(bs.length).toBeGreaterThan(0);
+  for (const b of bs) {
+    // a cut AT the table's first row is safe (the whole table starts the next
+    // segment); a cut between two table rows is never allowed
+    expect(b <= tStart || b >= text.length).toBe(true);
+  }
+});
+
+it('markdown-safe cuts preserve the exact tiling contract on mixed content', () => {
+  const blocks = [
+    '# Title\n\n',
+    PARA.repeat(2),
+    '| h1 | h2 |\n| --- | --- |\n| a | b |\n\n',
+    '```\nfenced\n```\n\n',
+    PARA.repeat(3),
+  ];
+  const text = blocks.join('');
+  for (const target of [50, 90, 140, 220]) {
+    assertTiling(computeSegments(text, [], cfg(target)), text.length);
+  }
+});
+
+// ---- TEA-989: raw-ordinal to rendered-ordinal match mapping ----
+
+it('pickRenderedOrdinal is the identity when raw and rendered counts agree', () => {
+  expect(pickRenderedOrdinal(0, 5, 5)).toBe(0);
+  expect(pickRenderedOrdinal(2, 5, 5)).toBe(2);
+  expect(pickRenderedOrdinal(4, 5, 5)).toBe(4);
+});
+
+it('pickRenderedOrdinal maps proportionally when counts diverge', () => {
+  // 3 raw matches, 5 rendered: first->first, last->last, middle->middle
+  expect(pickRenderedOrdinal(0, 3, 5)).toBe(0);
+  expect(pickRenderedOrdinal(1, 3, 5)).toBe(2);
+  expect(pickRenderedOrdinal(2, 3, 5)).toBe(4);
+  // 5 raw, 2 rendered: endpoints still map to endpoints
+  expect(pickRenderedOrdinal(0, 5, 2)).toBe(0);
+  expect(pickRenderedOrdinal(4, 5, 2)).toBe(1);
+});
+
+it('pickRenderedOrdinal: a single raw match lands on the first rendered match', () => {
+  expect(pickRenderedOrdinal(0, 1, 4)).toBe(0);
+});
+
+it('pickRenderedOrdinal returns null when unmappable', () => {
+  expect(pickRenderedOrdinal(0, 3, 0)).toBeNull(); // nothing rendered to map onto
+  expect(pickRenderedOrdinal(0, 0, 3)).toBeNull(); // no raw matches in the segment
+  expect(pickRenderedOrdinal(3, 3, 3)).toBeNull(); // ordinal out of range
+  expect(pickRenderedOrdinal(-1, 3, 3)).toBeNull();
+});
+
+// ---- TEA-989: TOC title anchoring into a rendered segment ----
+
+it('nthTitleIndex finds the k-th heading with a matching title', () => {
+  const titles = ['Terms', 'Events of Default', 'Terms', 'Notices'];
+  expect(nthTitleIndex(titles, 'Terms', 0)).toBe(0);
+  expect(nthTitleIndex(titles, 'Terms', 1)).toBe(2);
+  expect(nthTitleIndex(titles, 'Notices', 0)).toBe(3);
+});
+
+it('nthTitleIndex compares whitespace-normalized titles', () => {
+  const titles = ['Terms  and\nConditions '];
+  expect(nthTitleIndex(titles, 'Terms and Conditions', 0)).toBe(0);
+  expect(nthTitleIndex(['Terms and Conditions'], ' Terms  and Conditions', 0)).toBe(0);
+});
+
+it('nthTitleIndex returns null when absent or past the last occurrence', () => {
+  const titles = ['Terms', 'Notices'];
+  expect(nthTitleIndex(titles, 'Missing', 0)).toBeNull();
+  expect(nthTitleIndex(titles, 'Terms', 1)).toBeNull();
+  expect(nthTitleIndex([], 'Terms', 0)).toBeNull();
 });
