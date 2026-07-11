@@ -1,8 +1,41 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-10 (Stage 5 integration audit: batch verified, one fix PR, fix list staged)
+**Last updated:** 2026-07-11 (TEA-989: per-segment rendered mode for >1M markdown docs, PR open, council gate next)
 
-## Session 2026-07-10 (latest): Stage 5 integration audit of the pre-Monday batch
+## Session 2026-07-11 (latest): TEA-989 per-segment rendered mode (deliberate freeze-break)
+
+- **Did:** 620 docs over the 1M-unit `fullRenderMax` (6.4% of the corpus,
+  the flagship prospectuses) displayed raw markdown; the segmented path now
+  renders the ACTIVE segment as markdown (same renderer + DOMPurify +
+  `.ew-doc-rendered` wrapper as B1's rendered mode), default Formatted with
+  the raw toggle. Segment cuts are now markdown-safe (three-tier: blank-line
+  block boundary outside fences; never between table rows; legacy fallback).
+  Search/counts/TOC stay in RAW whole-doc space; painting re-runs the query
+  over the segment's rendered text; current match maps by ordinal
+  (`pickRenderedOrdinal`), TOC clicks anchor on rendered headings
+  (`nthTitleIndex`). Raw toggle is byte-exact (smoke-locked); pages-source
+  and at-or-under-1M paths unregressed. New `synthetic-seg-rich` fixture
+  (>1M, straddling table+fence) + smoke scenario (n) + scenario (d) raw
+  regression lock; `make_fixture.py` regeneration made byte-identical
+  (back-ported the hand-added empty-heading). Design note:
+  `docs/superpowers/specs/2026-07-11-tea-989-per-segment-render-design.md`.
+- **Why this shape:** no exact raw->rendered offset map exists (marked has
+  no source maps) and pre-rendering all segments is the perf wall the
+  threshold exists for, so whole-doc offsets stay raw (count = raw-truth,
+  paint = rendered-truth; documented in ARCHITECTURE.md and the code).
+- **Verified:** vitest 176, astro check 0/0, full two-origin smoke OK (new
+  scenarios watched failing against the pre-change build first), axe zero
+  serious/critical incl. the seg-rendered page, Lighthouse a11y 100, ruff/
+  pyright/pytest 472 green, privacy blocklist screen clean. Real-snapshot
+  perf: segment renders 19-72 ms across all sources, max long task 99 ms,
+  29 MB doc gate->rendered 338 ms wall (measurements/NOTES.md).
+- **Next: fresh council gate on the PR, then the attended pin-bump deploy
+  with the rehearsed rollback.** NOT merged. Deliberate freeze-break for
+  Monday 2026-07-13 (Teal's call, 2026-07-10).
+- **Pointer:** TEA-989, branch `lte/tea-989-per-segment-render`, worktree
+  `.claude/worktrees/lte+tea-989-per-segment-render`.
+
+## Session 2026-07-10: Stage 5 integration audit of the pre-Monday batch
 
 - **Verdict:** the batch composed. Fresh-checkout suites all green (vitest
   163, astro check clean, two-origin smoke, pytest 471, production
