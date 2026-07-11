@@ -44,3 +44,6 @@ build/
 docs/private/
 demo/reviews/
 process_additional_amounts.py
+
+# Node (any level): vitest/vite caches must never be committed (TEA-989 near-miss)
+node_modules/
