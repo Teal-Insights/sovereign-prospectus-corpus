@@ -441,6 +441,7 @@ class TestRunEdgarDownload:
         lines = [json.loads(line) for line in manifest.read_text().strip().split("\n")]
         assert len(lines) == 1
         assert lines[0]["native_id"] == "0000914021-24-000123"
+        assert lines[0]["file_path"] == str(output_dir / "edgar__0000914021-24-000123.htm")
 
     def test_existing_file_repairs_missing_manifest_and_rerun_is_idempotent(
         self, tmp_path: Path

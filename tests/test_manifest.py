@@ -27,6 +27,22 @@ def test_portable_path_is_relative_under_explicit_data_root(tmp_path: Path) -> N
     assert portable_data_path(target, data_root=data_root) == "data/original/document.pdf"
 
 
+def test_shared_data_root_requires_directory_named_data(tmp_path: Path) -> None:
+    from corpus.io.manifest import shared_data_root
+
+    run_root = tmp_path / "run"
+
+    assert shared_data_root(run_root / "original", run_root / "manifests") is None
+
+
+def test_shared_data_root_accepts_standard_data_layout(tmp_path: Path) -> None:
+    from corpus.io.manifest import shared_data_root
+
+    data_root = tmp_path / "run" / "data"
+
+    assert shared_data_root(data_root / "original", data_root / "manifests") == data_root
+
+
 def test_bulk_upsert_rewrites_manifest_once(tmp_path: Path) -> None:
     from corpus.io.manifest import upsert_manifest_records
 

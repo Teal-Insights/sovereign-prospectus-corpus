@@ -11,7 +11,7 @@
   idempotent manifest upserts; Bolivia FY2027 mapping/classification; and
   LuxSE exact issuer-ID discovery through issuer 29689. The original LuxSE
   string search was stopped when the API reported 17,347 token matches.
-- **Review hardening:** draft PR #126 now validates existing downloads, fully
+- **Review hardening:** draft PR #126 validates existing downloads, fully
   reconciles resumed parse JSONL, fails targeted discovery closed, preserves
   exact LuxSE issuer provenance, batches manifest reconciliation, preserves
   custom retry paths, and records validated resume skips in telemetry.

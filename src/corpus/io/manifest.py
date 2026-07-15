@@ -13,6 +13,15 @@ class ManifestConflictError(RuntimeError):
     """Raised when one storage key resolves to different downloaded bytes."""
 
 
+def shared_data_root(output_dir: Path, manifest_dir: Path) -> Path | None:
+    """Return the shared root only for the standard ``data`` directory layout."""
+    output_parent = output_dir.parent
+    manifest_parent = manifest_dir.parent
+    if output_parent.name == "data" and output_parent.resolve() == manifest_parent.resolve():
+        return output_parent
+    return None
+
+
 def portable_data_path(path: Path, *, data_root: Path | None = None) -> str:
     """Return a portable path only when the caller identifies its data root."""
     if data_root is not None:

@@ -17,6 +17,7 @@ from urllib.parse import quote
 
 from corpus.io.manifest import (
     portable_data_path,
+    shared_data_root,
     upsert_manifest_records,
 )
 from corpus.io.safe_write import safe_write
@@ -403,9 +404,7 @@ def run_luxse_download(
     manifest_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = manifest_dir / "luxse_manifest.jsonl"
-    data_root = (
-        output_dir.parent if output_dir.parent.resolve() == manifest_dir.parent.resolve() else None
-    )
+    data_root = shared_data_root(output_dir, manifest_dir)
     manifest_records: list[dict[str, Any]] = []
 
     stats: dict[str, Any] = {
