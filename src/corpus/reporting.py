@@ -35,6 +35,7 @@ def write_run_report(
     run_id: str,
     stats: dict[str, Any],
     telemetry_dir: Path,
+    discovery_file: Path | None = None,
 ) -> Path:
     """Write a human-readable download report.
 
@@ -66,17 +67,19 @@ def write_run_report(
 
     lines.append("")
     lines.append("  To retry failed downloads:")
-    lines.append(
-        f"    corpus download {source}"
-        f" --discovery-file {DISCOVERY_PATHS.get(source, f'data/{source}_discovery.jsonl')}"
+    retry_discovery = discovery_file or Path(
+        DISCOVERY_PATHS.get(source, f"data/{source}_discovery.jsonl")
     )
+    lines.append(f"    corpus download {source} --discovery-file {retry_discovery}")
     lines.append("")
 
     report_path.write_text("\n".join(lines))
     return report_path
 
 
-_NON_FAILURE_STATUSES = frozenset({"success", "success_after_429", "rate_limited", "not_found"})
+_NON_FAILURE_STATUSES = frozenset(
+    {"success", "success_after_429", "rate_limited", "not_found", "skipped_exists"}
+)
 
 
 def _extract_failures(

@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 from corpus.io.manifest import (
     portable_data_path,
-    upsert_manifest_record,
+    upsert_manifest_records,
 )
 from corpus.io.safe_write import safe_write
 
@@ -94,7 +94,7 @@ def resolve_luxse_issuer_id(
     data = response.json()
     if data.get("errors"):
         raise LuxseQueryError(f"Issuer lookup failed for {issuer_name!r}")
-    result = data.get("data", {}).get("luxseIssuersSearch", {})
+    result = (data.get("data") or {}).get("luxseIssuersSearch", {})
     exact = [issuer for issuer in result.get("issuers", []) if issuer.get("name") == issuer_name]
     if len(exact) != 1 or not exact[0].get("id"):
         raise LuxseQueryError(
@@ -148,7 +148,7 @@ def query_luxse_documents(
         data = resp.json()
 
         if "errors" not in data:
-            result = data.get("data", {}).get("luxseDocumentsSearch", {})
+            result = (data.get("data") or {}).get("luxseDocumentsSearch", {})
             documents = result.get("documents", [])
             total_hits = result.get("totalHits", 0)
             return documents, total_hits, attempt_size, False
@@ -186,6 +186,7 @@ def discover_luxse(
     for pattern in terms:
         query_hits = 0
         new_count = 0
+        accepted_exact_count = 0
         filtered_issuer_mismatch = 0
         page = 0
         effective_page_size = page_size
@@ -202,7 +203,7 @@ def discover_luxse(
             except LuxseQueryError:
                 query_failures += 1
                 term_failed = True
-                if fail_on_query_error:
+                if pattern in exact_terms or fail_on_query_error:
                     raise
 
         while not term_failed:
@@ -218,7 +219,7 @@ def discover_luxse(
             if failed:
                 query_failures += 1
                 term_failed = True
-                if fail_on_query_error:
+                if pattern in exact_terms or fail_on_query_error:
                     raise LuxseQueryError(
                         f"Unresolved LuxSE query for {pattern!r} page {requested_page}"
                     )
@@ -242,6 +243,8 @@ def discover_luxse(
                 if pattern in exact_terms and issuer_name != pattern:
                     filtered_issuer_mismatch += 1
                     continue
+                if pattern in exact_terms:
+                    accepted_exact_count += 1
 
                 if doc_id and doc_id not in seen_ids:
                     seen_ids.add(doc_id)
@@ -267,6 +270,11 @@ def discover_luxse(
                             "document_type_code": doc.get("documentTypeCode") or "",
                             "document_public_type_code": doc.get("documentPublicTypeCode") or "",
                             "description": doc.get("description") or "",
+                            "issuer_id": issuer_id,
+                            "issuer_resolution_method": (
+                                "exact_issuer_id" if issuer_id else "search_term"
+                            ),
+                            "queried_issuer_name": pattern,
                         },
                     }
                     all_records.append(record)
@@ -278,6 +286,12 @@ def discover_luxse(
                 break
             if delay > 0:
                 time.sleep(delay)
+
+        if pattern in exact_terms and not term_failed and accepted_exact_count == 0:
+            raise LuxseQueryError(
+                f"LuxSE query for {pattern!r} accepted no exact issuer documents "
+                f"({filtered_issuer_mismatch} issuer mismatch(es))"
+            )
 
         total_hits_raw += query_hits
         per_query.append(
@@ -311,6 +325,7 @@ def download_luxse_document(
     *,
     client: CorpusHTTPClient,
     output_dir: Path,
+    data_root: Path | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     """Download a single LuxSE document.
 
@@ -322,11 +337,21 @@ def download_luxse_document(
     target = output_dir / f"{storage_key}.pdf"
 
     if target.exists():
+        import fitz
+
         content = target.read_bytes()
         if not content.startswith(PDF_HEADER):
             return None, "failed_invalid_pdf"
+        try:
+            document = fitz.open(target)
+            page_count = document.page_count
+            document.close()
+        except Exception:
+            return None, "failed_invalid_pdf"
+        if page_count <= 0:
+            return None, "failed_invalid_pdf"
         enriched = dict(record)
-        enriched["file_path"] = portable_data_path(target)
+        enriched["file_path"] = portable_data_path(target, data_root=data_root)
         enriched["file_hash"] = hashlib.sha256(content).hexdigest()
         enriched["file_size_bytes"] = len(content)
         return enriched, "skipped_exists"
@@ -352,7 +377,7 @@ def download_luxse_document(
     file_hash = hashlib.sha256(content).hexdigest()
 
     enriched = dict(record)
-    enriched["file_path"] = portable_data_path(target)
+    enriched["file_path"] = portable_data_path(target, data_root=data_root)
     enriched["file_hash"] = file_hash
     enriched["file_size_bytes"] = len(content)
     return enriched, "downloaded"
@@ -378,6 +403,10 @@ def run_luxse_download(
     manifest_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = manifest_dir / "luxse_manifest.jsonl"
+    data_root = (
+        output_dir.parent if output_dir.parent.resolve() == manifest_dir.parent.resolve() else None
+    )
+    manifest_records: list[dict[str, Any]] = []
 
     stats: dict[str, Any] = {
         "downloaded": 0,
@@ -401,7 +430,7 @@ def run_luxse_download(
 
         try:
             result, dl_status = download_luxse_document(
-                record, client=client, output_dir=output_dir
+                record, client=client, output_dir=output_dir, data_root=data_root
             )
         except Exception as exc:
             elapsed_ms = int((time.monotonic() - _start) * 1000)
@@ -417,7 +446,7 @@ def run_luxse_download(
             elapsed_ms = int((time.monotonic() - _start) * 1000)
 
         if dl_status == "downloaded" and result is not None:
-            upsert_manifest_record(manifest_path, result)
+            manifest_records.append(result)
             stats["downloaded"] += 1
             logger.log(
                 document_id=doc_id, step="download", duration_ms=elapsed_ms, status="success"
@@ -425,7 +454,11 @@ def run_luxse_download(
         elif dl_status == "rate_limited":
             stats["failed"] += 1
             logger.log(
-                document_id=doc_id, step="download", duration_ms=elapsed_ms, status="rate_limited"
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status="failed_rate_limited",
+                error_message="LuxSE rate limit reached",
             )
             if rate_limit_sleep > 0:
                 time.sleep(rate_limit_sleep)
@@ -434,8 +467,14 @@ def run_luxse_download(
                 break
             continue
         elif dl_status == "skipped_exists" and result is not None:
-            upsert_manifest_record(manifest_path, result)
+            manifest_records.append(result)
             stats["skipped"] += 1
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status="skipped_exists",
+            )
         elif dl_status.startswith("skipped"):
             stats["skipped"] += 1
         else:
@@ -455,4 +494,5 @@ def run_luxse_download(
         if delay > 0:
             time.sleep(delay)
 
+    upsert_manifest_records(manifest_path, manifest_records)
     return stats

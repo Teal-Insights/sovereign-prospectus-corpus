@@ -17,7 +17,7 @@ import requests
 
 from corpus.io.manifest import (
     portable_data_path,
-    upsert_manifest_record,
+    upsert_manifest_records,
 )
 from corpus.io.safe_write import safe_write
 
@@ -234,6 +234,7 @@ def download_edgar_document(
     *,
     client: CorpusHTTPClient,
     output_dir: Path,
+    data_root: Path | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     """Download a single EDGAR filing.
 
@@ -246,9 +247,19 @@ def download_edgar_document(
     target = output_dir / f"{storage_key}.{ext}"
 
     if target.exists():
+        from corpus.parsers.html_parser import HTMLParser
+        from corpus.parsers.text_parser import PlainTextParser
+
         content = target.read_bytes()
+        parser = PlainTextParser() if target.suffix.lower() == ".txt" else HTMLParser()
+        try:
+            parsed = parser.parse(target)
+        except Exception:
+            return None, "failed_invalid_file"
+        if not content or parsed.page_count <= 0 or not parsed.text.strip():
+            return None, "failed_invalid_file"
         enriched = dict(record)
-        enriched["file_path"] = portable_data_path(target)
+        enriched["file_path"] = portable_data_path(target, data_root=data_root)
         enriched["file_hash"] = hashlib.sha256(content).hexdigest()
         enriched["file_size_bytes"] = len(content)
         return enriched, "skipped_exists"
@@ -264,7 +275,7 @@ def download_edgar_document(
     file_hash = hashlib.sha256(content).hexdigest()
 
     enriched = dict(record)
-    enriched["file_path"] = portable_data_path(target)
+    enriched["file_path"] = portable_data_path(target, data_root=data_root)
     enriched["file_hash"] = file_hash
     enriched["file_size_bytes"] = len(content)
     return enriched, "downloaded"
@@ -290,6 +301,10 @@ def run_edgar_download(
     manifest_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = manifest_dir / "edgar_manifest.jsonl"
+    data_root = (
+        output_dir.parent if output_dir.parent.resolve() == manifest_dir.parent.resolve() else None
+    )
+    manifest_records: list[dict[str, Any]] = []
 
     stats: dict[str, Any] = {
         "downloaded": 0,
@@ -316,6 +331,7 @@ def run_edgar_download(
                 record,
                 client=client,
                 output_dir=output_dir,
+                data_root=data_root,
             )
         except Exception as exc:
             elapsed_ms = int((time.monotonic() - _start) * 1000)
@@ -338,10 +354,11 @@ def run_edgar_download(
                         record,
                         client=client,
                         output_dir=output_dir,
+                        data_root=data_root,
                     )
                     if dl_status == "downloaded" and result is not None:
                         retry_ms = int((time.monotonic() - _start) * 1000)
-                        upsert_manifest_record(manifest_path, result)
+                        manifest_records.append(result)
                         stats["downloaded"] += 1
                         logger.log(
                             document_id=doc_id,
@@ -373,7 +390,7 @@ def run_edgar_download(
         elapsed_ms = int((time.monotonic() - _start) * 1000)
 
         if dl_status == "downloaded" and result is not None:
-            upsert_manifest_record(manifest_path, result)
+            manifest_records.append(result)
             stats["downloaded"] += 1
             logger.log(
                 document_id=doc_id,
@@ -382,12 +399,31 @@ def run_edgar_download(
                 status="success",
             )
         elif dl_status == "skipped_exists" and result is not None:
-            upsert_manifest_record(manifest_path, result)
+            manifest_records.append(result)
             stats["skipped"] += 1
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status="skipped_exists",
+            )
         elif dl_status.startswith("skipped"):
             stats["skipped"] += 1
+        else:
+            stats["failed"] += 1
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status=dl_status,
+                error_message=f"Download failed: {dl_status}",
+            )
+            if stats["failed"] >= total_failures_abort:
+                stats["aborted"] = True
+                break
 
         if delay > 0:
             time.sleep(delay)
 
+    upsert_manifest_records(manifest_path, manifest_records)
     return stats

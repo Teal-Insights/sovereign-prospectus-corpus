@@ -47,6 +47,34 @@ def _resolve_path(config: dict, section: str, key: str, default: str) -> Path:
     return p
 
 
+def _existing_parse_is_complete(output_path: Path, storage_key: str) -> bool:
+    """Return whether a parse JSONL is complete enough to be a resume point."""
+    import json
+
+    try:
+        with output_path.open() as existing:
+            records = [json.loads(line) for line in existing if line.strip()]
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+
+    if not records:
+        return False
+    header, *pages = records
+    page_count = header.get("page_count", 0)
+    if (
+        header.get("storage_key") != storage_key
+        or not isinstance(page_count, int)
+        or page_count <= 0
+        or header.get("parse_status") == "parse_empty"
+        or len(pages) != page_count
+    ):
+        return False
+
+    if [page.get("page") for page in pages] != list(range(page_count)):
+        return False
+    return any(isinstance(page.get("text"), str) and bool(page["text"].strip()) for page in pages)
+
+
 @click.group()
 @click.version_option(version=corpus.__version__, prog_name="corpus")
 def cli() -> None:
@@ -135,6 +163,7 @@ def nsm(
         run_id=run_id,
         stats=stats,
         telemetry_dir=log_dir,
+        discovery_file=discovery_file,
     )
 
     click.echo(
@@ -225,6 +254,7 @@ def edgar(
         run_id=run_id,
         stats=stats,
         telemetry_dir=log_dir,
+        discovery_file=discovery_file,
     )
 
     click.echo(
@@ -309,6 +339,7 @@ def pdip(
         run_id=run_id,
         stats=stats,
         telemetry_dir=log_dir,
+        discovery_file=discovery_file,
     )
 
     click.echo(
@@ -400,6 +431,7 @@ def luxse(
         run_id=run_id,
         stats=stats,
         telemetry_dir=log_dir,
+        discovery_file=discovery_file,
     )
 
     click.echo(
@@ -552,6 +584,12 @@ def discover_edgar_cmd(
         f"{stats['ciks_queried']} CIKs ({stats['ciks_failed']} failed)."
     )
     click.echo(f"Output: {output}")
+    if ciks and (stats["ciks_failed"] or stats["pagination_errors"]):
+        raise click.ClickException(
+            "EDGAR targeted discovery incomplete: "
+            f"{stats['ciks_failed']} CIK request(s) failed and "
+            f"{stats['pagination_errors']} pagination request(s) failed"
+        )
 
 
 @discover.command("pdip")
@@ -653,7 +691,7 @@ def discover_luxse_cmd(run_id: str | None, output: Path, search_terms: tuple[str
     click.echo(f"Output: {output}")
     for pq in stats["per_query"]:
         click.echo(f"  {pq['label']}: {pq['hits']} hits, {pq['new']} new")
-    if stats["query_failures"]:
+    if stats["query_failures"] and fail_on_query_error:
         raise click.ClickException(
             f"LuxSE discovery incomplete: {stats['query_failures']} unresolved query page(s)"
         )
@@ -875,25 +913,9 @@ def parse_run(run_id: str, source: str, limit: int | None, storage_keys: tuple[s
         output_path = text_dir / f"{storage_key}.jsonl"
 
         # Idempotent: skip only a valid, nonempty prior parse.
-        if output_path.exists():
-            try:
-                with output_path.open() as existing:
-                    header = _json.loads(next(existing))
-                    has_text = any(
-                        bool(_json.loads(line).get("text", "").strip())
-                        for line in existing
-                        if line.strip()
-                    )
-                if (
-                    header.get("storage_key") == storage_key
-                    and header.get("page_count", 0) > 0
-                    and header.get("parse_status") != "parse_empty"
-                    and has_text
-                ):
-                    skipped += 1
-                    continue
-            except (OSError, StopIteration, ValueError, _json.JSONDecodeError):
-                pass
+        if output_path.exists() and _existing_parse_is_complete(output_path, storage_key):
+            skipped += 1
+            continue
 
         if not file_path.exists():
             logger.log(

@@ -1,6 +1,6 @@
 """Hard-coded mapping of every issuer_name in the corpus to country metadata.
 
-262 distinct issuer names. Many are the same country with different formatting.
+Many issuer names identify the same country with different formatting.
 Corporate/non-sovereign issuers are flagged with is_sovereign=False.
 
 Format: issuer_name -> (country_code, country_name, is_sovereign)

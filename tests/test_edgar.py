@@ -355,6 +355,22 @@ class TestDownloadEdgarDocument:
         assert result["file_hash"] == hashlib.sha256(b"already here").hexdigest()
         assert result["file_size_bytes"] == len(b"already here")
 
+    def test_rejects_empty_existing_file(self, tmp_path: Path) -> None:
+        from corpus.sources.edgar import download_edgar_document
+
+        target = tmp_path / "edgar__empty.htm"
+        target.write_bytes(b"")
+        record = {
+            "storage_key": "edgar__empty",
+            "download_url": "https://example.com/doc.htm",
+            "file_ext": "htm",
+        }
+
+        result, status = download_edgar_document(record, client=MagicMock(), output_dir=tmp_path)
+
+        assert result is None
+        assert status == "failed_invalid_file"
+
     def test_skips_no_url(self, tmp_path: Path) -> None:
         from corpus.sources.edgar import download_edgar_document
 
@@ -481,6 +497,43 @@ class TestRunEdgarDownload:
         assert manifest_path.read_bytes() == first_bytes
         assert len(records) == 1
         assert records[0]["file_path"] == "data/original/edgar__0000103198-05-000001.htm"
+        telemetry = [
+            json.loads(line) for line in (tmp_path / "telemetry.jsonl").read_text().splitlines()
+        ]
+        assert [entry["status"] for entry in telemetry] == [
+            "skipped_exists",
+            "skipped_exists",
+        ]
+
+    def test_invalid_existing_file_counts_as_failure(self, tmp_path: Path) -> None:
+        from corpus.logging import CorpusLogger
+        from corpus.sources.edgar import run_edgar_download
+
+        record = {
+            "source": "edgar",
+            "native_id": "empty",
+            "storage_key": "edgar__empty",
+            "download_url": "https://example.test/empty.htm",
+            "file_ext": "htm",
+        }
+        discovery = tmp_path / "discovery.jsonl"
+        discovery.write_text(json.dumps(record) + "\n")
+        output_dir = tmp_path / "original"
+        output_dir.mkdir()
+        (output_dir / "edgar__empty.htm").write_bytes(b"")
+
+        stats = run_edgar_download(
+            client=MagicMock(),
+            discovery_file=discovery,
+            output_dir=output_dir,
+            manifest_dir=tmp_path / "manifests",
+            logger=CorpusLogger(tmp_path / "telemetry.jsonl", run_id="invalid"),
+            run_id="invalid",
+            delay=0,
+        )
+
+        assert stats["failed"] == 1
+        assert stats["skipped"] == 0
 
     def test_same_storage_key_hash_conflict_fails_loudly(self, tmp_path: Path) -> None:
         from corpus.io.manifest import ManifestConflictError
@@ -684,6 +737,37 @@ class TestEdgarCli:
                 "name": "BOLIVARIAN REPUBLIC OF VENEZUELA",
             }
         ]
+
+    @pytest.mark.parametrize("failed_field", ["ciks_failed", "pagination_errors"])
+    def test_targeted_discovery_fails_closed(self, tmp_path: Path, failed_field: str) -> None:
+        from unittest.mock import patch
+
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        stats = {
+            "total_filings": 3,
+            "ciks_queried": 1,
+            "ciks_failed": 0,
+            "pagination_errors": 0,
+        }
+        stats[failed_field] = 1
+        with patch("corpus.sources.edgar.discover_edgar", return_value=stats):
+            result = CliRunner().invoke(
+                cli,
+                [
+                    "discover",
+                    "edgar",
+                    "--cik",
+                    "0000103198",
+                    "--output",
+                    str(tmp_path / "discovery.jsonl"),
+                ],
+            )
+
+        assert result.exit_code != 0
+        assert "EDGAR targeted discovery incomplete" in result.output
 
     def test_discover_edgar_rejects_unknown_cik(self, tmp_path: Path) -> None:
         from click.testing import CliRunner

@@ -13,20 +13,27 @@ class ManifestConflictError(RuntimeError):
     """Raised when one storage key resolves to different downloaded bytes."""
 
 
-def portable_data_path(path: Path) -> str:
-    """Return a repository-relative data path when a path is under ``data``."""
-    parts = path.parts
-    if "data" in parts:
-        data_index = len(parts) - 1 - tuple(reversed(parts)).index("data")
-        return Path(*parts[data_index:]).as_posix()
+def portable_data_path(path: Path, *, data_root: Path | None = None) -> str:
+    """Return a portable path only when the caller identifies its data root."""
+    if data_root is not None:
+        try:
+            relative = path.resolve().relative_to(data_root.resolve())
+        except ValueError:
+            pass
+        else:
+            return (Path("data") / relative).as_posix()
     return str(path)
 
 
 def upsert_manifest_record(manifest_path: Path, record: dict[str, Any]) -> None:
     """Atomically upsert one manifest record by storage key."""
-    storage_key = record.get("storage_key", "")
-    if not storage_key:
-        raise ValueError("Manifest record is missing storage_key")
+    upsert_manifest_records(manifest_path, [record])
+
+
+def upsert_manifest_records(manifest_path: Path, new_records: list[dict[str, Any]]) -> None:
+    """Atomically upsert a batch of manifest records with one file rewrite."""
+    if not new_records:
+        return
 
     records: list[dict[str, Any]] = []
     by_key: dict[str, int] = {}
@@ -50,15 +57,20 @@ def upsert_manifest_record(manifest_path: Path, record: dict[str, Any]) -> None:
                 by_key[current_key] = len(records)
                 records.append(current)
 
-    if storage_key in by_key:
-        existing = records[by_key[storage_key]]
-        existing_hash = existing.get("file_hash")
-        new_hash = record.get("file_hash")
-        if existing_hash and new_hash and existing_hash != new_hash:
-            raise ManifestConflictError(f"Conflicting hashes for {storage_key}")
-        records[by_key[storage_key]] = {**existing, **record}
-    else:
-        records.append(record)
+    for record in new_records:
+        storage_key = record.get("storage_key", "")
+        if not storage_key:
+            raise ValueError("Manifest record is missing storage_key")
+        if storage_key in by_key:
+            existing = records[by_key[storage_key]]
+            existing_hash = existing.get("file_hash")
+            new_hash = record.get("file_hash")
+            if existing_hash and new_hash and existing_hash != new_hash:
+                raise ManifestConflictError(f"Conflicting hashes for {storage_key}")
+            records[by_key[storage_key]] = {**existing, **record}
+        else:
+            by_key[storage_key] = len(records)
+            records.append(record)
 
     content = "".join(json.dumps(item, sort_keys=True) + "\n" for item in records).encode()
     if manifest_path.exists() and manifest_path.read_bytes() == content:

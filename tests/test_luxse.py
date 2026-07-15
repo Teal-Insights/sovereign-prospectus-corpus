@@ -23,6 +23,16 @@ from corpus.sources.luxse import (
 )
 
 
+def _write_valid_pdf(path: Path, text: str) -> bytes:
+    import fitz
+
+    document = fitz.open()
+    document.new_page().insert_text((72, 72), text)
+    document.save(path)
+    document.close()
+    return path.read_bytes()
+
+
 def test_extract_issuer_name_with_isin():
     comp = "VENEZUELA (BOLIVARIAN REPUBLIC OF) - XS0029456067 Venezuela 6,75% 90-20"
     assert _extract_issuer_name(comp) == "VENEZUELA (BOLIVARIAN REPUBLIC OF)"
@@ -168,6 +178,52 @@ def test_targeted_discovery_filters_nonmatching_issuer(tmp_path: Path):
     document_variables = mock_client.post.call_args_list[1].kwargs["json"]["variables"]
     assert document_variables["term"] == ""
     assert document_variables["issuerId"] == "29689"
+    assert record["source_metadata"]["issuer_id"] == "29689"
+    assert record["source_metadata"]["issuer_resolution_method"] == "exact_issuer_id"
+    assert record["source_metadata"]["queried_issuer_name"] == term
+
+
+def test_targeted_discovery_fails_when_no_exact_documents_are_accepted(tmp_path: Path):
+    from corpus.sources.luxse import LuxseQueryError
+
+    mock_client = MagicMock()
+    issuer_response = MagicMock()
+    issuer_response.json.return_value = {
+        "data": {
+            "luxseIssuersSearch": {
+                "totalHits": 1,
+                "issuers": [{"id": "29689", "name": "BOLIVIA (PLURINATIONAL STATE OF)"}],
+            }
+        }
+    }
+    documents_response = MagicMock()
+    documents_response.json.return_value = {
+        "data": {
+            "luxseDocumentsSearch": {
+                "totalHits": 1,
+                "documents": [
+                    {
+                        "id": "renamed",
+                        "name": "Offering Memorandum",
+                        "publishDate": "2026-06-03",
+                        "downloadUrl": "token",
+                        "complement": "PLURINATIONAL STATE OF BOLIVIA - US29731QAF46",
+                    }
+                ],
+            }
+        }
+    }
+    mock_client.post.side_effect = [issuer_response, documents_response]
+    term = "BOLIVIA (PLURINATIONAL STATE OF)"
+
+    with pytest.raises(LuxseQueryError, match="accepted no exact issuer documents"):
+        discover_luxse(
+            client=mock_client,
+            output_path=tmp_path / "discovery.jsonl",
+            search_terms=[term],
+            exact_issuer_terms={term},
+            delay=0,
+        )
 
 
 def test_reduced_page_fallback_restarts_with_effective_size(tmp_path: Path):
@@ -247,16 +303,38 @@ def test_targeted_discovery_fails_when_all_query_retries_fail(tmp_path: Path):
     assert mock_client.post.call_count == 4
 
 
+def test_issuer_lookup_handles_null_graphql_data() -> None:
+    from corpus.sources.luxse import LuxseQueryError, resolve_luxse_issuer_id
+
+    client = MagicMock()
+    response = MagicMock()
+    response.json.return_value = {"data": None}
+    client.post.return_value = response
+
+    with pytest.raises(LuxseQueryError, match="Expected one exact LuxSE issuer"):
+        resolve_luxse_issuer_id(client, issuer_name="BOLIVIA (PLURINATIONAL STATE OF)")
+
+
 def test_download_reconciles_existing(tmp_path: Path):
     """Existing documents return enough metadata to repair the manifest."""
     record = {"storage_key": "luxse__123", "download_url": "https://example.com"}
     target = tmp_path / "luxse__123.pdf"
-    target.write_bytes(b"%PDF-fake")
+    content = _write_valid_pdf(target, "Existing prospectus")
 
     result, status = download_luxse_document(record, client=MagicMock(), output_dir=tmp_path)
     assert status == "skipped_exists"
     assert result is not None
-    assert result["file_hash"] == hashlib.sha256(b"%PDF-fake").hexdigest()
+    assert result["file_hash"] == hashlib.sha256(content).hexdigest()
+
+
+def test_download_rejects_truncated_existing_pdf(tmp_path: Path):
+    record = {"storage_key": "luxse__123", "download_url": "https://example.com"}
+    (tmp_path / "luxse__123.pdf").write_bytes(b"%PDF-truncated")
+
+    result, status = download_luxse_document(record, client=MagicMock(), output_dir=tmp_path)
+
+    assert result is None
+    assert status == "failed_invalid_pdf"
 
 
 def test_download_skips_no_url(tmp_path: Path):
@@ -313,7 +391,7 @@ def test_run_download_repairs_manifest_and_is_idempotent(tmp_path: Path):
     discovery.write_text(json.dumps(record) + "\n")
     output_dir = tmp_path / "data" / "original"
     output_dir.mkdir(parents=True)
-    (output_dir / "luxse__105422819.pdf").write_bytes(b"%PDF-existing")
+    _write_valid_pdf(output_dir / "luxse__105422819.pdf", "Existing prospectus")
     manifest_dir = tmp_path / "data" / "manifests"
     logger = CorpusLogger(tmp_path / "telemetry.jsonl", run_id="resume")
 
@@ -343,6 +421,13 @@ def test_run_download_repairs_manifest_and_is_idempotent(tmp_path: Path):
     assert manifest.read_bytes() == first_bytes
     assert len(records) == 1
     assert records[0]["file_path"] == "data/original/luxse__105422819.pdf"
+    telemetry = [
+        json.loads(line) for line in (tmp_path / "telemetry.jsonl").read_text().splitlines()
+    ]
+    assert [entry["status"] for entry in telemetry] == [
+        "skipped_exists",
+        "skipped_exists",
+    ]
 
 
 def test_run_download_rejects_same_key_hash_conflict(tmp_path: Path):
@@ -360,10 +445,11 @@ def test_run_download_rejects_same_key_hash_conflict(tmp_path: Path):
     discovery.write_text(json.dumps(record) + "\n")
     output_dir = tmp_path / "data" / "original"
     output_dir.mkdir(parents=True)
-    (output_dir / "luxse__conflict.pdf").write_bytes(b"%PDF-current")
+    current = _write_valid_pdf(output_dir / "luxse__conflict.pdf", "Current prospectus")
     manifest_dir = tmp_path / "data" / "manifests"
     manifest_dir.mkdir(parents=True)
-    stale = {**record, "file_hash": hashlib.sha256(b"%PDF-stale").hexdigest()}
+    assert current
+    stale = {**record, "file_hash": hashlib.sha256(b"stale").hexdigest()}
     (manifest_dir / "luxse_manifest.jsonl").write_text(json.dumps(stale) + "\n")
 
     with pytest.raises(ManifestConflictError, match="luxse__conflict"):
@@ -408,6 +494,10 @@ def test_run_download_rate_limit_trips_circuit_breaker(tmp_path: Path):
 
     assert stats["failed"] == 1
     assert stats["aborted"] is True
+    entries = [
+        json.loads(line) for line in (tmp_path / "telemetry.jsonl").read_text().splitlines()
+    ]
+    assert entries[-1]["status"] == "failed_rate_limited"
 
 
 def test_discover_luxse_cli_supports_explicit_exact_terms(tmp_path: Path):
@@ -458,3 +548,19 @@ def test_discover_luxse_cli_adds_configured_terms(monkeypatch, tmp_path: Path):
 
     assert result.exit_code == 0, result.output
     assert "BOLIVIA (PLURINATIONAL STATE OF)" in mock_discover.call_args.kwargs["search_terms"]
+
+
+def test_discover_luxse_cli_tolerates_generic_query_failure(tmp_path: Path):
+    with patch("corpus.sources.luxse.discover_luxse") as mock_discover:
+        mock_discover.return_value = {
+            "unique_filings": 2,
+            "total_hits_raw": 2,
+            "per_query": [],
+            "query_failures": 1,
+        }
+        result = CliRunner().invoke(
+            cli,
+            ["discover", "luxse", "--output", str(tmp_path / "discovery.jsonl")],
+        )
+
+    assert result.exit_code == 0, result.output

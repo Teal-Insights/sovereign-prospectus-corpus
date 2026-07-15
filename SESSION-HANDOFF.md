@@ -11,11 +11,16 @@
   idempotent manifest upserts; Bolivia FY2027 mapping/classification; and
   LuxSE exact issuer-ID discovery through issuer 29689. The original LuxSE
   string search was stopped when the API reported 17,347 token matches.
+- **Review hardening:** draft PR #126 now validates existing downloads, fully
+  reconciles resumed parse JSONL, fails targeted discovery closed, preserves
+  exact LuxSE issuer provenance, batches manifest reconciliation, preserves
+  custom retry paths, and records validated resume skips in telemetry.
 - **Real shadow pipeline:** `/tmp/coverage-data-20260715` contains 8 EDGAR
   Venezuela documents (590 pages) and 10 LuxSE Bolivia documents (950 pages)
   in a copy of the canonical database. Both download reruns were idempotent.
   Shadow mapped counts are Venezuela 107 and Bolivia 10. No accepted snapshot
-  was generated.
+  was generated. The durable 18-document inventory and hashes are in
+  `docs/reports/2026-07-15-coverage-shadow-evidence.md`.
 - **Why shadow only:** repo `data/` is a symlink to
   `/Users/teal_emery/Dropbox/2026-03_Sovereign-Prospectus-Corpus/data`, outside
   this session's writable roots. Canonical manifests, files, DB, and snapshot

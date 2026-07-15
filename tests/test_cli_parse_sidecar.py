@@ -101,6 +101,51 @@ class TestParseSidecar:
         assert "Skipped: 1" in second.output
         assert (parsed / "nsm__t1.md").exists()
 
+    def test_rerun_repairs_truncated_jsonl_instead_of_skipping(self, tmp_path, monkeypatch):
+        parsed = _setup_dirs(tmp_path, monkeypatch, "## Repaired")
+        parsed.mkdir(parents=True)
+        (parsed / "nsm__t1.jsonl").write_text(
+            json.dumps(
+                {
+                    "storage_key": "nsm__t1",
+                    "page_count": 2,
+                    "parse_status": "parse_ok",
+                }
+            )
+            + "\n"
+            + json.dumps({"page": 0, "text": "valid page"})
+            + "\n{truncated"
+        )
+
+        result = CliRunner().invoke(cli, ["parse", "run", "--run-id", "repair", "--source", "nsm"])
+
+        assert result.exit_code == 0, result.output
+        assert "Parsed: 1, Skipped: 0" in result.output
+        lines = (parsed / "nsm__t1.jsonl").read_text().splitlines()
+        assert len(lines) == 2
+        assert json.loads(lines[0])["page_count"] == 1
+
+    def test_rerun_repairs_page_count_mismatch_instead_of_skipping(self, tmp_path, monkeypatch):
+        parsed = _setup_dirs(tmp_path, monkeypatch, "## Repaired")
+        parsed.mkdir(parents=True)
+        (parsed / "nsm__t1.jsonl").write_text(
+            json.dumps(
+                {
+                    "storage_key": "nsm__t1",
+                    "page_count": 2,
+                    "parse_status": "parse_ok",
+                }
+            )
+            + "\n"
+            + json.dumps({"page": 0, "text": "only page"})
+            + "\n"
+        )
+
+        result = CliRunner().invoke(cli, ["parse", "run", "--run-id", "repair", "--source", "nsm"])
+
+        assert result.exit_code == 0, result.output
+        assert "Parsed: 1, Skipped: 0" in result.output
+
     def test_empty_markdown_writes_no_sidecar(self, tmp_path, monkeypatch):
         parsed = _setup_dirs(tmp_path, monkeypatch, "   \n  ")
 
