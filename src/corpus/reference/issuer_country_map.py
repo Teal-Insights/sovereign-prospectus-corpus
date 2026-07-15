@@ -66,6 +66,8 @@ ISSUER_TO_COUNTRY: dict[str, tuple[str, str, bool]] = {
     "Kingdom of Sweden": ("SWE", "Sweden", True),
     "CANADA": ("CAN", "Canada", True),
     "DOMINICAN REPUBLIC (THE)": ("DOM", "Dominican Republic", True),
+    "BOLIVIA (PLURINATIONAL STATE OF)": ("BOL", "Bolivia", True),
+    "BOLIVARIAN REPUBLIC OF VENEZUELA": ("VEN", "Venezuela", True),
     "VENEZUELA (BOLIVARIAN REPUBLIC OF)": ("VEN", "Venezuela", True),
     "ARKEA PUBLIC SECTOR SCF": ("FRA", "France", False),
     "ALDBURG PUBLIC S.A.": ("LUX", "Luxembourg", False),

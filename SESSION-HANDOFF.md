@@ -1,6 +1,37 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-10 (Stage 5 integration audit: batch verified, one fix PR, fix list staged)
+**Last updated:** 2026-07-15 (Janet He coverage patch batch, blocked at production browser gate)
+
+## Session 2026-07-15: TEA-1004 and TEA-1003 ready; TEA-1006 browser-blocked
+
+- **Order honored:** TEA-1004, TEA-1003, then TEA-1006. TEA-1005 was not
+  claimed because the TEA-1006 production reproduction gate could not run.
+- **Code ready:** Venezuela CIK 0000103198 and exact SEC issuer mapping;
+  targeted EDGAR CIK selection; exact-key fail-closed parse; shared atomic,
+  idempotent manifest upserts; Bolivia FY2027 mapping/classification; and
+  LuxSE exact issuer-ID discovery through issuer 29689. The original LuxSE
+  string search was stopped when the API reported 17,347 token matches.
+- **Real shadow pipeline:** `/tmp/coverage-data-20260715` contains 8 EDGAR
+  Venezuela documents (590 pages) and 10 LuxSE Bolivia documents (950 pages)
+  in a copy of the canonical database. Both download reruns were idempotent.
+  Shadow mapped counts are Venezuela 107 and Bolivia 10. No accepted snapshot
+  was generated.
+- **Why shadow only:** repo `data/` is a symlink to
+  `/Users/teal_emery/Dropbox/2026-03_Sovereign-Prospectus-Corpus/data`, outside
+  this session's writable roots. Canonical manifests, files, DB, and snapshot
+  remain unchanged.
+- **Browser blocker:** the in-app browser inventory was empty. Production
+  `Bolivia` search was not reproduced, so TEA-1006 remains In Progress and no
+  query fix was made. Local snapshot evidence still shows Venezuela slugs
+  `luxse-2175370` and `luxse-2176190` matching the raw word `BOLIVIAN`.
+- **Linear:** TEA-1004, TEA-1003, and TEA-1006 carry full trail comments and
+  remain In Progress. TEA-1005 remains Todo. TEA-1007 has the bounded 28-CIK
+  coverage observation.
+- **Resume:** use a writable canonical data root, ingest the two shadow
+  manifests/files or rerun the recorded targeted commands, then obtain a
+  controllable browser for TEA-1006. Only after that gate should TEA-1005 be
+  claimed and XZ57 retrieved. Generate the accepted snapshot once, after all
+  ingests, then deploy and run live smoke.
 
 ## Session 2026-07-10 (latest): Stage 5 integration audit of the pre-Monday batch
 

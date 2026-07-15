@@ -35,6 +35,7 @@ total_failures_abort = 10
 delay = 1.0
 max_retries = 3
 timeout = 60
+additional_search_terms = ["BOLIVIA (PLURINATIONAL STATE OF)"]
 
 [luxse.circuit_breaker]
 total_failures_abort = 10

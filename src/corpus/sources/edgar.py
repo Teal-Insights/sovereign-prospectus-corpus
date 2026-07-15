@@ -15,6 +15,10 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from corpus.io.manifest import (
+    portable_data_path,
+    upsert_manifest_record,
+)
 from corpus.io.safe_write import safe_write
 
 if TYPE_CHECKING:
@@ -46,6 +50,11 @@ SOVEREIGN_CIKS: dict[int, list[dict[str, str]]] = {
         {"cik": "0000076027", "country": "Panama", "name": "PANAMA REPUBLIC OF"},
         {"cik": "0000077694", "country": "Peru", "name": "PERU REPUBLIC OF"},
         {"cik": "0000102385", "country": "Uruguay", "name": "URUGUAY REPUBLIC OF"},
+        {
+            "cik": "0000103198",
+            "country": "Venezuela",
+            "name": "BOLIVARIAN REPUBLIC OF VENEZUELA",
+        },
         {"cik": "0001030717", "country": "Philippines", "name": "REPUBLIC OF THE PHILIPPINES"},
         {"cik": "0001163395", "country": "Jamaica", "name": "GOVERNMENT OF JAMICA"},
         {"cik": "0000053078", "country": "Jamaica", "name": "JAMAICA GOVERNMENT OF"},
@@ -237,7 +246,12 @@ def download_edgar_document(
     target = output_dir / f"{storage_key}.{ext}"
 
     if target.exists():
-        return None, "skipped_exists"
+        content = target.read_bytes()
+        enriched = dict(record)
+        enriched["file_path"] = portable_data_path(target)
+        enriched["file_hash"] = hashlib.sha256(content).hexdigest()
+        enriched["file_size_bytes"] = len(content)
+        return enriched, "skipped_exists"
 
     download_url = record.get("download_url", "")
     if not download_url:
@@ -250,7 +264,7 @@ def download_edgar_document(
     file_hash = hashlib.sha256(content).hexdigest()
 
     enriched = dict(record)
-    enriched["file_path"] = str(target)
+    enriched["file_path"] = portable_data_path(target)
     enriched["file_hash"] = file_hash
     enriched["file_size_bytes"] = len(content)
     return enriched, "downloaded"
@@ -327,8 +341,7 @@ def run_edgar_download(
                     )
                     if dl_status == "downloaded" and result is not None:
                         retry_ms = int((time.monotonic() - _start) * 1000)
-                        with manifest_path.open("a") as mf:
-                            mf.write(json.dumps(result) + "\n")
+                        upsert_manifest_record(manifest_path, result)
                         stats["downloaded"] += 1
                         logger.log(
                             document_id=doc_id,
@@ -360,8 +373,7 @@ def run_edgar_download(
         elapsed_ms = int((time.monotonic() - _start) * 1000)
 
         if dl_status == "downloaded" and result is not None:
-            with manifest_path.open("a") as mf:
-                mf.write(json.dumps(result) + "\n")
+            upsert_manifest_record(manifest_path, result)
             stats["downloaded"] += 1
             logger.log(
                 document_id=doc_id,
@@ -369,6 +381,9 @@ def run_edgar_download(
                 duration_ms=elapsed_ms,
                 status="success",
             )
+        elif dl_status == "skipped_exists" and result is not None:
+            upsert_manifest_record(manifest_path, result)
+            stats["skipped"] += 1
         elif dl_status.startswith("skipped"):
             stats["skipped"] += 1
 

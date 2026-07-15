@@ -235,6 +235,10 @@ def edgar(
     if stats["aborted"]:
         click.echo("WARNING: Download aborted due to too many failures.")
     click.echo(f"Report: {report_path}")
+    if stats["failed"] or stats["aborted"]:
+        raise click.ClickException(
+            f"EDGAR download incomplete: {stats['failed']} failed, aborted={stats['aborted']}"
+        )
 
 
 @download.command()
@@ -386,6 +390,7 @@ def luxse(
         run_id=run_id,
         delay=float(cfg.get("delay", 1.0)),
         total_failures_abort=int(cb_cfg.get("total_failures_abort", 10)),
+        rate_limit_sleep=int(cb_cfg.get("rate_limit_sleep_seconds", 60)),
     )
 
     from corpus.reporting import write_run_report
@@ -405,8 +410,10 @@ def luxse(
     if stats["aborted"]:
         click.echo("ERROR: Download aborted due to too many failures.", err=True)
     click.echo(f"Report: {report_path}")
-    if stats["aborted"]:
-        raise SystemExit(1)
+    if stats["failed"] or stats["aborted"]:
+        raise click.ClickException(
+            f"LuxSE download incomplete: {stats['failed']} failed, aborted={stats['aborted']}"
+        )
 
 
 # ── Discover group ─────────────────────────────────────────────────
@@ -481,7 +488,15 @@ def discover_nsm_cmd(run_id: str | None, output: Path, reference_csv: Path) -> N
     default="1,2,3,4",
     help="Comma-separated tier numbers (default: all).",
 )
-def discover_edgar_cmd(run_id: str | None, output: Path, tiers: str) -> None:
+@click.option(
+    "--cik",
+    "ciks",
+    multiple=True,
+    help="Known sovereign CIK to discover; repeat for multiple issuers.",
+)
+def discover_edgar_cmd(
+    run_id: str | None, output: Path, tiers: str, ciks: tuple[str, ...]
+) -> None:
     """Discover sovereign filings from SEC EDGAR (metadata only)."""
     import os
     import uuid
@@ -501,19 +516,33 @@ def discover_edgar_cmd(run_id: str | None, output: Path, tiers: str) -> None:
         timeout=int(cfg.get("timeout", 60)),
     )
 
-    requested_tiers = [int(t.strip()) for t in tiers.split(",")]
-    cik_entries: list[dict[str, str]] = []
-    for tier in sorted(requested_tiers):
-        cik_entries.extend(SOVEREIGN_CIKS.get(tier, []))
+    all_entries = [entry for tier_entries in SOVEREIGN_CIKS.values() for entry in tier_entries]
+    entries_by_cik = {entry["cik"]: entry for entry in all_entries}
+    if ciks:
+        unknown = sorted(set(ciks) - entries_by_cik.keys())
+        if unknown:
+            raise click.ClickException(f"Unknown sovereign CIK(s): {', '.join(unknown)}")
+        cik_entries = list(dict.fromkeys(ciks))
+        selected_entries = [entries_by_cik[cik] for cik in cik_entries]
+        selection_label = f"CIKs {', '.join(cik_entries)}"
+    else:
+        try:
+            requested_tiers = [int(t.strip()) for t in tiers.split(",")]
+        except ValueError as exc:
+            raise click.ClickException("--tiers must contain comma-separated integers") from exc
+        selected_entries = []
+        for tier in sorted(requested_tiers):
+            selected_entries.extend(SOVEREIGN_CIKS.get(tier, []))
+        selection_label = f"tiers {tiers}"
 
     click.echo(
-        f"Discovering EDGAR filings for {len(cik_entries)} sovereign CIKs "
-        f"(tiers {tiers}, run_id={run_id})..."
+        f"Discovering EDGAR filings for {len(selected_entries)} sovereign CIKs "
+        f"({selection_label}, run_id={run_id})..."
     )
 
     stats = discover_edgar(
         client=client,
-        cik_entries=cik_entries,
+        cik_entries=selected_entries,
         output_path=output,
         delay=float(cfg.get("delay", 0.25)),
     )
@@ -570,12 +599,18 @@ def discover_pdip_cmd(run_id: str | None, output: Path) -> None:
     default="data/luxse_discovery.jsonl",
     help="Output path for discovery JSONL.",
 )
-def discover_luxse_cmd(run_id: str | None, output: Path) -> None:
+@click.option(
+    "--search-term",
+    "search_terms",
+    multiple=True,
+    help="Exact LuxSE issuer search term; repeat for multiple issuers.",
+)
+def discover_luxse_cmd(run_id: str | None, output: Path, search_terms: tuple[str, ...]) -> None:
     """Discover sovereign filings from Luxembourg Stock Exchange (metadata only)."""
     import uuid
 
     from corpus.io.http import CorpusHTTPClient
-    from corpus.sources.luxse import discover_luxse
+    from corpus.sources.luxse import _SOVEREIGN_PATTERNS, discover_luxse
 
     cfg = _load_config().get("luxse", {})
 
@@ -588,12 +623,27 @@ def discover_luxse_cmd(run_id: str | None, output: Path) -> None:
         timeout=int(cfg.get("timeout", 60)),
     )
 
-    click.echo(f"Discovering LuxSE sovereign documents (run_id={run_id})...")
+    additional_terms = list(cfg.get("additional_search_terms", []))
+    if search_terms:
+        terms = list(dict.fromkeys(search_terms))
+        exact_issuer_terms = set(terms)
+        fail_on_query_error = True
+    else:
+        terms = list(dict.fromkeys([*_SOVEREIGN_PATTERNS, *additional_terms]))
+        exact_issuer_terms = set(additional_terms)
+        fail_on_query_error = False
+
+    click.echo(
+        f"Discovering LuxSE sovereign documents with {len(terms)} terms (run_id={run_id})..."
+    )
 
     stats = discover_luxse(
         client=client,
         output_path=output,
         delay=float(cfg.get("delay", 1.0)),
+        search_terms=terms,
+        exact_issuer_terms=exact_issuer_terms,
+        fail_on_query_error=fail_on_query_error,
     )
 
     click.echo(
@@ -603,6 +653,10 @@ def discover_luxse_cmd(run_id: str | None, output: Path) -> None:
     click.echo(f"Output: {output}")
     for pq in stats["per_query"]:
         click.echo(f"  {pq['label']}: {pq['hits']} hits, {pq['new']} new")
+    if stats["query_failures"]:
+        raise click.ClickException(
+            f"LuxSE discovery incomplete: {stats['query_failures']} unresolved query page(s)"
+        )
 
 
 # ── Scrape group ───────────────────────────────────────────────────
@@ -724,12 +778,18 @@ def parse(ctx: click.Context) -> None:
 @click.option("--run-id", required=True, help="Unique run identifier.")
 @click.option(
     "--source",
-    type=click.Choice(["nsm", "edgar", "pdip", "all"]),
+    type=click.Choice(["nsm", "edgar", "pdip", "luxse", "lse", "all"]),
     default="all",
     help="Which source to parse.",
 )
 @click.option("--limit", type=int, default=None, help="Max documents to parse.")
-def parse_run(run_id: str, source: str, limit: int | None) -> None:
+@click.option(
+    "--storage-key",
+    "storage_keys",
+    multiple=True,
+    help="Exact storage key to parse; repeat for multiple documents.",
+)
+def parse_run(run_id: str, source: str, limit: int | None, storage_keys: tuple[str, ...]) -> None:
     """Parse downloaded documents into per-page text JSONL."""
     import json as _json
     import time
@@ -757,7 +817,7 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
 
     # Collect files to parse from manifests
     manifest_dir = _resolve_path(config, "paths", "manifests_dir", "data/manifests")
-    files_to_parse: list[tuple[str, Path]] = []
+    files_by_key: dict[str, Path] = {}
 
     for manifest_path in sorted(manifest_dir.glob("*_manifest.jsonl")):
         source_name = manifest_path.stem.replace("_manifest", "")
@@ -771,19 +831,36 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
                 if file_path:
                     p = Path(file_path)
                     if not p.is_absolute():
-                        p = _PROJECT_ROOT / p
-                    files_to_parse.append((storage_key, p))
+                        project_candidate = _PROJECT_ROOT / p
+                        external_data_candidate = manifest_dir.parent.parent / p
+                        p = (
+                            external_data_candidate
+                            if external_data_candidate.exists()
+                            else project_candidate
+                        )
+                    files_by_key[storage_key] = p
 
     # Also check legacy PDIP path
     if source in ("pdip", "all"):
         pdip_pdf_dir = _PROJECT_ROOT / "data/pdfs/pdip"
         if pdip_pdf_dir.exists():
-            seen_keys = {sk for sk, _ in files_to_parse}
+            seen_keys = set(files_by_key)
             for pdf_path in pdip_pdf_dir.rglob("*.pdf"):
                 storage_key = f"pdip__{pdf_path.stem}"
                 if storage_key not in seen_keys:
-                    files_to_parse.append((storage_key, pdf_path))
+                    files_by_key[storage_key] = pdf_path
                     seen_keys.add(storage_key)
+
+    requested_keys = list(dict.fromkeys(storage_keys))
+    if requested_keys:
+        if limit is not None:
+            raise click.ClickException("--limit cannot be combined with --storage-key")
+        missing = [key for key in requested_keys if key not in files_by_key]
+        if missing:
+            raise click.ClickException(f"Storage keys not found: {', '.join(missing)}")
+        files_to_parse = [(key, files_by_key[key]) for key in requested_keys]
+    else:
+        files_to_parse = list(files_by_key.items())
 
     if limit:
         files_to_parse = files_to_parse[:limit]
@@ -797,10 +874,26 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
     for storage_key, file_path in files_to_parse:
         output_path = text_dir / f"{storage_key}.jsonl"
 
-        # Idempotent: skip if already parsed
+        # Idempotent: skip only a valid, nonempty prior parse.
         if output_path.exists():
-            skipped += 1
-            continue
+            try:
+                with output_path.open() as existing:
+                    header = _json.loads(next(existing))
+                    has_text = any(
+                        bool(_json.loads(line).get("text", "").strip())
+                        for line in existing
+                        if line.strip()
+                    )
+                if (
+                    header.get("storage_key") == storage_key
+                    and header.get("page_count", 0) > 0
+                    and header.get("parse_status") != "parse_empty"
+                    and has_text
+                ):
+                    skipped += 1
+                    continue
+            except (OSError, StopIteration, ValueError, _json.JSONDecodeError):
+                pass
 
         if not file_path.exists():
             logger.log(
@@ -842,6 +935,18 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
                     parse_status = "parse_partial"
                 else:
                     parse_status = "parse_ok"
+
+            if parse_status == "parse_empty" and requested_keys:
+                logger.log(
+                    document_id=storage_key,
+                    step="parse",
+                    duration_ms=elapsed_ms,
+                    status=parse_status,
+                    page_count=result.page_count,
+                    file_ext=suffix,
+                )
+                failed += 1
+                continue
 
             # Write output JSONL (atomic: .part → rename)
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -898,6 +1003,8 @@ def parse_run(run_id: str, source: str, limit: int | None) -> None:
             failed += 1
 
     click.echo(f"Done. Parsed: {parsed}, Skipped: {skipped}, Failed: {failed}")
+    if failed and requested_keys:
+        raise click.ClickException(f"Parsing failed for {failed} selected document(s)")
 
 
 # ── Grep group ──────────────────────────────────────────────────────

@@ -78,6 +78,25 @@ class TestResolveCountry:
     def test_none_issuer(self):
         assert resolve_country(None)["country_name"] == "Unknown"
 
+    def test_sec_venezuela_issuer(self):
+        meta = resolve_country("BOLIVARIAN REPUBLIC OF VENEZUELA")
+
+        assert meta["country_code"] == "VEN"
+        assert meta["country_name"] == "Venezuela"
+        assert meta["is_sovereign"] is True
+
+    def test_luxse_bolivia_issuer_and_fy2027_classification(self):
+        meta = resolve_country("BOLIVIA (PLURINATIONAL STATE OF)")
+
+        assert meta == {
+            "country_code": "BOL",
+            "country_name": "Bolivia",
+            "region": "Latin America & Caribbean",
+            "income_group": "Lower middle income",
+            "lending_category": "IBRD",
+            "is_sovereign": True,
+        }
+
 
 _DOC_COLUMNS = (
     "document_id, storage_key, source, native_id, issuer_name, title, doc_type, "

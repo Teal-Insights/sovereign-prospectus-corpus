@@ -25,6 +25,7 @@ WORLD_BANK_CLASSIFICATIONS: dict[str, tuple[str, str, str | None]] = {
     "BIH": ("Europe & Central Asia", "Upper middle income", "IBRD"),
     "BLR": ("Europe & Central Asia", "Upper middle income", "IBRD"),
     "BLZ": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
+    "BOL": ("Latin America & Caribbean", "Lower middle income", "IBRD"),
     "BRA": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
     "BRB": ("Latin America & Caribbean", "High income", None),
     "CAN": ("North America", "High income", None),
