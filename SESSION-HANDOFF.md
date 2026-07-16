@@ -10,8 +10,9 @@
   any canonical mutation.
 - **Canonical coverage promoted:** 8 Venezuela EDGAR documents with 590 pages,
   10 Bolivia LuxSE documents with 950 pages, and 3 Republic of Congo LSE
-  documents with 539 pages. The database now has 9,795 documents and 547,647
-  pages. Mapped counts are Venezuela 107, Bolivia 10, Republic of Congo 3, and
+  documents with 539 pages. The database now has 9,795 documents and 176,968
+  logical pages (`SUM(documents.page_count)`). Mapped counts are Venezuela 107,
+  Bolivia 10, Republic of Congo 3, and
   Democratic Republic of the Congo 2.
 - **Bolivia provenance repaired:** final exact discovery resolved issuer
   `29689`, returned the same 10 native IDs, and reconciled
