@@ -371,6 +371,23 @@ class TestDownloadEdgarDocument:
         assert result is None
         assert status == "failed_invalid_file"
 
+    def test_rejects_empty_fresh_download_before_promotion(self, tmp_path: Path) -> None:
+        from corpus.sources.edgar import download_edgar_document
+
+        record = {
+            "storage_key": "edgar__empty-fresh",
+            "download_url": "https://example.com/empty.htm",
+            "file_ext": "htm",
+        }
+        client = MagicMock()
+        client.get.return_value.content = b""
+
+        result, status = download_edgar_document(record, client=client, output_dir=tmp_path)
+
+        assert result is None
+        assert status == "failed_invalid_file"
+        assert not (tmp_path / "edgar__empty-fresh.htm").exists()
+
     def test_skips_no_url(self, tmp_path: Path) -> None:
         from corpus.sources.edgar import download_edgar_document
 

@@ -996,10 +996,11 @@ def parse_run(run_id: str, source: str, limit: int | None, storage_keys: tuple[s
             # Written BEFORE the .jsonl rename: the .jsonl is the resume
             # commit point, so a crash here re-parses and rewrites both.
             markdown = result.metadata.get("markdown", "")
+            markdown_path = text_dir / f"{storage_key}.md"
             if markdown.strip():
-                safe_write(
-                    text_dir / f"{storage_key}.md", markdown.encode("utf-8"), overwrite=True
-                )
+                safe_write(markdown_path, markdown.encode("utf-8"), overwrite=True)
+            else:
+                markdown_path.unlink(missing_ok=True)
             part_path.rename(output_path)
 
             logger.log(

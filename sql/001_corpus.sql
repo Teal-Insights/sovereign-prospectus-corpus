@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS documents (
     scope_status    VARCHAR DEFAULT 'in_scope',  -- in_scope | excluded | quarantine
     source_metadata VARCHAR,                     -- JSON blob for source-specific fields
     source_page_url VARCHAR,                     -- URL to human-facing filing page on source
-    source_page_kind VARCHAR,                    -- filing_index | artifact_html | artifact_pdf | search_page | none
+    source_page_kind VARCHAR,                    -- filing_index | artifact_html | artifact_pdf | artifact_archive | search_page | none
     created_at      TIMESTAMP DEFAULT current_timestamp,
     updated_at      TIMESTAMP DEFAULT current_timestamp
 );

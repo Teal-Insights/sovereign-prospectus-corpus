@@ -204,7 +204,7 @@ def discover_luxse(
             except LuxseQueryError:
                 query_failures += 1
                 term_failed = True
-                if pattern in exact_terms or fail_on_query_error:
+                if fail_on_query_error:
                     raise
 
         while not term_failed:
@@ -220,7 +220,7 @@ def discover_luxse(
             if failed:
                 query_failures += 1
                 term_failed = True
-                if pattern in exact_terms or fail_on_query_error:
+                if fail_on_query_error:
                     raise LuxseQueryError(
                         f"Unresolved LuxSE query for {pattern!r} page {requested_page}"
                     )
@@ -289,10 +289,13 @@ def discover_luxse(
                 time.sleep(delay)
 
         if pattern in exact_terms and not term_failed and accepted_exact_count == 0:
-            raise LuxseQueryError(
-                f"LuxSE query for {pattern!r} accepted no exact issuer documents "
-                f"({filtered_issuer_mismatch} issuer mismatch(es))"
-            )
+            if fail_on_query_error:
+                raise LuxseQueryError(
+                    f"LuxSE query for {pattern!r} accepted no exact issuer documents "
+                    f"({filtered_issuer_mismatch} issuer mismatch(es))"
+                )
+            query_failures += 1
+            term_failed = True
 
         total_hits_raw += query_hits
         per_query.append(
@@ -372,6 +375,17 @@ def download_luxse_document(
 
     content = resp.content
     if not content.startswith(PDF_HEADER):
+        return None, "failed_invalid_pdf"
+
+    import fitz
+
+    try:
+        document = fitz.open(stream=content, filetype="pdf")
+        page_count = document.page_count
+        document.close()
+    except Exception:
+        return None, "failed_invalid_pdf"
+    if page_count <= 0:
         return None, "failed_invalid_pdf"
 
     safe_write(target, content)
@@ -474,8 +488,15 @@ def run_luxse_download(
                 duration_ms=elapsed_ms,
                 status="skipped_exists",
             )
-        elif dl_status.startswith("skipped"):
-            stats["skipped"] += 1
+        elif dl_status == "skipped_no_url":
+            stats["failed"] += 1
+            logger.log(
+                document_id=doc_id,
+                step="download",
+                duration_ms=elapsed_ms,
+                status=dl_status,
+                error_message="LuxSE discovery record has no download URL",
+            )
         else:
             stats["failed"] += 1
             logger.log(

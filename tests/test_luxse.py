@@ -222,6 +222,7 @@ def test_targeted_discovery_fails_when_no_exact_documents_are_accepted(tmp_path:
             output_path=tmp_path / "discovery.jsonl",
             search_terms=[term],
             exact_issuer_terms={term},
+            fail_on_query_error=True,
             delay=0,
         )
 
@@ -303,6 +304,28 @@ def test_targeted_discovery_fails_when_all_query_retries_fail(tmp_path: Path):
     assert mock_client.post.call_count == 4
 
 
+def test_normal_discovery_tolerates_configured_exact_term_failure(tmp_path: Path):
+    mock_client = MagicMock()
+    error_response = MagicMock()
+    error_response.json.return_value = {"errors": [{"message": "unresolved"}]}
+    mock_client.post.return_value = error_response
+    term = "BOLIVIA (PLURINATIONAL STATE OF)"
+    output = tmp_path / "discovery.jsonl"
+
+    stats = discover_luxse(
+        client=mock_client,
+        output_path=output,
+        search_terms=[term],
+        exact_issuer_terms={term},
+        fail_on_query_error=False,
+        delay=0,
+    )
+
+    assert stats["query_failures"] == 1
+    assert stats["unique_filings"] == 0
+    assert output.read_text() == ""
+
+
 def test_issuer_lookup_handles_null_graphql_data() -> None:
     from corpus.sources.luxse import LuxseQueryError, resolve_luxse_issuer_id
 
@@ -366,15 +389,32 @@ def test_download_success(tmp_path: Path):
     mock_client = MagicMock()
     mock_resp = MagicMock()
     mock_resp.status_code = 200
-    mock_resp.content = b"%PDF-1.4 fake pdf content"
+    mock_resp.content = _write_valid_pdf(tmp_path / "valid-source.pdf", "Fresh prospectus")
     mock_client.get.return_value = mock_resp
 
     result, status = download_luxse_document(record, client=mock_client, output_dir=tmp_path)
     assert status == "downloaded"
     assert result is not None
     assert result["file_hash"]
-    assert result["file_size_bytes"] == len(b"%PDF-1.4 fake pdf content")
+    assert result["file_size_bytes"] == len(mock_resp.content)
     assert (tmp_path / "luxse__456.pdf").exists()
+
+
+def test_download_rejects_truncated_fresh_pdf_before_promotion(tmp_path: Path):
+    record = {
+        "storage_key": "luxse__truncated-fresh",
+        "download_url": "https://dl.luxse.com/dl?v=token",
+    }
+    response = MagicMock(status_code=200, url=record["download_url"])
+    response.content = b"%PDF-truncated"
+    client = MagicMock()
+    client.get.return_value = response
+
+    result, status = download_luxse_document(record, client=client, output_dir=tmp_path)
+
+    assert result is None
+    assert status == "failed_invalid_pdf"
+    assert not (tmp_path / "luxse__truncated-fresh.pdf").exists()
 
 
 def test_run_download_repairs_manifest_and_is_idempotent(tmp_path: Path):
@@ -498,6 +538,33 @@ def test_run_download_rate_limit_trips_circuit_breaker(tmp_path: Path):
         json.loads(line) for line in (tmp_path / "telemetry.jsonl").read_text().splitlines()
     ]
     assert entries[-1]["status"] == "failed_rate_limited"
+
+
+def test_run_download_treats_missing_url_as_failure(tmp_path: Path):
+    from corpus.logging import CorpusLogger
+    from corpus.sources.luxse import run_luxse_download
+
+    record = {
+        "source": "luxse",
+        "native_id": "missing-url",
+        "storage_key": "luxse__missing-url",
+        "download_url": "",
+    }
+    discovery = tmp_path / "discovery.jsonl"
+    discovery.write_text(json.dumps(record) + "\n")
+
+    stats = run_luxse_download(
+        client=MagicMock(),
+        discovery_file=discovery,
+        output_dir=tmp_path / "data" / "original",
+        manifest_dir=tmp_path / "data" / "manifests",
+        logger=CorpusLogger(tmp_path / "telemetry.jsonl", run_id="missing-url"),
+        run_id="missing-url",
+        delay=0,
+    )
+
+    assert stats["failed"] == 1
+    assert stats["skipped"] == 0
 
 
 def test_discover_luxse_cli_supports_explicit_exact_terms(tmp_path: Path):

@@ -1,42 +1,50 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-15 (Janet He coverage patch batch, blocked at production browser gate)
+**Last updated:** 2026-07-16 (coverage patch batch at final release gate)
 
-## Session 2026-07-15: TEA-1004 and TEA-1003 ready; TEA-1006 browser-blocked
+## Session 2026-07-15/16: TEA-1003, TEA-1004, TEA-1005, and TEA-1006 release candidate
 
-- **Order honored:** TEA-1004, TEA-1003, then TEA-1006. TEA-1005 was not
-  claimed because the TEA-1006 production reproduction gate could not run.
-- **Code ready:** Venezuela CIK 0000103198 and exact SEC issuer mapping;
-  targeted EDGAR CIK selection; exact-key fail-closed parse; shared atomic,
-  idempotent manifest upserts; Bolivia FY2027 mapping/classification; and
-  LuxSE exact issuer-ID discovery through issuer 29689. The original LuxSE
-  string search was stopped when the API reported 17,347 token matches.
-- **Review hardening:** draft PR #126 validates existing downloads, fully
-  reconciles resumed parse JSONL, fails targeted discovery closed, preserves
-  exact LuxSE issuer provenance, batches manifest reconciliation, preserves
-  custom retry paths, and records validated resume skips in telemetry.
-- **Real shadow pipeline:** `/tmp/coverage-data-20260715` contains 8 EDGAR
-  Venezuela documents (590 pages) and 10 LuxSE Bolivia documents (950 pages)
-  in a copy of the canonical database. Both download reruns were idempotent.
-  Shadow mapped counts are Venezuela 107 and Bolivia 10. No accepted snapshot
-  was generated. The durable 18-document inventory and hashes are in
-  `docs/reports/2026-07-15-coverage-shadow-evidence.md`.
-- **Why shadow only:** repo `data/` is a symlink to
-  `/Users/teal_emery/Dropbox/2026-03_Sovereign-Prospectus-Corpus/data`, outside
-  this session's writable roots. Canonical manifests, files, DB, and snapshot
-  remain unchanged.
-- **Browser blocker:** the in-app browser inventory was empty. Production
-  `Bolivia` search was not reproduced, so TEA-1006 remains In Progress and no
-  query fix was made. Local snapshot evidence still shows Venezuela slugs
-  `luxse-2175370` and `luxse-2176190` matching the raw word `BOLIVIAN`.
-- **Linear:** TEA-1004, TEA-1003, and TEA-1006 carry full trail comments and
-  remain In Progress. TEA-1005 remains Todo. TEA-1007 has the bounded 28-CIK
-  coverage observation.
-- **Resume:** use a writable canonical data root, ingest the two shadow
-  manifests/files or rerun the recorded targeted commands, then obtain a
-  controllable browser for TEA-1006. Only after that gate should TEA-1005 be
-  claimed and XZ57 retrieved. Generate the accepted snapshot once, after all
-  ingests, then deploy and run live smoke.
+- **Canonical boundary cleared:** the `data/` symlink and Dropbox target were
+  healthy. The earlier failure was the prior session's writable-root sandbox,
+  not a filesystem or Dropbox defect. Atomic create/remove probes passed before
+  any canonical mutation.
+- **Canonical coverage promoted:** 8 Venezuela EDGAR documents with 590 pages,
+  10 Bolivia LuxSE documents with 950 pages, and 3 Republic of Congo LSE
+  documents with 539 pages. The database now has 9,795 documents and 547,647
+  pages. Mapped counts are Venezuela 107, Bolivia 10, Republic of Congo 3, and
+  Democratic Republic of the Congo 2.
+- **Bolivia provenance repaired:** final exact discovery resolved issuer
+  `29689`, returned the same 10 native IDs, and reconciled
+  `issuer_resolution_method=exact_issuer_id` plus the queried issuer name into
+  the canonical manifest and DuckDB rows.
+- **TEA-1006 option a implemented:** only `luxse__2175370` and
+  `luxse__2176190` receive the exact snapshot-level `BOLIVIAN` to `BOLIVARIAN`
+  display/search correction. Canonical titles remain verbatim. The public
+  snapshot carries nullable `raw_title` provenance, the detail page shows it
+  when different, and CSV exports it without adding the raw typo to search.
+- **TEA-1005 retrieved host-side:** official LSE/LSEG endpoints identified
+  four issuance events and exposed three artifacts. All source ZIPs and PDFs
+  were verified by hash, byte size, ZIP member identity, `%PDF`, PyMuPDF text,
+  page count, issuer, ISIN, and event association before canonical ingest.
+  XP53 had no artifact on the checked component, instrument-document, or
+  programme API surfaces; this bounded result is not a claim of global
+  nonexistence. Republic of Congo remains distinct from DRC.
+- **Council corrections:** COG's official FY2027 World Bank lending category is
+  `Blend`, not `IDA`; fresh EDGAR/LuxSE downloads are parser-validated before
+  promotion; stale Markdown sidecars are removed on non-Markdown repair;
+  configured exact LuxSE terms remain best effort in a normal broad run while
+  explicit targeted runs fail closed; the one-off LSE helper pins the exact
+  three artifacts/four events and preflights manifest conflicts.
+- **Release state:** PR #126 is still draft and all four Linear issues remain In
+  Progress until the single accepted snapshot, hosted data cutover, branded
+  deploy, and target-specific live smoke pass. No accepted snapshot has yet
+  been regenerated in this session.
+- **Resume from here:** finish clean local gates and final review disposition,
+  generate exactly one canonical snapshot, validate the 21-document delta and
+  raw-title/search behavior, back up the hosted generation, deploy the
+  backward-compatible candidate app before flipping data, run the full live
+  acceptance matrix, then close the four issues, post one project status, and
+  mark PR #126 ready.
 
 ## Session 2026-07-10 (latest): Stage 5 integration audit of the pre-Monday batch
 

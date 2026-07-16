@@ -104,6 +104,7 @@ class TestResolveCountry:
         assert congo["country_code"] == "COG"
         assert congo["country_name"] == "Republic of Congo"
         assert congo["is_sovereign"] is True
+        assert congo["lending_category"] == "Blend"
         assert drc["country_code"] == "COD"
         assert drc["country_name"] == "Democratic Republic of the Congo"
 
@@ -188,6 +189,7 @@ class TestBuildSnapshot:
         # Markdown doc: text + toc, no page anchors
         doc1 = json.loads((out_dir / "text" / "nsm-111.json").read_text())
         assert doc1["schema_version"] == 1
+        assert doc1["raw_title"] is None
         assert doc1["text_source"] == "markdown"
         assert [(e["title"], e["offset"]) for e in doc1["toc"]] == [("Terms", 7)]
         assert doc1["pages"] == []
@@ -386,6 +388,9 @@ class TestBuildSnapshot:
         frame = pl.read_parquet(out_dir / "documents.parquet")
         notices = frame.filter(pl.col("storage_key").is_in(["luxse__2175370", "luxse__2176190"]))
         assert notices["title"].to_list() == [corrected_title, corrected_title]
+        assert notices["raw_title"].to_list() == [raw_title, raw_title]
+        bolivia = frame.filter(pl.col("storage_key") == "luxse__105422819").row(0, named=True)
+        assert bolivia["raw_title"] is None
 
         # The snapshot fix is deliberately derived-data-only. Canonical source
         # rows remain verbatim provenance for the upstream LuxSE typo.

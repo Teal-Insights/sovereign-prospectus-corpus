@@ -33,9 +33,9 @@ if TYPE_CHECKING:
 
     import duckdb
 
-# Bump when any consumer-visible shape changes: parquet columns, text
-# JSON keys, or manifest keys. MANIFEST.json is the version authority;
-# consumers must read it before interpreting the other components.
+# Bump for breaking consumer-visible shape changes. Additive nullable fields
+# remain within v1 so the prior static app can read a candidate snapshot during
+# a pointer-last rolling release.
 SCHEMA_VERSION = 1
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -325,6 +325,7 @@ def build_snapshot(
             text, text_source, page_offsets = _fetch_text(conn, doc["document_id"])
             by_source[doc["source"]] = by_source.get(doc["source"], 0) + 1
             snapshot_title = _snapshot_title(doc["storage_key"], doc["title"])
+            raw_title = doc["title"] if snapshot_title != doc["title"] else None
             display_name = _display_name(doc["issuer_name"], snapshot_title, doc["storage_key"])
 
             pub_date = doc["publication_date"]
@@ -338,6 +339,7 @@ def build_snapshot(
                     "source": doc["source"],
                     "display_name": display_name,
                     "title": snapshot_title,
+                    "raw_title": raw_title,
                     "doc_type": doc["doc_type"],
                     "publication_date": pub_date.isoformat() if pub_date else None,
                     "country_name": country["country_name"],
@@ -368,6 +370,7 @@ def build_snapshot(
                     "display_name": display_name,
                     "issuer_name": doc["issuer_name"],
                     "title": snapshot_title,
+                    "raw_title": raw_title,
                     "doc_type": doc["doc_type"],
                     "publication_date": pub_date,
                     "country_code": country["country_code"],
@@ -401,6 +404,7 @@ def build_snapshot(
         "display_name": pl.Utf8,
         "issuer_name": pl.Utf8,
         "title": pl.Utf8,
+        "raw_title": pl.Utf8,
         "doc_type": pl.Utf8,
         "publication_date": pl.Date,
         "country_code": pl.Utf8,

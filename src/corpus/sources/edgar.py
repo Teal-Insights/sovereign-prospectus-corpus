@@ -10,7 +10,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import tempfile
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import requests
@@ -23,8 +25,6 @@ from corpus.io.manifest import (
 from corpus.io.safe_write import safe_write
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from corpus.io.http import CorpusHTTPClient
     from corpus.logging import CorpusLogger
 
@@ -271,6 +271,31 @@ def download_edgar_document(
 
     resp = client.get(download_url)
     content = resp.content
+
+    from corpus.parsers.html_parser import HTMLParser
+    from corpus.parsers.text_parser import PlainTextParser
+
+    if not content:
+        return None, "failed_invalid_file"
+    parser = PlainTextParser() if target.suffix.lower() == ".txt" else HTMLParser()
+    validation_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=target.parent,
+            prefix=f".{target.stem}.",
+            suffix=target.suffix,
+            delete=False,
+        ) as validation_file:
+            validation_file.write(content)
+            validation_path = Path(validation_file.name)
+        parsed = parser.parse(validation_path)
+        if parsed.page_count <= 0 or not parsed.text.strip():
+            return None, "failed_invalid_file"
+    except Exception:
+        return None, "failed_invalid_file"
+    finally:
+        if validation_path is not None:
+            validation_path.unlink(missing_ok=True)
 
     safe_write(target, content)
     file_hash = hashlib.sha256(content).hexdigest()

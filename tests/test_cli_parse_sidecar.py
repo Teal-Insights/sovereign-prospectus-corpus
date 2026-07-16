@@ -155,6 +155,18 @@ class TestParseSidecar:
         assert (parsed / "nsm__t1.jsonl").exists()
         assert not (parsed / "nsm__t1.md").exists()
 
+    def test_repair_without_markdown_removes_stale_sidecar(self, tmp_path, monkeypatch):
+        parsed = _setup_dirs(tmp_path, monkeypatch, "")
+        parsed.mkdir(parents=True)
+        (parsed / "nsm__t1.jsonl").write_text("{truncated")
+        (parsed / "nsm__t1.md").write_text("stale markdown")
+
+        result = CliRunner().invoke(cli, ["parse", "run", "--run-id", "repair", "--source", "nsm"])
+
+        assert result.exit_code == 0, result.output
+        assert (parsed / "nsm__t1.jsonl").exists()
+        assert not (parsed / "nsm__t1.md").exists()
+
     def test_storage_key_parses_only_exact_selection(self, tmp_path, monkeypatch):
         parsed = tmp_path / "parsed"
         manifests = tmp_path / "manifests"
