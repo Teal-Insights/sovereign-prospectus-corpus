@@ -1,0 +1,134 @@
+{
+  "retrieved_at": "2026-07-16T02:16:41Z",
+  "retrieval_method": "Host-side curl against the official LSE Angular API and issuer-services asset host",
+  "issuer_page_url": "https://www.londonstockexchange.com/stock/XZ57/the-republic-of-congo/company-page",
+  "issuer_code": "TREPCG",
+  "issuer_name": "THE REPUBLIC OF CONGO",
+  "country_code": "COG",
+  "api_evidence": {
+    "page_endpoint": "https://api.londonstockexchange.com/api/v1/pages?path=issuer-profile&parameters=tidm%3DXZ57%26issuername%3Dthe-republic-of-congo",
+    "component_endpoint": "https://api.londonstockexchange.com/api/v1/components/refresh",
+    "programme_endpoint": "https://cache-api.lsegissuerservices.com/documents/TREPCG/programmes"
+  },
+  "issuance_events": [
+    {
+      "event_date": "2025-11-07",
+      "description": "US$670,000,000 9.875% Amortising Notes due 2032",
+      "instrument_code": "YK35",
+      "isin": "XS3223166409",
+      "artifact_native_ids": [
+        "THEREPUBLICOFCONGO-US6700000009875AmortisingNotesdue2032"
+      ]
+    },
+    {
+      "event_date": "2025-12-19",
+      "description": "US$260,000,000 tap of the 9.875% Amortising Notes due 2032",
+      "instrument_code": "YK35",
+      "isin": "XS3223166409",
+      "artifact_native_ids": [
+        "THEREPUBLICOFCONGO-YK35"
+      ]
+    },
+    {
+      "event_date": "2026-02-19",
+      "description": "US$700,000,000 private placement and concurrent tender",
+      "instrument_code": "XP53",
+      "isin": "XS3295059367",
+      "artifact_native_ids": [],
+      "status": "no_public_lse_document",
+      "evidence": "The official instrument component identifies XP53 and its ISIN but returns no tradingDocument URL. Direct issuer programme metadata lists only the November 2032 programme archive."
+    },
+    {
+      "event_date": "2026-05-26",
+      "description": "US$850,000,000 9.500% Amortising Notes due 2036",
+      "instrument_code": "XZ57",
+      "isin": "XS3376882687",
+      "artifact_native_ids": [
+        "THEREPUBLICOFCONGO-XZ57"
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "native_id": "THEREPUBLICOFCONGO-US6700000009875AmortisingNotesdue2032",
+      "source_file": "THEREPUBLICOFCONGO-US6700000009875AmortisingNotesdue2032.pdf",
+      "source_archive_file": "programme.zip",
+      "source_archive_member": "Rep. of Congo - Prospectus.pdf",
+      "source_archive_sha256": "9b51ce55a6922971ce5dd2756f3c06cec288002f0f0ee1966af8a2ab5e4458e0",
+      "source_archive_size_bytes": 2273288,
+      "title": "US$670,000,000 9.875% Amortising Notes due 2032",
+      "issuer_name": "THE REPUBLIC OF CONGO",
+      "doc_type": "offering_circular",
+      "publication_date": "2025-11-05",
+      "download_url": "https://assets.lsegissuerservices.com/assets/THEREPUBLICOFCONGO-US6700000009875AmortisingNotesdue2032.zip",
+      "expected_sha256": "e2236200ec7ec7f302cda0dc0170f0b047326eb67f9a1b4b4310a5554fbf24d8",
+      "expected_size_bytes": 2273130,
+      "expected_page_count": 178,
+      "family_id": "lse__congo-2032",
+      "document_role": "base",
+      "instrument_codes": [
+        "YK35"
+      ],
+      "isins": [
+        "XS3223166409"
+      ],
+      "associated_issuance_dates": [
+        "2025-11-07"
+      ]
+    },
+    {
+      "native_id": "THEREPUBLICOFCONGO-YK35",
+      "source_file": "THEREPUBLICOFCONGO-YK35.pdf",
+      "source_archive_file": "YK35.zip",
+      "source_archive_member": "The Republic of Congo - Final Offering Circular [Dated - 17.12.2025].pdf",
+      "source_archive_sha256": "f4c3ef7231dc84f4a9cd9882cae8288c022332def01e10a9ff82283b24a57fc4",
+      "source_archive_size_bytes": 2282461,
+      "title": "US$260,000,000 9.875% Amortizing Notes due 2032",
+      "issuer_name": "THE REPUBLIC OF CONGO",
+      "doc_type": "offering_circular",
+      "publication_date": "2025-12-17",
+      "download_url": "https://assets.lsegissuerservices.com/assets/THEREPUBLICOFCONGO-YK35.zip",
+      "expected_sha256": "3f4682e2efaa2e37dcace466f1714e13e25ed420ac9c9f4bdbe97c79a9eb9e9d",
+      "expected_size_bytes": 2282219,
+      "expected_page_count": 178,
+      "family_id": "lse__congo-2032",
+      "document_role": "tap",
+      "instrument_codes": [
+        "YK35"
+      ],
+      "isins": [
+        "XS3223166409"
+      ],
+      "associated_issuance_dates": [
+        "2025-12-19"
+      ]
+    },
+    {
+      "native_id": "THEREPUBLICOFCONGO-XZ57",
+      "source_file": "THEREPUBLICOFCONGO-XZ57.pdf",
+      "source_archive_file": "XZ57.zip",
+      "source_archive_member": "Republic of Congo- Final Offering Circular (Dated 22.05.2026) XS3376882687.pdf",
+      "source_archive_sha256": "b2edbe59cc80aedf57bf8e65e483a3d3756c68446e5faabf1d4780d1fc86270c",
+      "source_archive_size_bytes": 2141878,
+      "title": "US$850,000,000 9.500% Amortising Notes due 2036",
+      "issuer_name": "THE REPUBLIC OF CONGO",
+      "doc_type": "offering_circular",
+      "publication_date": "2026-05-22",
+      "download_url": "https://assets.lsegissuerservices.com/assets/THEREPUBLICOFCONGO-XZ57.zip",
+      "expected_sha256": "a5e4576e4ca101c18a1d21191e82b7cccc8f523b7aec6b7525f6ea318becbc60",
+      "expected_size_bytes": 2141624,
+      "expected_page_count": 183,
+      "family_id": "lse__congo-2036",
+      "document_role": "standalone",
+      "instrument_codes": [
+        "XZ57"
+      ],
+      "isins": [
+        "XS3376882687"
+      ],
+      "associated_issuance_dates": [
+        "2026-05-26"
+      ]
+    }
+  ]
+}

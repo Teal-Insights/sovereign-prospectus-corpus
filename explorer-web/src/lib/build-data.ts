@@ -2,10 +2,10 @@
 // JS; snappy is built in) for getStaticPaths, and MANIFEST.json for build
 // stamping. Runs in Node only; never shipped to the browser.
 
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
-import { asyncBufferFromFile, parquetReadObjects } from 'hyparquet';
+import { asyncBufferFromFile, parquetReadObjects } from "hyparquet";
 
 export interface DocRow {
   slug: string;
@@ -16,6 +16,7 @@ export interface DocRow {
   display_name: string | null;
   issuer_name: string | null;
   title: string | null;
+  raw_title: string | null;
   doc_type: string | null;
   publication_date: string | null;
   country_code: string | null;
@@ -42,7 +43,10 @@ export interface SnapshotStamp {
 // module-scope read would capture the default before test files can set the
 // env var.
 function snapshotDir(): string {
-  return path.resolve(process.cwd(), process.env.SNAPSHOT_DIR ?? '../data/snapshot');
+  return path.resolve(
+    process.cwd(),
+    process.env.SNAPSHOT_DIR ?? "../data/snapshot",
+  );
 }
 
 function toNull<T>(v: T | undefined | null): T | null {
@@ -63,7 +67,9 @@ function toIsoDate(v: unknown): string | null {
 let cache: Promise<DocRow[]> | null = null;
 
 async function readParquet(): Promise<DocRow[]> {
-  const file = await asyncBufferFromFile(path.join(snapshotDir(), 'documents.parquet'));
+  const file = await asyncBufferFromFile(
+    path.join(snapshotDir(), "documents.parquet"),
+  );
   const raw = (await parquetReadObjects({ file })) as Record<string, unknown>[];
   return raw.map((r) => ({
     slug: String(r.slug),
@@ -74,6 +80,7 @@ async function readParquet(): Promise<DocRow[]> {
     display_name: toNull(r.display_name as string),
     issuer_name: toNull(r.issuer_name as string),
     title: toNull(r.title as string),
+    raw_title: toNull(r.raw_title as string),
     doc_type: toNull(r.doc_type as string),
     publication_date: toIsoDate(r.publication_date),
     country_code: toNull(r.country_code as string),
@@ -98,7 +105,7 @@ export function loadDocuments(): Promise<DocRow[]> {
 }
 
 export async function loadSnapshotManifest(): Promise<SnapshotStamp> {
-  const raw = await readFile(path.join(snapshotDir(), 'MANIFEST.json'), 'utf8');
+  const raw = await readFile(path.join(snapshotDir(), "MANIFEST.json"), "utf8");
   const m = JSON.parse(raw) as SnapshotStamp;
   return { snapshot_date: m.snapshot_date, generated_at: m.generated_at };
 }
@@ -156,8 +163,8 @@ export function computeFilterOptions(rows: DocRow[]): FilterOptions {
     if (r.country_code !== null && r.country_name !== null) {
       countries.set(r.country_code, r.country_name);
     }
-    regions.add(r.region ?? 'Unknown');
-    incomes.add(r.income_group ?? 'Unknown');
+    regions.add(r.region ?? "Unknown");
+    incomes.add(r.income_group ?? "Unknown");
     if (r.source !== null) sources.add(r.source);
   }
   return {

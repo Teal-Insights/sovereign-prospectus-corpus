@@ -67,6 +67,7 @@ export const SOURCE_DISPLAY_NAMES: Record<string, string> = {
   edgar: 'SEC EDGAR',
   nsm: 'FCA NSM',
   luxse: 'Luxembourg Stock Exchange',
+  lse: 'London Stock Exchange',
   pdip: '#PublicDebtIsPublic',
 };
 

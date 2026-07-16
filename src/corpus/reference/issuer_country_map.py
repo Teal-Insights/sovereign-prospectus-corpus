@@ -1,6 +1,6 @@
 """Hard-coded mapping of every issuer_name in the corpus to country metadata.
 
-262 distinct issuer names. Many are the same country with different formatting.
+Many issuer names identify the same country with different formatting.
 Corporate/non-sovereign issuers are flagged with is_sovereign=False.
 
 Format: issuer_name -> (country_code, country_name, is_sovereign)
@@ -66,6 +66,8 @@ ISSUER_TO_COUNTRY: dict[str, tuple[str, str, bool]] = {
     "Kingdom of Sweden": ("SWE", "Sweden", True),
     "CANADA": ("CAN", "Canada", True),
     "DOMINICAN REPUBLIC (THE)": ("DOM", "Dominican Republic", True),
+    "BOLIVIA (PLURINATIONAL STATE OF)": ("BOL", "Bolivia", True),
+    "BOLIVARIAN REPUBLIC OF VENEZUELA": ("VEN", "Venezuela", True),
     "VENEZUELA (BOLIVARIAN REPUBLIC OF)": ("VEN", "Venezuela", True),
     "ARKEA PUBLIC SECTOR SCF": ("FRA", "France", False),
     "ALDBURG PUBLIC S.A.": ("LUX", "Luxembourg", False),
@@ -220,6 +222,7 @@ ISSUER_TO_COUNTRY: dict[str, tuple[str, str, bool]] = {
     "Kenya (The Republic of)": ("KEN", "Kenya", True),
     "ALBANIA (THE REPUBLIC OF)": ("ALB", "Albania", True),
     "REPUBLIC OF CONGO (THE)": ("COG", "Republic of Congo", True),
+    "THE REPUBLIC OF CONGO": ("COG", "Republic of Congo", True),
     "SECTEUR PUBLIC FRANCE 2012-1": ("FRA", "France", False),
     "The Govt of the Hong Kong Spl Adm Region of the People's Republic of China": (
         "HKG",

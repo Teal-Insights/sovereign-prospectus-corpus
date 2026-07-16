@@ -3,7 +3,7 @@
 // so no value import enters the vitest graph; this module must never import
 // duck.ts (the connection arrives as a parameter).
 
-import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
+import type { AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 
 export interface BrowseFilters {
   countries: string[];
@@ -18,9 +18,11 @@ export interface BrowseFilters {
 }
 
 export function highIncomeExclusionActive(
-  f: Pick<BrowseFilters, 'includeHighIncome' | 'incomes' | 'countries'>
+  f: Pick<BrowseFilters, "includeHighIncome" | "incomes" | "countries">,
 ): boolean {
-  return !f.includeHighIncome && f.incomes.length === 0 && f.countries.length === 0;
+  return (
+    !f.includeHighIncome && f.incomes.length === 0 && f.countries.length === 0
+  );
 }
 
 // v1 semantics: COALESCE keeps 'Unknown' rows visible under the default
@@ -29,20 +31,28 @@ const HI_EXCLUDE = "COALESCE(income_group, 'Unknown') != 'High income'";
 const IS_HI = "COALESCE(income_group, 'Unknown') = 'High income'";
 
 function inList(col: string, values: string[]): string {
-  return `${col} IN (${values.map(sqlQuote).join(', ')})`;
+  return `${col} IN (${values.map(sqlQuote).join(", ")})`;
 }
 
 // Free-text find-the-document search. The four columns are the human-facing
 // identity of a document (what someone types when hunting for one). ESCAPE
 // '\' pairs with likeEscape so a term containing %, _, or \ matches literally.
-const SEARCH_COLUMNS = ['display_name', 'issuer_name', 'title', 'country_name'] as const;
+const SEARCH_COLUMNS = [
+  "display_name",
+  "issuer_name",
+  "title",
+  "country_name",
+] as const;
 const MAX_SEARCH_TERMS = 8;
 
 // Escape the LIKE metacharacters (and the escape char itself) so a term is
 // matched literally under ILIKE ... ESCAPE '\'. Backslash goes first, or the
 // escapes we add would themselves be re-escaped.
 export function likeEscape(v: string): string {
-  return v.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+  return v
+    .replaceAll("\\", "\\\\")
+    .replaceAll("%", "\\%")
+    .replaceAll("_", "\\_");
 }
 
 // Each whitespace-separated term becomes one OR group over SEARCH_COLUMNS;
@@ -57,21 +67,25 @@ function searchConditions(q: string): string[] {
     .slice(0, MAX_SEARCH_TERMS)
     .map((term) => {
       const pattern = sqlQuote(`%${likeEscape(term)}%`);
-      const ors = SEARCH_COLUMNS.map((col) => `${col} ILIKE ${pattern} ESCAPE '\\'`);
-      return `(${ors.join(' OR ')})`;
+      const ors = SEARCH_COLUMNS.map(
+        (col) => `${col} ILIKE ${pattern} ESCAPE '\\'`,
+      );
+      return `(${ors.join(" OR ")})`;
     });
 }
 
 function explicitConditions(f: BrowseFilters): string[] {
   const c: string[] = [];
-  if (f.countries.length) c.push(inList('country_code', f.countries));
-  if (f.regions.length) c.push(inList("COALESCE(region, 'Unknown')", f.regions));
-  if (f.incomes.length) c.push(inList("COALESCE(income_group, 'Unknown')", f.incomes));
-  if (f.sources.length) c.push(inList('source', f.sources));
+  if (f.countries.length) c.push(inList("country_code", f.countries));
+  if (f.regions.length)
+    c.push(inList("COALESCE(region, 'Unknown')", f.regions));
+  if (f.incomes.length)
+    c.push(inList("COALESCE(income_group, 'Unknown')", f.incomes));
+  if (f.sources.length) c.push(inList("source", f.sources));
   // SINGLE SEAM: search clauses live here, inside explicitConditions, so every
   // builder (list, status counts, and any future aggregate layered over this
   // WHERE) inherits them by construction rather than re-adding them.
-  c.push(...searchConditions(f.q ?? ''));
+  c.push(...searchConditions(f.q ?? ""));
   return c;
 }
 
@@ -99,9 +113,9 @@ export function createDocsViewSql(parquetName: string): string {
 
 function listWhereClause(f: BrowseFilters): string {
   const conditions = explicitConditions(f);
-  if (!f.includeNonSovereign) conditions.push('is_sovereign = true');
+  if (!f.includeNonSovereign) conditions.push("is_sovereign = true");
   if (highIncomeExclusionActive(f)) conditions.push(HI_EXCLUDE);
-  return conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  return conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 }
 
 export function buildListSql(f: BrowseFilters): string {
@@ -121,6 +135,12 @@ export function buildListSql(f: BrowseFilters): string {
 export function buildExportSql(f: BrowseFilters): string {
   return `
     SELECT slug, display_name, issuer_name, title,
+           CASE
+             WHEN storage_key IN ('luxse__2175370', 'luxse__2176190')
+              AND title = 'Suspension - JHO - THE BOLIVARIAN REPUBLIC OF VENEZUELA - 17.09.2014'
+             THEN 'Suspension - JHO - THE BOLIVIAN REPUBLIC OF VENEZUELA - 17.09.2014'
+             ELSE NULL
+           END AS raw_title,
            strftime(publication_date, '%Y-%m-%d') AS publication_date,
            country_name, region, income_group, doc_type, source,
            is_sovereign, filing_url
@@ -136,17 +156,19 @@ export function buildExportSql(f: BrowseFilters): string {
 // reveal, given every explicit filter). The client maps zeros/inactive
 // arms to null before statusLine renders sentences.
 export function buildStatusCountsSql(f: BrowseFilters): string {
-  const scopeP = f.includeNonSovereign ? 'TRUE' : 'is_sovereign = true';
-  const notScope = f.includeNonSovereign ? 'FALSE' : 'is_sovereign IS DISTINCT FROM true';
+  const scopeP = f.includeNonSovereign ? "TRUE" : "is_sovereign = true";
+  const notScope = f.includeNonSovereign
+    ? "FALSE"
+    : "is_sovereign IS DISTINCT FROM true";
   const hiActive = highIncomeExclusionActive(f);
-  const hiP = hiActive ? HI_EXCLUDE : 'TRUE';
-  const isHi = hiActive ? IS_HI : 'FALSE';
+  const hiP = hiActive ? HI_EXCLUDE : "TRUE";
+  const isHi = hiActive ? IS_HI : "FALSE";
   const includedHiOverride =
     !f.includeHighIncome && f.countries.length > 0 && f.incomes.length === 0
       ? `count(*) FILTER (WHERE ${scopeP} AND ${IS_HI})`
-      : '0';
+      : "0";
   const explicit = explicitConditions(f);
-  const where = explicit.length ? `WHERE ${explicit.join(' AND ')}` : '';
+  const where = explicit.length ? `WHERE ${explicit.join(" AND ")}` : "";
   return `
     SELECT
       count(*) FILTER (WHERE ${scopeP} AND ${hiP})::INTEGER AS matching,
@@ -160,7 +182,7 @@ export function buildStatusCountsSql(f: BrowseFilters): string {
 
 export async function runQuery(
   conn: AsyncDuckDBConnection,
-  sql: string
+  sql: string,
 ): Promise<Record<string, unknown>[]> {
   const result = await conn.query(sql);
   return result.toArray().map((row) => row.toJSON() as Record<string, unknown>);

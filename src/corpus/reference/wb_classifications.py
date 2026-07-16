@@ -4,8 +4,10 @@ Vendored from explorer/country_metadata.py (feature/explorer-v2) for the
 static snapshot builder; the sovereign_issuers table builder stays in explorer/
 (and still carries FY26-and-earlier values -- see GitHub issue #80).
 
-Edition: FY2027 (July 1, 2026 - June 30, 2027), verified 2026-07-04 against
-the official CLASS.xlsx, the Data Help Desk page, and the OGHIST workbook:
+Edition: FY2027 (July 1, 2026 - June 30, 2027), verified 2026-07-16 against
+the official CLASS_2026_07_01.xlsx (SHA-256
+2896f7c57b92835b00acd114c03dfd75bf84208e931b446b3f1b15f412bcb969),
+the Data Help Desk page, and the country API:
 https://datahelpdesk.worldbank.org/knowledgebase/articles/906519
 Update annually each July when the World Bank releases new classifications.
 """
@@ -25,6 +27,7 @@ WORLD_BANK_CLASSIFICATIONS: dict[str, tuple[str, str, str | None]] = {
     "BIH": ("Europe & Central Asia", "Upper middle income", "IBRD"),
     "BLR": ("Europe & Central Asia", "Upper middle income", "IBRD"),
     "BLZ": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
+    "BOL": ("Latin America & Caribbean", "Lower middle income", "IBRD"),
     "BRA": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
     "BRB": ("Latin America & Caribbean", "High income", None),
     "CAN": ("North America", "High income", None),
@@ -32,7 +35,7 @@ WORLD_BANK_CLASSIFICATIONS: dict[str, tuple[str, str, str | None]] = {
     "CHN": ("East Asia & Pacific", "Upper middle income", "IBRD"),
     "CMR": ("Sub-Saharan Africa", "Lower middle income", "Blend"),
     "COD": ("Sub-Saharan Africa", "Low income", "IDA"),
-    "COG": ("Sub-Saharan Africa", "Lower middle income", "IDA"),
+    "COG": ("Sub-Saharan Africa", "Lower middle income", "Blend"),
     "COL": ("Latin America & Caribbean", "Upper middle income", "IBRD"),
     "CRI": ("Latin America & Caribbean", "High income", "IBRD"),
     "CYP": ("Europe & Central Asia", "High income", None),

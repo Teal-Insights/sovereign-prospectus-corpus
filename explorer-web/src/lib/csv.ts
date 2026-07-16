@@ -3,6 +3,7 @@ export interface ExportRow {
   display_name: string | null;
   issuer_name: string | null;
   title: string | null;
+  raw_title: string | null;
   publication_date: string | null;
   country_name: string | null;
   region: string | null;
@@ -14,18 +15,19 @@ export interface ExportRow {
 }
 
 const HEADER = [
-  'publication_date',
-  'issuer',
-  'display_name',
-  'title',
-  'country',
-  'region',
-  'income_group',
-  'doc_type',
-  'source',
-  'is_sovereign',
-  'document_url',
-  'filing_url',
+  "publication_date",
+  "issuer",
+  "display_name",
+  "title",
+  "raw_title",
+  "country",
+  "region",
+  "income_group",
+  "doc_type",
+  "source",
+  "is_sovereign",
+  "document_url",
+  "filing_url",
 ];
 
 // Neutralize spreadsheet formula injection (OWASP CSV injection). title,
@@ -39,17 +41,19 @@ const HEADER = [
 // (rare in this corpus) and only in the export artifact, never the corpus
 // itself. See TEA-936 / #116.
 function csvField(value: string | boolean | null): string {
-  if (value === null) return '';
+  if (value === null) return "";
   const raw = String(value);
   const guarded = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
-  return /[",\r\n]/.test(guarded) ? `"${guarded.replaceAll('"', '""')}"` : guarded;
+  return /[",\r\n]/.test(guarded)
+    ? `"${guarded.replaceAll('"', '""')}"`
+    : guarded;
 }
 
 export function toCsv(
   rows: ExportRow[],
-  siteOrigin: string
+  siteOrigin: string,
 ): { csv: string; truncated: boolean } {
-  const cleanOrigin = siteOrigin.replace(/\/+$/, '');
+  const cleanOrigin = siteOrigin.replace(/\/+$/, "");
   const truncated = rows.length === 10001;
   const exportedRows = truncated ? rows.slice(0, 10000) : rows;
   const records = exportedRows.map((row) =>
@@ -58,6 +62,7 @@ export function toCsv(
       row.issuer_name,
       row.display_name,
       row.title,
+      row.raw_title,
       row.country_name,
       row.region,
       row.income_group,
@@ -68,8 +73,8 @@ export function toCsv(
       row.filing_url,
     ]
       .map(csvField)
-      .join(',')
+      .join(","),
   );
 
-  return { csv: [HEADER.join(','), ...records].join('\r\n'), truncated };
+  return { csv: [HEADER.join(","), ...records].join("\r\n"), truncated };
 }

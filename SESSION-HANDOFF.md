@@ -1,6 +1,66 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-10 (Stage 5 integration audit: batch verified, one fix PR, fix list staged)
+**Last updated:** 2026-07-16 (coverage patch batch shipped live)
+
+## Session 2026-07-15/16: TEA-1003, TEA-1004, TEA-1005, and TEA-1006 shipped
+
+- **Canonical boundary cleared:** the `data/` symlink and Dropbox target were
+  healthy. The earlier failure was the prior session's writable-root sandbox,
+  not a filesystem or Dropbox defect. Atomic create/remove probes passed before
+  any canonical mutation.
+- **Canonical coverage promoted:** 8 Venezuela EDGAR documents with 590 pages,
+  10 Bolivia LuxSE documents with 950 pages, and 3 Republic of Congo LSE
+  documents with 539 pages. The database now has 9,795 documents and 176,968
+  logical pages (`SUM(documents.page_count)`). Mapped counts are Venezuela 107,
+  Bolivia 10, Republic of Congo 6 (3 newly added LSE plus 3 existing LuxSE),
+  and Democratic Republic of the Congo 2.
+- **Bolivia provenance repaired:** final exact discovery resolved issuer
+  `29689`, returned the same 10 native IDs, and reconciled
+  `issuer_resolution_method=exact_issuer_id` plus the queried issuer name into
+  the canonical manifest and DuckDB rows.
+- **TEA-1006 option a implemented:** only `luxse__2175370` and
+  `luxse__2176190` receive the exact snapshot-level `BOLIVIAN` to `BOLIVARIAN`
+  display/search correction. Canonical titles remain verbatim. The public
+  snapshot carries nullable `raw_title` provenance, the detail page shows it
+  when different, and CSV exports it without adding the raw typo to search.
+- **TEA-1005 retrieved host-side:** official LSE/LSEG endpoints identified
+  four issuance events and exposed three artifacts. All source ZIPs and PDFs
+  were verified by hash, byte size, ZIP member identity, `%PDF`, PyMuPDF text,
+  page count, issuer, ISIN, and event association before canonical ingest.
+  XP53 had no artifact on the checked component, instrument-document, or
+  programme API surfaces; this bounded result is not a claim of global
+  nonexistence. Republic of Congo remains distinct from DRC.
+- **Council corrections:** COG's official FY2027 World Bank lending category is
+  `Blend`, not `IDA`; fresh EDGAR/LuxSE downloads are parser-validated before
+  promotion; stale Markdown sidecars are removed on non-Markdown repair;
+  configured exact LuxSE terms remain best effort in a normal broad run while
+  explicit targeted runs fail closed; the one-off LSE helper pins the exact
+  three artifacts/four events and preflights manifest conflicts.
+- **Snapshot accepted:** regenerated exactly once at
+  `2026-07-16T03:20:20+00:00`: 9,795 parquet rows and 9,692 text files.
+  Manifest SHA-256 is
+  `186cfd5b94019046b79ab5fef0a5cc6d7c685128c4096063ad00d669a6028d4b`;
+  parquet SHA-256 is
+  `61c328f9596c36e367ad61a3a1e1081380133601d2b5d9c76183084a36cb6aa6`.
+- **Generation-safe release complete:** the old hosted generation is preserved
+  under `prospectus/backups/2026-07-04T170409Z/snapshot/` with the verified
+  9,673-object / 542,953,791-byte inventory. The candidate was staged under
+  `prospectus/generations/2026-07-16T032020Z/snapshot/`, verified through S3
+  and the public data hostname, and built into the branded wrapper before the
+  live manifest changed. Wrapper PR #6 merged as `8b9d2a4`; Netlify deploy
+  `6a585313527f8b0008e57574` published the backward-compatible app first, then
+  data activated with `MANIFEST.json` last. The temporary Netlify build-source
+  override is cleared.
+- **Production accepted:** generic live smoke passed 3/3 and the coverage
+  matrix passed 27/27. It verifies exact 8/10/3 target sets, all source and
+  country counts, COG/DRC separation, title/raw-title provenance, Bolivia and
+  Venezuela search behavior, all LSE text/archive URLs, and build-stamp parity.
+- **Tracking closed:** TEA-1003, TEA-1004, TEA-1005, and TEA-1006 are Done
+  with final evidence comments. The project received one on-track status
+  update. PR #126 is ready for review at `7b16a85`; all six checks pass and
+  external Codex found no major issues.
+- **Resume from here:** work TEA-1007 for the systematic sovereign coverage
+  ledger, then TEA-1008 for the durable LSE adapter.
 
 ## Session 2026-07-10 (latest): Stage 5 integration audit of the pre-Monday batch
 

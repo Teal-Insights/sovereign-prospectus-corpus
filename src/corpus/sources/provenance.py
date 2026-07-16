@@ -4,7 +4,7 @@ For each document record, these functions return ``(source_page_url, source_page
 where ``source_page_url`` links to the human-facing filing page on the original
 source and ``source_page_kind`` is one of:
 
-    filing_index | artifact_html | artifact_pdf | search_page | none
+    filing_index | artifact_html | artifact_pdf | artifact_archive | search_page | none
 
 These are pure functions over the manifest-record dict. They're safe to call
 during manifest backfill and during resolver unit tests.

@@ -41,6 +41,7 @@ const filingLabel = filingLinkLabel(doc.source);
     <tbody>
       <tr><th scope="row">Issuer</th><td>{orNA(doc.issuer_name)}</td></tr>
       <tr><th scope="row">Title</th><td>{orNA(doc.title)}</td></tr>
+      {doc.raw_title && doc.raw_title !== doc.title && <tr><th scope="row">Raw source title</th><td>{doc.raw_title}</td></tr>}
       <tr><th scope="row">Document type</th><td>{orNA(doc.doc_type)}</td></tr>
       <tr><th scope="row">Publication date</th><td>{formatDate(doc.publication_date)}</td></tr>
       <tr><th scope="row">Country</th><td>{orNA(doc.country_name)}</td></tr>

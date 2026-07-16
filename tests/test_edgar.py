@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
 import requests
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -37,7 +38,21 @@ class TestSovereignCiks:
         from corpus.sources.edgar import SOVEREIGN_CIKS
 
         total = sum(len(entries) for entries in SOVEREIGN_CIKS.values())
-        assert total == 27
+        assert total == 28
+
+    def test_venezuela_cik_is_unique(self) -> None:
+        from corpus.sources.edgar import SOVEREIGN_CIKS
+
+        entries = [entry for tier in SOVEREIGN_CIKS.values() for entry in tier]
+        matches = [entry for entry in entries if entry["cik"] == "0000103198"]
+
+        assert matches == [
+            {
+                "cik": "0000103198",
+                "country": "Venezuela",
+                "name": "BOLIVARIAN REPUBLIC OF VENEZUELA",
+            }
+        ]
 
 
 class TestBuildFilingList:
@@ -320,7 +335,7 @@ class TestDownloadEdgarDocument:
         assert result["file_size_bytes"] == len(html_bytes)
         assert (tmp_path / "edgar__0000914021-24-000123.htm").exists()
 
-    def test_skips_already_downloaded(self, tmp_path: Path) -> None:
+    def test_reconciles_already_downloaded_file(self, tmp_path: Path) -> None:
         from corpus.sources.edgar import download_edgar_document
 
         target = tmp_path / "edgar__0000914021-24-000123.htm"
@@ -335,8 +350,43 @@ class TestDownloadEdgarDocument:
         }
 
         result, status = download_edgar_document(record, client=MagicMock(), output_dir=tmp_path)
-        assert result is None
+        assert result is not None
         assert status == "skipped_exists"
+        assert result["file_hash"] == hashlib.sha256(b"already here").hexdigest()
+        assert result["file_size_bytes"] == len(b"already here")
+
+    def test_rejects_empty_existing_file(self, tmp_path: Path) -> None:
+        from corpus.sources.edgar import download_edgar_document
+
+        target = tmp_path / "edgar__empty.htm"
+        target.write_bytes(b"")
+        record = {
+            "storage_key": "edgar__empty",
+            "download_url": "https://example.com/doc.htm",
+            "file_ext": "htm",
+        }
+
+        result, status = download_edgar_document(record, client=MagicMock(), output_dir=tmp_path)
+
+        assert result is None
+        assert status == "failed_invalid_file"
+
+    def test_rejects_empty_fresh_download_before_promotion(self, tmp_path: Path) -> None:
+        from corpus.sources.edgar import download_edgar_document
+
+        record = {
+            "storage_key": "edgar__empty-fresh",
+            "download_url": "https://example.com/empty.htm",
+            "file_ext": "htm",
+        }
+        client = MagicMock()
+        client.get.return_value.content = b""
+
+        result, status = download_edgar_document(record, client=client, output_dir=tmp_path)
+
+        assert result is None
+        assert status == "failed_invalid_file"
+        assert not (tmp_path / "edgar__empty-fresh.htm").exists()
 
     def test_skips_no_url(self, tmp_path: Path) -> None:
         from corpus.sources.edgar import download_edgar_document
@@ -408,6 +458,133 @@ class TestRunEdgarDownload:
         lines = [json.loads(line) for line in manifest.read_text().strip().split("\n")]
         assert len(lines) == 1
         assert lines[0]["native_id"] == "0000914021-24-000123"
+        assert lines[0]["file_path"] == str(output_dir / "edgar__0000914021-24-000123.htm")
+
+    def test_existing_file_repairs_missing_manifest_and_rerun_is_idempotent(
+        self, tmp_path: Path
+    ) -> None:
+        from corpus.logging import CorpusLogger
+        from corpus.sources.edgar import run_edgar_download
+
+        discovery = tmp_path / "discovery.jsonl"
+        record = {
+            "source": "edgar",
+            "native_id": "0000103198-05-000001",
+            "storage_key": "edgar__0000103198-05-000001",
+            "download_url": "https://example.test/venezuela.htm",
+            "file_ext": "htm",
+        }
+        discovery.write_text(json.dumps(record) + "\n")
+        output_dir = tmp_path / "data" / "original"
+        output_dir.mkdir(parents=True)
+        target = output_dir / "edgar__0000103198-05-000001.htm"
+        target.write_bytes(b"existing filing")
+        manifest_dir = tmp_path / "data" / "manifests"
+        logger = CorpusLogger(tmp_path / "telemetry.jsonl", run_id="resume")
+
+        first = run_edgar_download(
+            client=MagicMock(),
+            discovery_file=discovery,
+            output_dir=output_dir,
+            manifest_dir=manifest_dir,
+            logger=logger,
+            run_id="resume",
+            delay=0.0,
+        )
+        manifest_path = manifest_dir / "edgar_manifest.jsonl"
+        first_bytes = manifest_path.read_bytes()
+        second = run_edgar_download(
+            client=MagicMock(),
+            discovery_file=discovery,
+            output_dir=output_dir,
+            manifest_dir=manifest_dir,
+            logger=logger,
+            run_id="resume-2",
+            delay=0.0,
+        )
+
+        records = [json.loads(line) for line in manifest_path.read_text().splitlines()]
+        assert first == {
+            "downloaded": 0,
+            "skipped": 1,
+            "failed": 0,
+            "total_in_discovery": 1,
+            "aborted": False,
+        }
+        assert second["skipped"] == 1
+        assert manifest_path.read_bytes() == first_bytes
+        assert len(records) == 1
+        assert records[0]["file_path"] == "data/original/edgar__0000103198-05-000001.htm"
+        telemetry = [
+            json.loads(line) for line in (tmp_path / "telemetry.jsonl").read_text().splitlines()
+        ]
+        assert [entry["status"] for entry in telemetry] == [
+            "skipped_exists",
+            "skipped_exists",
+        ]
+
+    def test_invalid_existing_file_counts_as_failure(self, tmp_path: Path) -> None:
+        from corpus.logging import CorpusLogger
+        from corpus.sources.edgar import run_edgar_download
+
+        record = {
+            "source": "edgar",
+            "native_id": "empty",
+            "storage_key": "edgar__empty",
+            "download_url": "https://example.test/empty.htm",
+            "file_ext": "htm",
+        }
+        discovery = tmp_path / "discovery.jsonl"
+        discovery.write_text(json.dumps(record) + "\n")
+        output_dir = tmp_path / "original"
+        output_dir.mkdir()
+        (output_dir / "edgar__empty.htm").write_bytes(b"")
+
+        stats = run_edgar_download(
+            client=MagicMock(),
+            discovery_file=discovery,
+            output_dir=output_dir,
+            manifest_dir=tmp_path / "manifests",
+            logger=CorpusLogger(tmp_path / "telemetry.jsonl", run_id="invalid"),
+            run_id="invalid",
+            delay=0,
+        )
+
+        assert stats["failed"] == 1
+        assert stats["skipped"] == 0
+
+    def test_same_storage_key_hash_conflict_fails_loudly(self, tmp_path: Path) -> None:
+        from corpus.io.manifest import ManifestConflictError
+        from corpus.logging import CorpusLogger
+        from corpus.sources.edgar import run_edgar_download
+
+        discovery = tmp_path / "discovery.jsonl"
+        record = {
+            "source": "edgar",
+            "native_id": "conflict",
+            "storage_key": "edgar__conflict",
+            "download_url": "https://example.test/conflict.htm",
+            "file_ext": "htm",
+        }
+        discovery.write_text(json.dumps(record) + "\n")
+        output_dir = tmp_path / "data" / "original"
+        output_dir.mkdir(parents=True)
+        (output_dir / "edgar__conflict.htm").write_bytes(b"current")
+        manifest_dir = tmp_path / "data" / "manifests"
+        manifest_dir.mkdir(parents=True)
+        stale = {**record, "file_hash": hashlib.sha256(b"stale").hexdigest()}
+        (manifest_dir / "edgar_manifest.jsonl").write_text(json.dumps(stale) + "\n")
+
+        with pytest.raises(ManifestConflictError, match="edgar__conflict"):
+            run_edgar_download(
+                client=MagicMock(),
+                discovery_file=discovery,
+                output_dir=output_dir,
+                manifest_dir=manifest_dir,
+                logger=CorpusLogger(tmp_path / "telemetry.jsonl", run_id="conflict"),
+                run_id="conflict",
+                delay=0.0,
+            )
 
     def test_circuit_breaker_aborts(self, tmp_path: Path) -> None:
         from corpus.logging import CorpusLogger
@@ -509,6 +686,7 @@ class TestEdgarCli:
         assert "--run-id" in result.output
         assert "--output" in result.output
         assert "--tiers" in result.output
+        assert "--cik" in result.output
 
     def test_download_edgar_help(self) -> None:
         from click.testing import CliRunner
@@ -541,3 +719,83 @@ class TestEdgarCli:
 
         assert result.exit_code == 0
         assert "filings" in result.output.lower()
+
+    def test_discover_edgar_selects_only_requested_cik(self, tmp_path: Path) -> None:
+        from unittest.mock import patch
+
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        output = tmp_path / "discovery.jsonl"
+        with patch("corpus.sources.edgar.discover_edgar") as mock_discover:
+            mock_discover.return_value = {
+                "total_filings": 0,
+                "ciks_queried": 1,
+                "ciks_failed": 0,
+                "pagination_errors": 0,
+            }
+            result = CliRunner().invoke(
+                cli,
+                [
+                    "discover",
+                    "edgar",
+                    "--cik",
+                    "0000103198",
+                    "--output",
+                    str(output),
+                ],
+            )
+
+        assert result.exit_code == 0, result.output
+        assert mock_discover.call_args.kwargs["cik_entries"] == [
+            {
+                "cik": "0000103198",
+                "country": "Venezuela",
+                "name": "BOLIVARIAN REPUBLIC OF VENEZUELA",
+            }
+        ]
+
+    @pytest.mark.parametrize("failed_field", ["ciks_failed", "pagination_errors"])
+    def test_targeted_discovery_fails_closed(self, tmp_path: Path, failed_field: str) -> None:
+        from unittest.mock import patch
+
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        stats = {
+            "total_filings": 3,
+            "ciks_queried": 1,
+            "ciks_failed": 0,
+            "pagination_errors": 0,
+        }
+        stats[failed_field] = 1
+        with patch("corpus.sources.edgar.discover_edgar", return_value=stats):
+            result = CliRunner().invoke(
+                cli,
+                [
+                    "discover",
+                    "edgar",
+                    "--cik",
+                    "0000103198",
+                    "--output",
+                    str(tmp_path / "discovery.jsonl"),
+                ],
+            )
+
+        assert result.exit_code != 0
+        assert "EDGAR targeted discovery incomplete" in result.output
+
+    def test_discover_edgar_rejects_unknown_cik(self, tmp_path: Path) -> None:
+        from click.testing import CliRunner
+
+        from corpus.cli import cli
+
+        result = CliRunner().invoke(
+            cli,
+            ["discover", "edgar", "--cik", "0000000000", "--output", str(tmp_path / "x")],
+        )
+
+        assert result.exit_code != 0
+        assert "Unknown sovereign CIK" in result.output

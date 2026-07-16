@@ -90,6 +90,23 @@ class TestWriteRunReport:
         content = report_path.read_text()
         assert "corpus download edgar" in content
 
+    def test_report_preserves_custom_discovery_path(self, tmp_path: Path) -> None:
+        from corpus.reporting import write_run_report
+
+        telemetry_dir = tmp_path / "telemetry"
+        telemetry_dir.mkdir()
+        discovery_file = tmp_path / "edgar_discovery_venezuela.jsonl"
+
+        report_path = write_run_report(
+            source="edgar",
+            run_id="targeted",
+            stats={"failed": 1},
+            telemetry_dir=telemetry_dir,
+            discovery_file=discovery_file,
+        )
+
+        assert f"--discovery-file {discovery_file}" in report_path.read_text()
+
     def test_report_shows_aborted_warning(self, tmp_path: Path) -> None:
         from corpus.reporting import write_run_report
 

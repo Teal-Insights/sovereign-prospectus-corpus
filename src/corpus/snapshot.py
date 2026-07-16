@@ -33,9 +33,9 @@ if TYPE_CHECKING:
 
     import duckdb
 
-# Bump when any consumer-visible shape changes: parquet columns, text
-# JSON keys, or manifest keys. MANIFEST.json is the version authority;
-# consumers must read it before interpreting the other components.
+# Bump for breaking consumer-visible shape changes. Additive nullable fields
+# remain within v1 so the prior static app can read a candidate snapshot during
+# a pointer-last rolling release.
 SCHEMA_VERSION = 1
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -45,6 +45,15 @@ _SLUG_RE = re.compile(r"[^a-z0-9]+")
 # the next line into a bogus heading title.
 _HEADING_RE = re.compile(r"^(#{2,5})[ \t]+(.+)$", re.MULTILINE)
 _ASTRAL_RE = re.compile(r"[\U00010000-\U0010FFFF]")
+
+_LUXSE_VENEZUELA_RAW_TITLE = "Suspension - JHO - THE BOLIVIAN REPUBLIC OF VENEZUELA - 17.09.2014"
+_LUXSE_VENEZUELA_CORRECTED_TITLE = (
+    "Suspension - JHO - THE BOLIVARIAN REPUBLIC OF VENEZUELA - 17.09.2014"
+)
+_SNAPSHOT_TITLE_NORMALIZATIONS = {
+    "luxse__2175370": (_LUXSE_VENEZUELA_RAW_TITLE, _LUXSE_VENEZUELA_CORRECTED_TITLE),
+    "luxse__2176190": (_LUXSE_VENEZUELA_RAW_TITLE, _LUXSE_VENEZUELA_CORRECTED_TITLE),
+}
 
 # ToC quality gates: CID-font extraction garbage produces mojibake
 # headings and pathological counts (worst corpus doc: 9,269 entries).
@@ -176,6 +185,25 @@ def _display_name(issuer_name: str | None, title: str | None, storage_key: str) 
     return " ".join(raw.split()).rstrip(";,")
 
 
+def _snapshot_title(storage_key: str, raw_title: str | None) -> str | None:
+    """Correct verified source-title typos only in the derived snapshot.
+
+    The database and source manifests retain ``raw_title`` verbatim as
+    provenance. A changed source title for a listed key fails closed so this
+    narrow exception cannot silently rewrite different future metadata.
+    """
+    normalization = _SNAPSHOT_TITLE_NORMALIZATIONS.get(storage_key)
+    if normalization is None:
+        return raw_title
+    expected_raw, corrected = normalization
+    if raw_title != expected_raw:
+        raise ValueError(
+            f"Snapshot title normalization precondition failed for {storage_key}: "
+            f"expected {expected_raw!r}, found {raw_title!r}"
+        )
+    return corrected
+
+
 def _fetch_text(
     conn: duckdb.DuckDBPyConnection, document_id: int
 ) -> tuple[str | None, str | None, list[PageOffset]]:
@@ -296,7 +324,9 @@ def build_snapshot(
                     flag_conflicts.add(doc["issuer_name"])
             text, text_source, page_offsets = _fetch_text(conn, doc["document_id"])
             by_source[doc["source"]] = by_source.get(doc["source"], 0) + 1
-            display_name = _display_name(doc["issuer_name"], doc["title"], doc["storage_key"])
+            snapshot_title = _snapshot_title(doc["storage_key"], doc["title"])
+            raw_title = doc["title"] if snapshot_title != doc["title"] else None
+            display_name = _display_name(doc["issuer_name"], snapshot_title, doc["storage_key"])
 
             pub_date = doc["publication_date"]
             doc_text_bytes = 0
@@ -308,7 +338,8 @@ def build_snapshot(
                     "storage_key": doc["storage_key"],
                     "source": doc["source"],
                     "display_name": display_name,
-                    "title": doc["title"],
+                    "title": snapshot_title,
+                    "raw_title": raw_title,
                     "doc_type": doc["doc_type"],
                     "publication_date": pub_date.isoformat() if pub_date else None,
                     "country_name": country["country_name"],
@@ -338,7 +369,8 @@ def build_snapshot(
                     "native_id": doc["native_id"],
                     "display_name": display_name,
                     "issuer_name": doc["issuer_name"],
-                    "title": doc["title"],
+                    "title": snapshot_title,
+                    "raw_title": raw_title,
                     "doc_type": doc["doc_type"],
                     "publication_date": pub_date,
                     "country_code": country["country_code"],
@@ -372,6 +404,7 @@ def build_snapshot(
         "display_name": pl.Utf8,
         "issuer_name": pl.Utf8,
         "title": pl.Utf8,
+        "raw_title": pl.Utf8,
         "doc_type": pl.Utf8,
         "publication_date": pl.Date,
         "country_code": pl.Utf8,
