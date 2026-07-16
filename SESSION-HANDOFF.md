@@ -1,8 +1,8 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-16 (coverage patch batch at final release gate)
+**Last updated:** 2026-07-16 (coverage patch batch shipped live)
 
-## Session 2026-07-15/16: TEA-1003, TEA-1004, TEA-1005, and TEA-1006 release candidate
+## Session 2026-07-15/16: TEA-1003, TEA-1004, TEA-1005, and TEA-1006 shipped
 
 - **Canonical boundary cleared:** the `data/` symlink and Dropbox target were
   healthy. The earlier failure was the prior session's writable-root sandbox,
@@ -36,16 +36,31 @@
   configured exact LuxSE terms remain best effort in a normal broad run while
   explicit targeted runs fail closed; the one-off LSE helper pins the exact
   three artifacts/four events and preflights manifest conflicts.
-- **Release state:** PR #126 is still draft and all four Linear issues remain In
-  Progress until the single accepted snapshot, hosted data cutover, branded
-  deploy, and target-specific live smoke pass. No accepted snapshot has yet
-  been regenerated in this session.
-- **Resume from here:** finish clean local gates and final review disposition,
-  generate exactly one canonical snapshot, validate the 21-document delta and
-  raw-title/search behavior, back up the hosted generation, deploy the
-  backward-compatible candidate app before flipping data, run the full live
-  acceptance matrix, then close the four issues, post one project status, and
-  mark PR #126 ready.
+- **Snapshot accepted:** regenerated exactly once at
+  `2026-07-16T03:20:20+00:00`: 9,795 parquet rows and 9,692 text files.
+  Manifest SHA-256 is
+  `186cfd5b94019046b79ab5fef0a5cc6d7c685128c4096063ad00d669a6028d4b`;
+  parquet SHA-256 is
+  `61c328f9596c36e367ad61a3a1e1081380133601d2b5d9c76183084a36cb6aa6`.
+- **Generation-safe release complete:** the old hosted generation is preserved
+  under `prospectus/backups/2026-07-04T170409Z/snapshot/` with the verified
+  9,673-object / 542,953,791-byte inventory. The candidate was staged under
+  `prospectus/generations/2026-07-16T032020Z/snapshot/`, verified through S3
+  and the public data hostname, and built into the branded wrapper before the
+  live manifest changed. Wrapper PR #6 merged as `8b9d2a4`; Netlify deploy
+  `6a585313527f8b0008e57574` published the backward-compatible app first, then
+  data activated with `MANIFEST.json` last. The temporary Netlify build-source
+  override is cleared.
+- **Production accepted:** generic live smoke passed 3/3 and the coverage
+  matrix passed 27/27. It verifies exact 8/10/3 target sets, all source and
+  country counts, COG/DRC separation, title/raw-title provenance, Bolivia and
+  Venezuela search behavior, all LSE text/archive URLs, and build-stamp parity.
+- **Tracking closed:** TEA-1003, TEA-1004, TEA-1005, and TEA-1006 are Done
+  with final evidence comments. The project received one on-track status
+  update. PR #126 is ready for review at `7b16a85`; all six checks pass and
+  external Codex found no major issues.
+- **Resume from here:** work TEA-1007 for the systematic sovereign coverage
+  ledger, then TEA-1008 for the durable LSE adapter.
 
 ## Session 2026-07-10 (latest): Stage 5 integration audit of the pre-Monday batch
 
