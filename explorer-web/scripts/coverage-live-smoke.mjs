@@ -122,7 +122,7 @@ check(
 );
 check(
   "Republic of Congo and DRC remain distinct",
-  rows.filter((row) => row.country_name === "Republic of Congo").length === 3 &&
+  rows.filter((row) => row.country_name === "Republic of Congo").length === 6 &&
     rows.filter(
       (row) => row.country_name === "Democratic Republic of the Congo",
     ).length === 2,
@@ -142,6 +142,9 @@ check(
 );
 const boliviaSearch = search(rows, "Bolivia");
 const venezuelaSearch = search(rows, "Venezuela");
+const venezuelaCountryRows = rows.filter(
+  (row) => row.country_name === "Venezuela",
+);
 check(
   "Bolivia search excludes Venezuela notices",
   boliviaSearch.length === 10 &&
@@ -149,12 +152,14 @@ check(
   `count=${boliviaSearch.length}`,
 );
 check(
-  "Venezuela search includes corrected notices",
-  venezuelaSearch.length === 107 &&
+  "Venezuela country coverage and search include corrected notices",
+  venezuelaCountryRows.length === 107 &&
+    venezuelaSearch.length === 108 &&
     [...correctedNoticeSlugs].every((slug) =>
       venezuelaSearch.some((row) => row.slug === slug),
-    ),
-  `count=${venezuelaSearch.length}`,
+    ) &&
+    venezuelaSearch.some((row) => row.slug === "pdip-ven77"),
+  `country=${venezuelaCountryRows.length},search=${venezuelaSearch.length}`,
 );
 
 for (const row of lseRows) {
