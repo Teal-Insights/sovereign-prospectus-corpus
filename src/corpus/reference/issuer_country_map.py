@@ -222,6 +222,7 @@ ISSUER_TO_COUNTRY: dict[str, tuple[str, str, bool]] = {
     "Kenya (The Republic of)": ("KEN", "Kenya", True),
     "ALBANIA (THE REPUBLIC OF)": ("ALB", "Albania", True),
     "REPUBLIC OF CONGO (THE)": ("COG", "Republic of Congo", True),
+    "THE REPUBLIC OF CONGO": ("COG", "Republic of Congo", True),
     "SECTEUR PUBLIC FRANCE 2012-1": ("FRA", "France", False),
     "The Govt of the Hong Kong Spl Adm Region of the People's Republic of China": (
         "HKG",

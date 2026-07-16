@@ -182,6 +182,7 @@ it('source display names', () => {
   expect(sourceDisplay('edgar')).toBe('SEC EDGAR');
   expect(sourceDisplay('nsm')).toBe('FCA NSM');
   expect(sourceDisplay('luxse')).toBe('Luxembourg Stock Exchange');
+  expect(sourceDisplay('lse')).toBe('London Stock Exchange');
   expect(sourceDisplay('pdip')).toBe('#PublicDebtIsPublic');
   expect(sourceDisplay('synthetic')).toBe('synthetic');
   expect(sourceDisplay(null)).toBe('n/a');

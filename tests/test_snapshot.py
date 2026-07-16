@@ -9,7 +9,7 @@ import duckdb
 import polars as pl
 import pytest
 
-from corpus.snapshot import build_snapshot, extract_toc, resolve_country, slugify
+from corpus.snapshot import _snapshot_title, build_snapshot, extract_toc, resolve_country, slugify
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -96,6 +96,16 @@ class TestResolveCountry:
             "lending_category": "IBRD",
             "is_sovereign": True,
         }
+
+    def test_lse_republic_of_congo_stays_distinct_from_drc(self):
+        congo = resolve_country("THE REPUBLIC OF CONGO")
+        drc = resolve_country("MINISTRY OF FINANCE, THE DEMOCRATIC REPUBLIC OF THE CONGO")
+
+        assert congo["country_code"] == "COG"
+        assert congo["country_name"] == "Republic of Congo"
+        assert congo["is_sovereign"] is True
+        assert drc["country_code"] == "COD"
+        assert drc["country_name"] == "Democratic Republic of the Congo"
 
 
 _DOC_COLUMNS = (
@@ -344,3 +354,63 @@ class TestBuildSnapshot:
         row = frame.filter(pl.col("slug") == "nsm-777").row(0, named=True)
         assert row["display_name"] == "National Investment Fund of Somewhere"
         assert row["issuer_name"] == "National Investment Fund of Somewhere;"  # raw preserved
+
+    def test_luxse_venezuela_title_typos_are_normalized_only_in_snapshot(self, tmp_path):
+        db_path = tmp_path / "test.duckdb"
+        _seed_db(db_path)
+        raw_title = "Suspension - JHO - THE BOLIVIAN REPUBLIC OF VENEZUELA - 17.09.2014"
+        corrected_title = "Suspension - JHO - THE BOLIVARIAN REPUBLIC OF VENEZUELA - 17.09.2014"
+        assert _snapshot_title("luxse__unrelated", raw_title) == raw_title
+        with pytest.raises(ValueError, match="normalization precondition failed"):
+            _snapshot_title("luxse__2175370", "Unexpected replacement title")
+        conn = duckdb.connect(str(db_path))
+        conn.execute(
+            f"INSERT INTO documents ({_DOC_COLUMNS}) VALUES "
+            "(4, 'luxse__2175370', 'luxse', '2175370', "
+            "'VENEZUELA (BOLIVARIAN REPUBLIC OF)', ?, 'D455', DATE '2014-09-15', "
+            "NULL, 'https://example.test/luxse/2175370', 1, 'in_scope', TRUE, NULL),"
+            "(5, 'luxse__2176190', 'luxse', '2176190', "
+            "'VENEZUELA (BOLIVARIAN REPUBLIC OF)', ?, 'D455', DATE '2014-09-16', "
+            "NULL, 'https://example.test/luxse/2176190', 1, 'in_scope', TRUE, NULL),"
+            "(6, 'luxse__105422819', 'luxse', '105422819', "
+            "'BOLIVIA (PLURINATIONAL STATE OF)', 'Prospectus', 'D010', "
+            "DATE '2026-06-03', NULL, 'https://example.test/luxse/105422819', 222, "
+            "'in_scope', TRUE, NULL)",
+            [raw_title, raw_title],
+        )
+        conn.close()
+
+        out_dir = tmp_path / "snapshot"
+        build_snapshot(db_path, out_dir)
+
+        frame = pl.read_parquet(out_dir / "documents.parquet")
+        notices = frame.filter(pl.col("storage_key").is_in(["luxse__2175370", "luxse__2176190"]))
+        assert notices["title"].to_list() == [corrected_title, corrected_title]
+
+        # The snapshot fix is deliberately derived-data-only. Canonical source
+        # rows remain verbatim provenance for the upstream LuxSE typo.
+        conn = duckdb.connect(str(db_path), read_only=True)
+        raw_rows = conn.execute(
+            "SELECT title FROM documents WHERE storage_key IN "
+            "('luxse__2175370', 'luxse__2176190') ORDER BY storage_key"
+        ).fetchall()
+        assert raw_rows == [(raw_title,), (raw_title,)]
+
+        parquet = str(out_dir / "documents.parquet")
+        search = (
+            "display_name ILIKE ? OR issuer_name ILIKE ? OR title ILIKE ? OR country_name ILIKE ?"
+        )
+        bolivia_pattern = "%Bolivia%"
+        bolivia_slugs = conn.execute(
+            f"SELECT slug FROM read_parquet(?) WHERE {search} ORDER BY slug",
+            [parquet, *([bolivia_pattern] * 4)],
+        ).fetchall()
+        assert bolivia_slugs == [("luxse-105422819",)]
+
+        venezuela_pattern = "%Venezuela%"
+        venezuela_slugs = conn.execute(
+            f"SELECT slug FROM read_parquet(?) WHERE {search} ORDER BY slug",
+            [parquet, *([venezuela_pattern] * 4)],
+        ).fetchall()
+        assert venezuela_slugs == [("luxse-2175370",), ("luxse-2176190",)]
+        conn.close()

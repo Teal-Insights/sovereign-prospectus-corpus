@@ -6,7 +6,7 @@ An open source pipeline and web explorer for searching sovereign bond prospectus
 
 ![Browse view of the explorer: 9,774 documents, filters for country, region, income group, and source, and a newest-first document table](docs/images/explorer-web-browse.png)
 
-Browse the full corpus at [prospectus.tealinsights.com](https://prospectus.tealinsights.com): 9,774 documents from 265 issuers across four sources, filterable by country, region, income group, and source, with full-text reading and in-document search. Every document has a stable, shareable URL and, where the source provides one, a link to its original filing.
+Browse the full corpus at [prospectus.tealinsights.com](https://prospectus.tealinsights.com): 9,795 documents from 268 issuers across five sources, filterable by country, region, income group, and source, with full-text reading and in-document search. Every document has a stable, shareable URL and, where the source provides one, a link to its original filing.
 
 The explorer is a static site (Astro + DuckDB-WASM). No server, no database process, no accounts. The hosted version is this repository's code with Teal Insights branding on top; see [Open core](#open-core).
 
@@ -39,7 +39,7 @@ To re-theme a fork: swap `explorer-web/src/styles/tokens.css` (the complete styl
 
 ## What this does
 
-1. **Downloads** sovereign bond prospectuses from SEC EDGAR, the Luxembourg Stock Exchange, the FCA National Storage Mechanism, and the PDIP corpus
+1. **Downloads** sovereign bond prospectuses from SEC EDGAR, the Luxembourg Stock Exchange, the London Stock Exchange, the FCA National Storage Mechanism, and the PDIP corpus
 2. **Locates** likely clause sections using deterministic pattern matching
 3. **Extracts** clauses using LLMs with multi-shot prompts derived from PDIP's expert-annotated contracts
 4. **Verifies** every extraction against the source text (95% verbatim match threshold)
