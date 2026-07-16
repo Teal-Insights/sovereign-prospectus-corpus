@@ -5,7 +5,7 @@
 //   DATA_BASE=https://data.tealinsights.com/prospectus/snapshot \
 //   node scripts/coverage-live-smoke.mjs
 
-import { asyncBufferFromUrl, parquetReadObjects } from "hyparquet";
+import { parquetReadObjects } from "hyparquet";
 
 const BASE = (
   process.env.BASE ?? "https://prospectus.tealinsights.com"
@@ -95,9 +95,15 @@ check(
   JSON.stringify(manifest.documents_by_source),
 );
 
-const parquet = await asyncBufferFromUrl(
+const parquetResponse = await fetch(
   `${DATA_BASE}/documents.parquet?v=${encodeURIComponent(manifest.generated_at)}`,
 );
+check("parquet HTTP", parquetResponse.ok, `status=${parquetResponse.status}`);
+const parquetBytes = await parquetResponse.arrayBuffer();
+const parquet = {
+  byteLength: parquetBytes.byteLength,
+  slice: async (start, end) => parquetBytes.slice(start, end),
+};
 const rows = await parquetReadObjects({ file: parquet });
 check("parquet row count", rows.length === 9795, `rows=${rows.length}`);
 
