@@ -1,6 +1,44 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-19 (source-onboarding + Dublin architect session: Stage 1 spec, council-reviewed 3 rounds, awaiting Teal sign-off)
+**Last updated:** 2026-07-19 (Lane B Stage 2 architect session: branch plan + executor prompts, council-reviewed 2 rounds)
+
+## Session 2026-07-19 (latest): Lane B Stage 2 branch plan + executor prompts
+
+- **Plan + paste-ready prompts landed** (this session's PR):
+  `docs/superpowers/plans/2026-07-19-lane-b-stage2-batch-plan.md` (shared
+  contracts in section 2: bucket layout, STATE.json, CAS-lease lock,
+  watermarks + download-failure ledger, health beacon, RUN.json,
+  register, generation ledger, publish journal with the mid-activation
+  tear rule, suppression ledger, alarm signal titles, config vocabulary,
+  OIDC roles) and
+  `docs/superpowers/plans/2026-07-19-lane-b-stage2-executor-prompts.md`
+  (dispatch schedule + 14 self-contained prompts).
+- **Branch cut:** LB0 LuxSE spike (TEA-1058, Codex), LB1 Gate 0 parse
+  path (TEA-1032), LB2 Gate 1 content correctness (TEA-1059), LB3 Gate 2
+  data contract incl. wrapper build.sh half (TEA-1060), LB4 state
+  shuttle (TEA-1061), LB5 incremental discovery + source config
+  (TEA-1062), LB6 staging/ledger/role policies (TEA-1033), LB7
+  refresh.yml (TEA-1042), LB8 publish.yml (TEA-1064), LB9 wrapper
+  alarms (TEA-1063, Codex), LB10 reconcile.yml (TEA-1065), LB11
+  takedown.yml (TEA-1067), OPS-A cutover (TEA-1066), OPS-B skeleton +
+  drills + cron-on (TEA-1068). Spec gate order enforced: LB1/LB2/LB3 +
+  LB6 merge before LB7 exists. All five source-onboarding seam deltas
+  mapped (plan section 9).
+- **Council PLAN review:** round 1 Codex gpt-5.6-sol xhigh NOT SOUND
+  (10 CRITICAL, 5 IMPORTANT) + Claude external SOUND WITH CHANGES (15
+  findings); all triaged by convergence, two partial acceptances with
+  recorded pushback (Tier A migration stays with the onboarding build;
+  config helper retained under the onboarding verb name); round 2 Codex
+  delta verification; full dispositions in plan section 12.
+- **Linear:** TEA-1032/1033/1042 claimed In Progress with trails;
+  TEA-1054 carries the proposed 10-clean-cycle flip number; eleven
+  per-branch issues minted with blockedBy wiring (TEA-1058..1068).
+- **Teal handoff list (plan section 10):** pipeline bucket + OIDC
+  provider/roles + repo variables, takedown Environment,
+  NETLIFY_AUTH_TOKEN + site/distribution ids, repo watch settings, the
+  Actions "create and approve pull requests" setting, TEA-1052 evening.
+- **Next:** merge the plan PR, then dispatch wave 0 (LB1-LB5 Claude
+  Opus max sessions + LB0 Codex) per the prompts file's schedule.
 
 ## Session 2026-07-19 (latest): source-onboarding pattern + Dublin Stage 1 spec
 
