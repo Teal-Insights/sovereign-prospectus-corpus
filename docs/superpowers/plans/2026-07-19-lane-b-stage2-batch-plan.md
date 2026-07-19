@@ -1169,18 +1169,27 @@ architect's, not yours); EDGAR recent-window semantics do not cover a
   row serialization, and the LEDGER field is renamed
   `parquet_logical_sha256`. Record the measured outcome in the PR AND on
   the TEA-1033 issue; the choice is mechanical from the measurement.
-- Role policies: refresh = pipeline bucket RW on `state/*, originals/*,
-  candidates/*, locks/*, journal/*` + delete ONLY `incoming/*` +
-  data-bucket PutObject ONLY `prospectus/health/refresh.json`; publish =
+- Role policies: **section 2.12 is the single authoritative scope list;
+  implement the JSONs from it, not from any shorthand.** In brief:
+  refresh = pipeline bucket RW (`state/*, originals/*, candidates/*,
+  locks/*, journal/*`) + delete ONLY `incoming/*` + data-bucket
+  PutObject ONLY `prospectus/health/refresh.json` PLUS data-bucket
+  GetObject/ListBucket on `prospectus/generations/*` (staging's
+  server-side copy source and the active-ledger read); publish =
   data-bucket PutObject `prospectus/generations/*` + PutObject
-  `prospectus/snapshot/MANIFEST.json` + GetObject both buckets + pipeline
-  `journal/*` RW, NO deletes; reconcile = refresh scopes plus
+  `prospectus/snapshot/MANIFEST.json` + GetObject both buckets +
+  pipeline `journal/*` RW, NO deletes; reconcile = refresh scopes plus
   DeleteObject on `prospectus/generations/*`, `candidates/*`,
   `state/revisions/*`; takedown = DeleteObject scoped
-  `prospectus/generations/*/snapshot/text/*` + `cloudfront:CreateInvalidation`
-  on the distribution ARN + the publish scopes. `test_role_policies.py`
-  loads each JSON and asserts the scoping (no `*` resources except the
-  documented CloudFront invalidation ARN placeholder replaced by Teal).
+  `prospectus/generations/*/snapshot/text/*` +
+  `cloudfront:CreateInvalidation` on the distribution ARN + the publish
+  scopes PLUS data-bucket ListBucket on `prospectus/generations/*` and
+  the pipeline-bucket scopes its own phases need (`locks/*` RW,
+  `state/*` read, `state/suppressions.jsonl` write, `candidates/*` RW,
+  `journal/*` RW). `test_role_policies.py` loads each JSON and asserts
+  BOTH the scoping (no `*` resources except the documented CloudFront
+  invalidation ARN placeholder replaced by Teal) AND required-operation
+  coverage per role against 2.12.
 
 **Tasks:** test-first through `test_ledger.py::test_compute_deterministic`,
 `::test_diff_empty_when_identical`, `::test_diff_detects_text_change`,
@@ -1257,13 +1266,15 @@ set); `incoming/` step (list `incoming/`; if unexpectedly non-empty, log
 a warning and continue WITHOUT consuming; the validation and consumption
 code path ships with the feeder, spec section 17; LB10's revalidation
 does not use this path);
-per-source `corpus download <s>`; `corpus quarantine sync` variant for
-download failures is NOT needed (download failures stay in discovery
-retry, 2.5); parse: `corpus parse run --budget <config
-[refresh].parse_budget, default 200>`; `corpus quarantine sync
---telemetry ... --run-id ...`; `corpus ingest`; `corpus build-pages
---skip-fts`; `corpus build-markdown`; `corpus quarantine sync
---assert-derived`; `corpus ops register-build`; `corpus snapshot build
+per-source `corpus download <s>` (which records download outcomes into
+the 2.5 ledger itself; no separate quarantine step for download
+failures); parse: `corpus parse run --budget <config
+[refresh].parse_budget, default 200>`; `corpus ingest`; `corpus
+quarantine sync --telemetry ... --run-id ...` AFTER ingest, because a
+newly downloaded document that failed parse has no `documents` row until
+ingest creates it, and sync marks `scope_status` on rows (a
+council-of-bots P1 on PR #131); `corpus build-pages --skip-fts`;
+`corpus build-markdown`; `corpus quarantine sync --assert-derived`; `corpus ops register-build`; `corpus snapshot build
 --data-base <computed gen URL> --generation <gen> --suppressions <restored
 ledger>`; `corpus ledger compute` + `diff` (against active); IF delta
 non-empty AND not dry_run: `corpus stage candidate`; originals upload
@@ -1712,10 +1723,13 @@ dispatch live-smoke with `SMOKE_DRILL=liveness_red`; confirm the wrapper
 dispatch closes it (the independent dead-man's own notification path is
 now proven, spec s14's "verified in the skeleton"). (6) Rollback drill:
 `gh workflow run publish.yml -f rollback_to=<prev gen>`; verify pointer +
-deploy pair; re-activate. (7) Torn-publish drill: dispatch publish with
-`kill_after=activate-mid` on the next real candidate (the CAS-landed,
-journal-torn window); re-run; verify the resume recognizes the landed
-flip, completes the smoke, and never reports green without it. (8) NSM
+deploy pair; re-activate. (7) Torn-publish drill: BEFORE merging the next real
+candidate's PR, set the repo variable `DRILL_KILL_AFTER=activate-mid`
+(`gh variable set`); the merge-triggered publish run dies between the
+CAS PUT and the journal done_at write (the torn window); clear the
+variable, then resume via `gh workflow run publish.yml -f
+gen=<candidate>`; verify the resume recognizes the landed flip,
+completes the smoke, and never reports green without it. (8) NSM
 joins: dispatch with `sources=edgar,nsm`; verify. (9) LuxSE disposition
 from LB0 (TEA-1058): flip `luxse.scheduled=true` in a config PR, or mint
 the feeder issue with the "feeder pending" register row; write the
