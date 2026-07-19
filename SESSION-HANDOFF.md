@@ -1,8 +1,27 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-10 (Stage 5 integration audit: batch verified, one fix PR, fix list staged)
+**Last updated:** 2026-07-18 (Lane B Stage 1 architect session: self-running corpus spec, council-reviewed 3 rounds, signed off by Teal)
 
-## Session 2026-07-10 (latest): Stage 5 integration audit of the pre-Monday batch
+## Session 2026-07-18 (latest): Lane B Stage 1 spec (self-running corpus)
+
+- **Spec SIGNED OFF by Teal 2026-07-18**, landing via PR #127:
+  `docs/superpowers/specs/2026-07-18-self-running-corpus-design.md` v3.1.
+  Interview decisions (S3-canonical state; EDGAR+NSM daily with
+  LuxSE-by-spike; email alarms via per-signal GitHub issues; daily-ish
+  merge; eight non-goals) in spec section 3. Council: round 1
+  (Codex xhigh NOT SOUND + Opus max SWC + Sonnet max SWC, Gemini/agy
+  blocked on headless read permissions), round 2 (Codex NOT SOUND on
+  five revision seams), round 3 (Codex SOUND WITH CHANGES, 11/12
+  closed, final race closed in v3.1). Full dispositions in spec s22.
+- **Linear:** TEA-1031 minted, claimed, closed Done (the roadmap
+  section 9 Launch 0 batch was never minted; still to mint). Supersedes
+  TEA-906 when refresh.yml lands.
+- **Pending:** Stage 2 planning session (separate, per the shell);
+  mint the Launch 0 consolidation batch; Teal fix-when-convenient:
+  `agy` headless permissions.allow (walkthrough given in-session) and
+  `mgrep login`.
+
+## Session 2026-07-10: Stage 5 integration audit of the pre-Monday batch
 
 - **Verdict:** the batch composed. Fresh-checkout suites all green (vitest
   163, astro check clean, two-origin smoke, pytest 471, production
@@ -28,8 +47,7 @@
 - **Scoreboard:** 9/9 branches first-attempt, 0 escalations; post-audit
   residual 0 CRITICAL / 1 IMPORTANT (fixed); executor seats
   subscription-covered. Posted to ADM-153 and the project status update.
-
-## Session 2026-07-06 (latest): Stage 2 for the pre-Monday batch
+## Session 2026-07-06: Stage 2 for the pre-Monday batch
 
 - **PR #101** (this branch): the batch plan (B0-B8 + gated CAC spike),
   paste-ready executor prompts, the private-blocklist loader in
