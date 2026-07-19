@@ -1,8 +1,27 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-06 (Stage 2 architect session: pre-Monday batch plan + executor prompts + privacy blocklist, PR #101)
+**Last updated:** 2026-07-18 (Lane B Stage 1 architect session: self-running corpus spec, council-reviewed 3 rounds, awaiting Teal sign-off)
 
-## Session 2026-07-06 (latest): Stage 2 for the pre-Monday batch
+## Session 2026-07-18 (latest): Lane B Stage 1 spec (self-running corpus)
+
+- **Branch `teal/tea-1031-lane-b-spec`:** the Stage 1 spec at
+  `docs/superpowers/specs/2026-07-18-self-running-corpus-design.md`, v3.1.
+  Interview decisions (S3-canonical state; EDGAR+NSM daily with
+  LuxSE-by-spike; email alarms via per-signal GitHub issues; daily-ish
+  merge; eight non-goals) in spec section 3. Council: round 1
+  (Codex xhigh NOT SOUND + Opus max SWC + Sonnet max SWC, Gemini/agy
+  blocked on headless read permissions), round 2 (Codex NOT SOUND on
+  five revision seams), round 3 (Codex SOUND WITH CHANGES, 11/12
+  closed, final race closed in v3.1). Full dispositions in spec s22.
+- **Linear:** TEA-1031 minted and claimed (the roadmap section 9
+  Launch 0 batch was never minted; flagged). Supersedes TEA-906 when
+  refresh.yml lands.
+- **Pending Teal:** sign off on the spec (or request changes). Stage 2
+  planning is a separate session per the shell. Fix-when-convenient:
+  `agy` headless reviews need a permissions.allow entry or one
+  interactive trust run in this repo; `mgrep login` expired.
+
+## Session 2026-07-06: Stage 2 for the pre-Monday batch
 
 - **PR #101** (this branch): the batch plan (B0-B8 + gated CAC spike),
   paste-ready executor prompts, the private-blocklist loader in
