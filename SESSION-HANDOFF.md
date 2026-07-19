@@ -1,6 +1,35 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-19 (ontology pilots 1+2 architect session: doc-class vocabulary + issuer canonicalization, spec-lite, PR #128 awaiting Teal sign-off)
+**Last updated:** 2026-07-19 (source-onboarding + Dublin architect session: Stage 1 spec, council-reviewed 3 rounds, awaiting Teal sign-off)
+
+## Session 2026-07-19 (latest): source-onboarding pattern + Dublin Stage 1 spec
+
+- **Spec at v3.1, AWAITING Teal sign-off**, on branch
+  `feature/source-onboarding-dublin-spec`:
+  `docs/superpowers/specs/2026-07-19-source-onboarding-dublin-design.md`.
+  Adapter contract (registry + runner + two-tier shims + contract tests +
+  toysource proof), corpus-wide dedup pass (SHA-256 hard key,
+  document_listings, near-dup advisory on the pilot tables, decisions
+  file, PDIP hash backfill precondition), CI-enforced ToS gate,
+  cadence-class alarms with scheduled/enrollment model, three one-time
+  platform refactors (country-from-document_countries with obligor
+  precedence, filing_url landing fallback, parquet additive-within-version
+  reconciliation), Dublin instantiation (allowlist perimeter, spike D0,
+  DOL-or-directory-diff signal, S3 retrieval), ESMA/SGX paper checks,
+  docs how-to. Five seam deltas handed to Lane B Stage 2 (spec s4).
+- **Interview decisions (Teal):** sovereign + linked-SPV perimeter via
+  committed allowlist; one-document-multi-venue-listings dedup;
+  non-blocking near-dup advisory review.
+- **Council:** round 1 (Codex xhigh NOT SOUND + 4 fresh internal seats
+  all SWC, ~28 findings, all CRITICALs applied), round 2 (Codex delta:
+  3 closed/7 partial, NOT SOUND on 10 new; all applied; also reconciled
+  with PR #128 pilot tables mid-council), round 3 final (5 closed/5
+  partial + 7 residuals, all with undisputed mechanical closures, applied
+  chair-side in v3.1 per the Lane B precedent). Dispositions in spec s18.
+- **Linear:** TEA-1035 claimed In Progress with trail comment (this spec
+  is its Stage 1); TEA-1053 (ESMA) and TEA-1055 (SGX) reuse the pattern.
+- **Pending:** Teal sign-off on the spec + PR merge; then Stage 2 branch
+  plan (separate session, per the shell).
 
 ## Session 2026-07-19 (latest): ontology pilots 1+2 spec-lite (doc classes, issuers)
 
@@ -26,8 +55,9 @@
   (browse filter, provenance line, dedup soft key, feeds, data
   dictionary); the 947 title-opaque D318 docs are the standing
   text-sampling backlog.
-- **Linear:** no issue existed (the roadmap section 9 Launch 0 batch is
-  still unminted); fold this into that batch when minted.
+- **Linear:** the Launch 0 batch is minted and verified (milestone
+  "Consolidation: self-running flagship", TEA-1032..1056); the vocabulary
+  and canonicalization issues in that batch carry this work forward.
 
 ## Session 2026-07-18 (latest): Lane B Stage 1 spec (self-running corpus)
 
@@ -40,13 +70,13 @@
   blocked on headless read permissions), round 2 (Codex NOT SOUND on
   five revision seams), round 3 (Codex SOUND WITH CHANGES, 11/12
   closed, final race closed in v3.1). Full dispositions in spec s22.
-- **Linear:** TEA-1031 minted, claimed, closed Done (the roadmap
-  section 9 Launch 0 batch was never minted; still to mint). Supersedes
+- **Linear:** TEA-1031 minted, claimed, closed Done. The roadmap
+  section 9 Launch 0 batch is minted and verified (milestone
+  "Consolidation: self-running flagship", TEA-1032..1056). Supersedes
   TEA-906 when refresh.yml lands.
 - **Pending:** Stage 2 planning session (separate, per the shell);
-  mint the Launch 0 consolidation batch; Teal fix-when-convenient:
-  `agy` headless permissions.allow (walkthrough given in-session) and
-  `mgrep login`.
+  Teal fix-when-convenient: `agy` headless permissions.allow
+  (walkthrough given in-session) and `mgrep login`.
 
 ## Session 2026-07-10: Stage 5 integration audit of the pre-Monday batch
 
