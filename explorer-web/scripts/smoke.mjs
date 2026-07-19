@@ -562,6 +562,38 @@ check(
 await mobileAxe('gate doc');
 await mobileCtx.close();
 
+// ---- Rendered-mode flow lock (Stage 5 audit, TEA-929). The plain path's
+// load-bearing white-space: pre-wrap on #ew-doc-text inherits into the
+// injected rendered tree unless .ew-doc-rendered resets it, and marked emits
+// newline text nodes between block elements (kept in the search haystack by
+// design), so an inherited pre-wrap renders every rendered doc with phantom
+// blank lines and near-double-height tables. Nothing functional fails when
+// that regresses (offsets and text are unchanged), so this computed-style
+// check is the only lock. The second check guards the inverse: raw mode must
+// keep the facsimile pre-wrap. ----
+const flowPage = await browser.newPage();
+await flowPage.goto(`${BASE}/doc/synthetic-rich/`, { waitUntil: 'load' });
+await flowPage.waitForSelector('#ew-doc-text .ew-doc-rendered', { timeout: 120000 });
+check(
+  'rendered tree uses normal flow (white-space reset)',
+  await flowPage.evaluate(() => {
+    const el = document.querySelector('#ew-doc-text .ew-doc-rendered');
+    return el !== null && getComputedStyle(el).whiteSpace === 'normal';
+  }),
+  'computed white-space on .ew-doc-rendered is not normal'
+);
+await flowPage.click('#ew-view-toggle');
+await flowPage.waitForFunction(() => !document.querySelector('#ew-doc-text .ew-doc-rendered'), null, { timeout: 10000 });
+check(
+  'raw mode keeps the facsimile pre-wrap on #ew-doc-text',
+  await flowPage.evaluate(() => {
+    const el = document.getElementById('ew-doc-text');
+    return el !== null && getComputedStyle(el).whiteSpace === 'pre-wrap';
+  }),
+  'computed white-space on #ew-doc-text is not pre-wrap in raw mode'
+);
+await flowPage.close();
+
 await browser.close();
 const failed = results.filter((r) => !r.ok);
 console.log(failed.length ? `SMOKE FAILED: ${failed.length}` : 'SMOKE OK');
