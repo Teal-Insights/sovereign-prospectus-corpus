@@ -135,7 +135,7 @@
 - Modify: `config.toml` (active_sources, per-source descriptor fields, alarm_defaults, dormant `[esma]` block)
 - Modify: `src/corpus/cli.py` (generic `corpus discover <source>` / `corpus download <source>` subcommand construction from the registry for TIER A sources only in this branch; `corpus source list`; existing legacy commands untouched until D3)
 
-**Config (append to existing blocks; exact keys, spec s5.1):** every source block gains `display_name`, `cadence_class`, `execution_venue`, `feed_routing`, `scheduled`, `adapter_status` (default "active"; lse "pending"), `tier` ("a" | "b"; the four legacy sources are "b", toysource and dublin "a"), `landing_url` (D2 SETS real values for all five registered names, drafted and cited; D5 curl-200 VERIFIES and corrects with a note). Spec s6 assignments verbatim: nsm active-feed/true, edgar active-feed/true, luxse active-feed/false, pdip archive/true, lse pending. **Tiered validation (council):** `Registry.load()` protocol-validates tier "a" active sources at startup; tier "b" sources are importability-checked ONLY in this branch (their protocol shims do not exist until D3; D3 tightens tier-b validation to shim shape). Without this, `corpus source list` could not boot against the real config. The `[lse]` block, verbatim (no `[lse]` exists in config.toml today, chair-verified):
+**Config (append to existing blocks; exact keys, spec s5.1):** every source block gains `display_name`, `cadence_class`, `execution_venue`, `feed_routing`, `scheduled`, `adapter_status` (default "active"; lse "pending"), `tier` ("a" | "b", DEFAULT "a" when absent; the four legacy blocks set "b" explicitly; pending/planned descriptors omit it and validation ignores it since they never import), `landing_url` (D2 SETS real values for all five registered names, drafted and cited; D5 curl-200 VERIFIES and corrects with a note). Spec s6 assignments verbatim: nsm active-feed/true, edgar active-feed/true, luxse active-feed/false, pdip archive/true, lse pending. **Tiered validation (council):** `Registry.load()` protocol-validates tier "a" active sources at startup; tier "b" sources are importability-checked ONLY in this branch (their protocol shims do not exist until D3; D3 tightens tier-b validation to shim shape). Without this, `corpus source list` could not boot against the real config. The `[lse]` block, verbatim (no `[lse]` exists in config.toml today, chair-verified):
 
 ```toml
 [lse]
@@ -146,6 +146,7 @@ feed_routing = "new-feed-eligible"
 scheduled = false
 adapter_status = "pending"   # TEA-1008 flips to active with an ordinary adapter build
 landing_url = "https://www.londonstockexchange.com/news"
+# tier omitted deliberately: pending never imports, and tier defaults to "a"
 ```
 
 (Executor verifies the LSE landing_url resolves; if not, substitute the RNS news-explorer landing page and note it.) Add:
@@ -347,7 +348,7 @@ adapter_status = "planned"
 **Executor:** Claude Code, Fable 5 xhigh. After D6 merges; the audit RUN task additionally waits for D1 to merge.
 
 **Files:**
-- Modify: `sql/001_corpus.sql`: append verbatim the spec s5.8 `document_listings` DDL + `CREATE SEQUENCE IF NOT EXISTS document_listings_seq;` and the additive columns:
+- Modify: `sql/001_corpus.sql`: append the spec s5.8 `document_listings` DDL in the FILE'S IDEMPOTENT CONVENTION (Codex PR-130 P2: the spec block reads `CREATE TABLE`, but 001_corpus.sql is applied repeatedly, so write `CREATE SEQUENCE IF NOT EXISTS document_listings_seq;` FIRST, then `CREATE TABLE IF NOT EXISTS document_listings (...)` with the spec's columns verbatim) and the additive columns:
   `ALTER TABLE documents ADD COLUMN IF NOT EXISTS duplicate_of_document_id INTEGER;`
   `ALTER TABLE documents ADD COLUMN IF NOT EXISTS suppressed_at TIMESTAMP;`
 - Create: `src/corpus/db/dedup.py` (all dedup logic; ingest calls into it)
