@@ -1,0 +1,149 @@
+canonical_issuer_id,canonical_display_name,issuer_type,country_code,docs_in_snapshot,lei,lei_source,needs_review,notes,proposed_by,proposed_date,status
+advance-agro-public-company-limited,Advance Agro Public Company Limited,corporate,THA,1,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+ago,Republic of Angola,sovereign_state,AGO,29,549300QHR2R3J8JSGK83,GLEIF RESIDENT_GOVERNMENT_ENTITY AGO 2026-07-19 (THE REPUBLIC OF ANGOLA; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+alb,Republic of Albania,sovereign_state,ALB,6,254900EDM43U3SGRND29,NSM research (docs/nsm_api_reference.md),false,,fable-architect-session,2026-07-19,proposed
+aldburg-public,Aldburg Public S.a.,corporate,LUX,58,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+are,United Arab Emirates,sovereign_state,ARE,1,,GLEIF candidates (no exact alias match): 98450060C643D82DF808=Federal Government of the United Arab Emirates,true,,fable-architect-session,2026-07-19,proposed
+are-abu-dhabi,Emirate of Abu Dhabi,sub_sovereign,ARE,38,213800FER4348CINTA77,NSM research (docs/nsm_api_reference.md),false,,fable-architect-session,2026-07-19,proposed
+arg,Republic of Argentina,sovereign_state,ARG,155,549300KPBYGYF7HCHO27,GLEIF RESIDENT_GOVERNMENT_ENTITY ARG 2026-07-19 (República Argentina; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+arkea-public-sector-scf,Arkea Public Sector Scf,corporate,FRA,180,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+arm,Republic of Armenia,sovereign_state,ARM,1,,GLEIF candidates (no exact alias match): 5299000H77JSW90G7935=Central Bank of the Republic of Armenia,true,,fable-architect-session,2026-07-19,proposed
+aut,Republic of Austria,sovereign_state,AUT,82,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+azor-mortgages-public-limited-company,Azor Mortgages Public Limited Company,corporate,IRL,6,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+bank-of-cyprus-holdings-public-limited-company,Bank of Cyprus Holdings Public Limited Company,corporate,CYP,31,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+bank-of-cyprus-public-company-limited,Bank of Cyprus Public Company Limited,corporate,CYP,171,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+bgr,Republic of Bulgaria,sovereign_state,BGR,31,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+bhr,Kingdom of Bahrain,sovereign_state,BHR,14,,GLEIF candidates (no exact alias match): 2138005R27ZUQX18JE41=BAHRAIN ROYAL FLIGHT,true,,fable-architect-session,2026-07-19,proposed
+bih,Bosnia and Herzegovina,sovereign_state,BIH,2,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+bih-federation,Federation of Bosnia and Herzegovina,sub_sovereign,BIH,1,,pending,false,Federation finance ministry,fable-architect-session,2026-07-19,proposed
+bih-republika-srpska,Republika Srpska,sub_sovereign,BIH,4,,pending,false,Entity of Bosnia and Herzegovina; distinct issuer from the state | Ministry filings collapse into the entity,fable-architect-session,2026-07-19,proposed
+blr,Republic of Belarus,sovereign_state,BLR,6,,GLEIF candidates (no exact alias match): 2534007HQY7PSHYH6598=A.V. Luikov Heat and Mass Transfer Institute of the National Academy of Sciences of Belarus; 253400AAUDQ6NK0HNK41=National Bank of the Republic of Belarus,true,,fable-architect-session,2026-07-19,proposed
+blz,Belize,sovereign_state,BLZ,1,529900096070LUHXVI62,GLEIF RESIDENT_GOVERNMENT_ENTITY BLZ 2026-07-19 (State of Belize; LAPSED),false,,fable-architect-session,2026-07-19,proposed
+bnp-paribas-public-sector-scf,Bnp Paribas Public Sector Scf,corporate,FRA,16,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+bol,Plurinational State of Bolivia,sovereign_state,BOL,10,529900TGIRPY3SZXEB56,GLEIF RESIDENT_GOVERNMENT_ENTITY BOL 2026-07-19 (PLURINATIONAL STATE OF BOLIVIA; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+bra,Federative Republic of Brazil,sovereign_state,BRA,396,254900ZFY40OYEADAP90,GLEIF RESIDENT_GOVERNMENT_ENTITY BRA 2026-07-19 (Federative Republic of Brazil; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+brb,Barbados,sovereign_state,BRB,5,529900UD1KUUS4SFD905,GLEIF RESIDENT_GOVERNMENT_ENTITY BRB 2026-07-19 (Barbados; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+can,Canada,sovereign_state,CAN,69,,GLEIF candidates (no exact alias match): 549300TVLW3S530Z3J57=Canada Deposit Insurance Corporation; 549300YCFEZKY6ZOSI81=STANDARDS COUNCIL OF CANADA; 549300Q80MELDIHMGP61=THE GOVERNING COUNCIL OF THE SALVATION ARMY IN CANADA; 549300HBUNHZ41EGEU21=Business Development Bank of Canada,true,,fable-architect-session,2026-07-19,proposed
+castanea-one-public-limited-company,Castanea One Public Limited Company,corporate,IRL,1,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+chl,Republic of Chile,sovereign_state,CHL,270,549300FLZTJM5YJF8D34,GLEIF RESIDENT_GOVERNMENT_ENTITY CHL 2026-07-19 (Republic of Chile; LAPSED),false,,fable-architect-session,2026-07-19,proposed
+chn,People's Republic of China,sovereign_state,CHN,23,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+cmr,Republic of Cameroon,sovereign_state,CMR,10,54930021BO6NHYGBBV24,GLEIF RESIDENT_GOVERNMENT_ENTITY CMR 2026-07-19 (THE REPUBLIC OF CAMEROON; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+cod,Democratic Republic of the Congo,sovereign_state,COD,2,,"GLEIF candidates (no exact alias match): 2138004PAH1DQEIMEW20=MINISTRY OF FINANCE, THE DEMOCRATIC REPUBLIC OF THE CONGO",true,,fable-architect-session,2026-07-19,proposed
+cog,Republic of the Congo,sovereign_state,COG,6,529900BXT90HR4QTB688,GLEIF RESIDENT_GOVERNMENT_ENTITY COG 2026-07-19 (REPUBLIC OF CONGO; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+col,Republic of Colombia,sovereign_state,COL,460,549300MHDRBVRF6B9117,GLEIF RESIDENT_GOVERNMENT_ENTITY COL 2026-07-19 (Republic of Colombia; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+cri,Republic of Costa Rica,sovereign_state,CRI,6,,GLEIF candidates (no exact alias match): 549300S1EK2VN6XVJP58=Ministerio de Hacienda de Costa Rica,true,,fable-architect-session,2026-07-19,proposed
+cyp,Republic of Cyprus,sovereign_state,CYP,31,,GLEIF candidates (no exact alias match): 213800CGVPXWKWQJHX83=UNIVERSITY OF CYPRUS; 25490001WKTZJXA6PW05=CYPRUS AGRICULTURAL PAYMENTS ORGANISATION; 213800ZSP4SRJTI1QZ92=CYPRUS TELECOMMUNICATIONS AUTHORITY (CYTA); 2549005ANDBE5L11RR80=Cyprus Energy Regulatory Authority,true,,fable-architect-session,2026-07-19,proposed
+cyprus-popular-bank-public-co,Cyprus Popular Bank Public Co Ltd,corporate,CYP,47,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+cze,Czech Republic,sovereign_state,CZE,11,,not_found_gleif_government_category [only first 200 of 601 scanned],false,,fable-architect-session,2026-07-19,proposed
+dom,Dominican Republic,sovereign_state,DOM,60,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+dom-banreservas,Banco de Reservas de la República Dominicana,state_owned_entity,DOM,1,,pending,false,State-owned bank,fable-architect-session,2026-07-19,proposed
+dom-central-bank,Central Bank of the Dominican Republic,central_bank,DOM,1,,pending,false,,fable-architect-session,2026-07-19,proposed
+ecu,Republic of Ecuador,sovereign_state,ECU,88,5299003Y2U5XK0A35H71,GLEIF RESIDENT_GOVERNMENT_ENTITY ECU 2026-07-19 (Republic of Ecuador; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+egy,Arab Republic of Egypt,sovereign_state,EGY,75,529900GFIVH4086NMH82,GLEIF RESIDENT_GOVERNMENT_ENTITY EGY 2026-07-19 (ARAB REPUBLIC OF EGYPT; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+est,Republic of Estonia,sovereign_state,EST,1,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+eth,Federal Democratic Republic of Ethiopia,sovereign_state,ETH,4,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+eurobank-limited,Eurobank Limited,corporate,CYP,11,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+fin,Republic of Finland,sovereign_state,FIN,32,,GLEIF candidates (no exact alias match): 7437000P4Q142IVI1641=Suomen metsäkeskus - Finlands skogscentral [only first 200 of 349 scanned],true,,fable-architect-session,2026-07-19,proposed
+fji,Republic of Fiji,sovereign_state,FJI,1,213800IPIFGAGUEVAK53,GLEIF RESIDENT_GOVERNMENT_ENTITY FJI 2026-07-19 (GOVERNMENT OF THE REPUBLIC OF FIJI; LAPSED),false,,fable-architect-session,2026-07-19,proposed
+fresenius-finance-ireland-public-limited-company,Fresenius Finance Ireland Public Limited Company,corporate,DEU,36,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+gab,Gabonese Republic,sovereign_state,GAB,1,,GLEIF candidates (no exact alias match): 213800XA7X746GRPXA35=MINISTRY OF ECONOMY AND RECOVERY OF THE GABONESE REPUBLIC,true,,fable-architect-session,2026-07-19,proposed
+gha,Republic of Ghana,sovereign_state,GHA,49,213800PP4399SNNXZ126,GLEIF RESIDENT_GOVERNMENT_ENTITY GHA 2026-07-19 (REPUBLIC OF GHANA; LAPSED),false,,fable-architect-session,2026-07-19,proposed
+gin,Republic of Guinea,sovereign_state,GIN,1,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+grc,Hellenic Republic,sovereign_state,GRC,19,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+gtm,Republic of Guatemala,sovereign_state,GTM,12,529900QKDFFU9UWW5315,GLEIF RESIDENT_GOVERNMENT_ENTITY GTM 2026-07-19 (República de Guatemala; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+guy,Co-operative Republic of Guyana,sovereign_state,GUY,1,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+hellenic-bank-public-company-limited,Hellenic Bank Public Company Limited,corporate,CYP,18,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+hkg,Hong Kong Special Administrative Region,sovereign_state,HKG,3,,GLEIF candidates (no exact alias match): 549300EOV4ZP8X3Z2W31=HONG KONG TRADE DEVELOPMENT COUNCIL; 549300DSMAD69T7GGN13=The Government of the Hong Kong Special Administrative Region of the People's Republic of China; 5493005LNO5YKSV62440=THE HONG KONG HOUSING AUTHORITY,true,,fable-architect-session,2026-07-19,proposed
+hnd,Republic of Honduras,sovereign_state,HND,5,5493002DW1JNBNG17615,GLEIF RESIDENT_GOVERNMENT_ENTITY HND 2026-07-19 (Republic of Honduras; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+hrv,Republic of Croatia,sovereign_state,HRV,25,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+hun,Hungary,sovereign_state,HUN,52,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+hypo-public-finance-bank,Hypo Public Finance Bank,corporate,AUT,27,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+idn,Republic of Indonesia,sovereign_state,IDN,115,529900FWX0GRR7WG5W79,GLEIF RESIDENT_GOVERNMENT_ENTITY IDN 2026-07-19 (Republic of Indonesia; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+irl,Ireland,sovereign_state,IRL,1,,GLEIF candidates (no exact alias match): 984500C1N891T2CPCA86=Veterinary Council of Ireland,true,,fable-architect-session,2026-07-19,proposed
+isl,Republic of Iceland,sovereign_state,ISL,30,549300K5GD3JPA2LLG98,NSM research (docs/nsm_api_reference.md),false,,fable-architect-session,2026-07-19,proposed
+isl-central-bank,Central Bank of Iceland,central_bank,ISL,4,,pending,true,Distinct entity; REVIEW whether NSM filings are its own or on behalf of the Republic,fable-architect-session,2026-07-19,proposed
+isr,State of Israel,sovereign_state,ISR,1309,,GLEIF candidates (no exact alias match): 213800T8ZHTFZIBYPE21=MINISTRY OF FINANCE ON BEHALF OF THE STATE OF ISRAEL; M8LYVLF5DOB9X0LZOW72=BANK OF ISRAEL,true,,fable-architect-session,2026-07-19,proposed
+ita,Republic of Italy,sovereign_state,ITA,187,,not_found_gleif_government_category [only first 200 of 878 scanned],false,,fable-architect-session,2026-07-19,proposed
+jam,Jamaica,sovereign_state,JAM,64,,GLEIF candidates (no exact alias match): 529900Y93KNSXZI8KK56=JAMAICA (THE GOVERNMENT OF); 213800X6Q4DV5P6GQY25=BANK OF JAMAICA,true,,fable-architect-session,2026-07-19,proposed
+jor,Hashemite Kingdom of Jordan,sovereign_state,JOR,10,5493000JZ4MYPVMBVN50,GLEIF RESIDENT_GOVERNMENT_ENTITY JOR 2026-07-19 (THE HASHEMITE KINGDOM OF JORDAN; LAPSED); confirmed by NSM research,false,,fable-architect-session,2026-07-19,proposed
+jpn,Japan,sovereign_state,JPN,1,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+kaz,Republic of Kazakhstan,sovereign_state,KAZ,29,5493007OEK8EF02UO833,NSM research (docs/nsm_api_reference.md),false,,fable-architect-session,2026-07-19,proposed
+kaz-ktz-finance,Kazakhstan Temir Zholy Finance B.V.,state_owned_entity,KAZ,2,,pending,false,Railway group finance subsidiary,fable-architect-session,2026-07-19,proposed
+ken,Republic of Kenya,sovereign_state,KEN,31,549300VVURQQYU45PR87,GLEIF RESIDENT_GOVERNMENT_ENTITY KEN 2026-07-19 (REPUBLIC OF KENYA; ISSUED); confirmed by NSM research,false,,fable-architect-session,2026-07-19,proposed
+kgz,Kyrgyz Republic,sovereign_state,KGZ,2,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+kor,Republic of Korea,sovereign_state,KOR,57,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+kwt,State of Kuwait,sovereign_state,KWT,9,549300FSC1YD0D9XX589,NSM research (docs/nsm_api_reference.md),true,,fable-architect-session,2026-07-19,proposed
+lbn,Lebanese Republic,sovereign_state,LBN,218,529900QPC4K9S1KHL354,GLEIF RESIDENT_GOVERNMENT_ENTITY LBN 2026-07-19 (Republic of Lebanon; LAPSED),false,,fable-architect-session,2026-07-19,proposed
+lka,Democratic Socialist Republic of Sri Lanka,sovereign_state,LKA,4,254900IG6Y30I2QE2R92,GLEIF RESIDENT_GOVERNMENT_ENTITY LKA 2026-07-19 (Government of the Democratic Socialist Republic of Sri Lanka; LAPSED),false,,fable-architect-session,2026-07-19,proposed
+ltu,Republic of Lithuania,sovereign_state,LTU,111,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+lunar-funding-v-public-limited-company,Lunar Funding V Public Limited Company,corporate,IRL,11,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+lva,Republic of Latvia,sovereign_state,LVA,159,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+mar,Kingdom of Morocco,sovereign_state,MAR,5,529900F3MBW9XY5K1X07,GLEIF RESIDENT_GOVERNMENT_ENTITY MAR 2026-07-19 (KINGDOM OF MOROCCO; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+mda,Republic of Moldova,sovereign_state,MDA,5,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+mex,United Mexican States,sovereign_state,MEX,269,254900EGTWEU67VP6075,GLEIF RESIDENT_GOVERNMENT_ENTITY MEX 2026-07-19 (United Mexican States; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+mkd,Republic of North Macedonia,sovereign_state,MKD,1,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+mne,Montenegro,sovereign_state,MNE,11,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+mol-hungarian-oil-and-gas-public-limited-company,Mol Hungarian Oil and Gas Public Limited Company,corporate,HUN,6,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+morgan-guaranty-trust-company-of-new-york,Morgan Guaranty Trust Company of New York,corporate,USA,1,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+multi-bank-of-cyprus-holdings-public-limited-company-bank-of-cypru,"BANK OF CYPRUS HOLDINGS PUBLIC LIMITED COMPANY, BANK OF CYPRUS PUBLIC COMPANY LIMITED",multi_issuer,CYP,417,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-belgacom-finance-proximus-de-droit-public,"BELGACOM FINANCE S.A., PROXIMUS S.A. DE DROIT PUBLIC",multi_issuer,BEL,4,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-belgacom-finance-proximus-de-droit-public-2-issuers,"BELGACOM FINANCE S.A., PROXIMUS S.A. DE DROIT PUBLIC (2 issuers)",multi_issuer,BEL,7,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-fresenius-finance-ireland-ii-public-limited-company-freseniu,"FRESENIUS FINANCE IRELAND II PUBLIC LIMITED COMPANY, FRESENIUS FINANCE IRELAND PUBLIC LIMITED COMPANY, FRESENIUS SE & CO KGAA (3 issuers)",multi_issuer,DEU,43,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-fresenius-finance-ireland-public-limited-company-fresenius-s,"FRESENIUS FINANCE IRELAND PUBLIC LIMITED COMPANY, FRESENIUS SE & CO KGAA, FRESENIUS FINANCE IRELAND II PUBLIC LIMITED COMPANY (3 issuers)",multi_issuer,DEU,67,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-greece-the-hellenic-republic-national-bank-of-greece-nbg-fin,"GREECE (THE HELLENIC REPUBLIC), NATIONAL BANK OF GREECE S.A., NBG FINANCE PLC... (25 issuers)",multi_issuer,GRC,1,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-hellenic-railways-greece-the-hellenic-republic,"HELLENIC RAILWAYS, GREECE (THE HELLENIC REPUBLIC)",multi_issuer,GRC,12,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-hellenic-railways-greece-the-hellenic-republic-national-bank,"HELLENIC RAILWAYS, GREECE (THE HELLENIC REPUBLIC), NATIONAL BANK OF GREECE S.A.... (7 issuers)",multi_issuer,GRC,1,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-pdip-composite,Albania; Andorra; Austria; Indonesia,multi_issuer,ALB,1,,pending,true,PDIP multi-country agreement; REVIEW routing,fable-architect-session,2026-07-19,proposed
+multi-sg-issuer-portugal-republic-of,"SG ISSUER, PORTUGAL (REPUBLIC OF)",multi_issuer,FRA,1,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-sg-issuer-societe-generale-portugal-republic-of,"SG ISSUER, SOCIETE GENERALE, PORTUGAL (REPUBLIC OF)",multi_issuer,FRA,1,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-unicredit-bank-czech-republic-and-slovakia-a-s,"UNICREDIT BANK CZECH REPUBLIC AND SLOVAKIA, A.S.",multi_issuer,CZE,106,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-unicredit-luxembourg-finance-unicredit-bank-ireland-public-l,"UNICREDIT LUXEMBOURG FINANCE S.A., UNICREDIT BANK IRELAND PUBLIC LIMITED COMPANY",multi_issuer,ITA,5,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-unicredit-unicredit-bank-ireland-public-limited-company-2-is,"UNICREDIT S.P.A., UNICREDIT BANK IRELAND PUBLIC LIMITED COMPANY (2 issuers)",multi_issuer,ITA,177,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-unicredit-unicredit-bank-ireland-public-limited-company-ing-,"UNICREDIT S.P.A., UNICREDIT BANK IRELAND PUBLIC LIMITED COMPANY, ING BANK N.V., UNICREDIT INTERNATIONAL BANK (LUXEMBOURG) S.A.",multi_issuer,ITA,1,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+multi-unicredit-unicredit-bank-ireland-public-limited-company-unic,"UNICREDIT S.P.A., UNICREDIT BANK IRELAND PUBLIC LIMITED COMPANY, UNICREDIT INTERNATIONAL BANK (LUXEMBOURG) S.A. (3 issuers)",multi_issuer,ITA,339,,pending,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+nga,Federal Republic of Nigeria,sovereign_state,NGA,53,549300GSBZD84TNEQ285,GLEIF RESIDENT_GOVERNMENT_ENTITY NGA 2026-07-19 (THE FEDERAL REPUBLIC OF NIGERIA; ISSUED); confirmed by NSM research,false,,fable-architect-session,2026-07-19,proposed
+nld,State of the Netherlands,sovereign_state,NLD,23,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+omn,Sultanate of Oman,sovereign_state,OMN,10,549300SZ20F0QTKNQC75,GLEIF RESIDENT_GOVERNMENT_ENTITY OMN 2026-07-19 (THE GOVERNMENT OF THE SULTANATE OF OMAN; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+omn-sovereign-sukuk,Oman Sovereign Sukuk S.A.O.C.,sovereign_spv,OMN,7,549300KM6RUZQLK8LU36,NSM research (docs/nsm_api_reference.md),false,Sukuk issuance vehicle of the Sultanate of Oman,fable-architect-session,2026-07-19,proposed
+opus-public-chartered-issuance,Opus (public) Chartered Issuance S.a.,corporate,LUX,144,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+pak,Islamic Republic of Pakistan,sovereign_state,PAK,5,529900LOP29R5WKHOD86,GLEIF RESIDENT_GOVERNMENT_ENTITY PAK 2026-07-19 (Islamic Republic of Pakistan; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+pan,Republic of Panama,sovereign_state,PAN,230,,GLEIF candidates (no exact alias match): 529900H2Q7WMDKKIW109=Banco Nacional de Panama; 549300SHS4T08CL0LP14=Ministry of Economy and Finance of the Republic of Panama,true,,fable-architect-session,2026-07-19,proposed
+per,Republic of Peru,sovereign_state,PER,309,,GLEIF candidates (no exact alias match): 254900STKLK2DBJJZ530=Republica Del Peru,true,,fable-architect-session,2026-07-19,proposed
+phl,Republic of the Philippines,sovereign_state,PHL,454,529900RAHBALMYIJ3T08,GLEIF RESIDENT_GOVERNMENT_ENTITY PHL 2026-07-19 (Republic of the Philippines; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+pol,Republic of Poland,sovereign_state,POL,87,,not_found_gleif_government_category [only first 200 of 1198 scanned],false,,fable-architect-session,2026-07-19,proposed
+proximus-de-droit-public,Proximus S.a. de Droit Public,corporate,BEL,51,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+prt,Portuguese Republic,sovereign_state,PRT,18,549300P6U1FJ3IMP7K42,GLEIF RESIDENT_GOVERNMENT_ENTITY PRT 2026-07-19 (REPUBLIC OF PORTUGAL; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+pry,Republic of Paraguay,sovereign_state,PRY,25,,GLEIF candidates (no exact alias match): 529900UXKJTJPCU0HK83=República del Paraguay,true,,fable-architect-session,2026-07-19,proposed
+qat,State of Qatar,sovereign_state,QAT,10,,GLEIF candidates (no exact alias match): 2763Q44H4JBXX0WYYA05=Qatar Derivatives Exchange LLC; 2763XGUKBI1NULDBJP65=Qatar Central Counterparty LLC; 549300JC3FVD623PEG92=MINISTRY OF DEFENCE QATAR,true,,fable-architect-session,2026-07-19,proposed
+qat-global-sukuk-ventures,Global Sukuk Ventures (Q.P.J.S.C.),sovereign_spv,QAT,1,,pending,true,REVIEW: confirm relationship to the State of Qatar,fable-architect-session,2026-07-19,proposed
+rwa,Republic of Rwanda,sovereign_state,RWA,57,213800DQC28OBRZDYJ87,GLEIF RESIDENT_GOVERNMENT_ENTITY RWA 2026-07-19 (THE REPUBLIC OF RWANDA; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+sau,Kingdom of Saudi Arabia,sovereign_state,SAU,40,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+secteur-public-france-2012-1,Secteur Public France 2012-1,corporate,FRA,3,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+sen,Republic of Senegal,sovereign_state,SEN,11,,"GLEIF candidates (no exact alias match): 549300NP14ZLQGWIUZ97=Minister of Finance and Budget, The Republic of Senegal",true,,fable-architect-session,2026-07-19,proposed
+sle,Republic of Sierra Leone,sovereign_state,SLE,15,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+slv,Republic of El Salvador,sovereign_state,SLV,27,529900AKDMUSFSDOM949,GLEIF RESIDENT_GOVERNMENT_ENTITY SLV 2026-07-19 (República de El Salvador; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+smr,Republic of San Marino,sovereign_state,SMR,6,,GLEIF candidates (no exact alias match): 5299009BDP7ZQ4185U27=REPUBBLICA DI SAN MARINO; 529900TJJFT2ZC40AO35=Banca Centrale della Repubblica di San Marino,true,,fable-architect-session,2026-07-19,proposed
+srb,Republic of Serbia,sovereign_state,SRB,31,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+sur,Suriname,sovereign_state,SUR,27,,not_found_gleif_government_category,true,REVIEW: no canonical display on file,fable-architect-session,2026-07-19,proposed
+svk,Slovak Republic,sovereign_state,SVK,4,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+svn,Republic of Slovenia,sovereign_state,SVN,33,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+swe,Kingdom of Sweden,sovereign_state,SWE,73,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+the-standard-bank-of-south-africa,The Standard Bank of South Africa Ltd,corporate,ZAF,2,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+tjk,Republic of Tajikistan,sovereign_state,TJK,1,529900W1LSYUF3CYVU10,GLEIF RESIDENT_GOVERNMENT_ENTITY TJK 2026-07-19 (Republic of Tajikistan; LAPSED),false,,fable-architect-session,2026-07-19,proposed
+tt-and-t-public-company-limited,Tt&t Public Company Limited,corporate,THA,3,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+tto,Republic of Trinidad and Tobago,sovereign_state,TTO,8,,GLEIF candidates (no exact alias match): 549300C17BDH8V7HP303=National Insurance Board of Trinidad and Tobago,true,,fable-architect-session,2026-07-19,proposed
+tur,Republic of Türkiye,sovereign_state,TUR,529,5493000PCHOG3B6S3Q85,GLEIF RESIDENT_GOVERNMENT_ENTITY TUR 2026-07-19 (REPUBLIC OF TURKEY; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+uga,Republic of Uganda,sovereign_state,UGA,1,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+ukr,Ukraine,sovereign_state,UKR,2,,not_found_gleif_government_category,false,,fable-architect-session,2026-07-19,proposed
+unicredit-bank,Unicredit Bank Gmbh,corporate,DEU,7,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+unicredit-bank-ireland-public-limited-company,Unicredit Bank Ireland Public Limited Company,corporate,IRL,154,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+ury,Oriental Republic of Uruguay,sovereign_state,URY,283,,GLEIF candidates (no exact alias match): 549300RDR012H2V82H43=República Oriental del Uruguay; 579100IKDIDEFDDIH076=BANCO DE LA REPUBLICA ORIENTAL DEL URUGUAY,true,,fable-architect-session,2026-07-19,proposed
+uzb,Republic of Uzbekistan,sovereign_state,UZB,22,213800L6VDKUM3TCM927,GLEIF RESIDENT_GOVERNMENT_ENTITY UZB 2026-07-19 (THE REPUBLIC OF UZBEKISTAN; ISSUED),false,,fable-architect-session,2026-07-19,proposed
+uzb-nbu,National Bank for Foreign Economic Activity of the Republic of Uzbekistan,state_owned_entity,UZB,3,,pending,false,,fable-architect-session,2026-07-19,proposed
+uzb-nif,National Investment Fund of the Republic of Uzbekistan,state_owned_entity,UZB,2,,pending,true,Raw name carries a stray semicolon,fable-architect-session,2026-07-19,proposed
+ven,Bolivarian Republic of Venezuela,sovereign_state,VEN,107,529900XM8PJTJK5OJI77,GLEIF RESIDENT_GOVERNMENT_ENTITY VEN 2026-07-19 (Bolivarian Republic of Venezuela; LAPSED),false,,fable-architect-session,2026-07-19,proposed
+vnm,Socialist Republic of Vietnam,sovereign_state,VNM,2,,GLEIF candidates (no exact alias match): 549300VV8X5RR9JOCN38=THE STATE BANK OF VIETNAM,true,,fable-architect-session,2026-07-19,proposed
+xxi-century-investments-public-limited,Xxi Century Investments Public Limited,corporate,CYP,1,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+zaf,Republic of South Africa,sovereign_state,ZAF,156,,GLEIF candidates (no exact alias match): 3789YH3QU1YY1WUUW998=The South African National Roads Agency SOC Ltd; 254900GZDCMAB6ADIN39=University of South Africa; 378900707FAEC496CB53=Export Credit Insurance Corporation of South Africa SOC Ltd; 378900AAFB4F17004C49=National Treasury of the Republic of South Africa,true,TEAL GATE: National Treasury filings mapped to the Republic as issuer of record | TEAL GATE: as above,fable-architect-session,2026-07-19,proposed
+zeleznice-slovenskej-republiky,Zeleznice Slovenskej Republiky,corporate,SVK,1,,pending,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+zmb,Republic of Zambia,sovereign_state,ZMB,3,213800DMLAZ6LGMMD849,GLEIF RESIDENT_GOVERNMENT_ENTITY ZMB 2026-07-19 (THE REPUBLIC OF ZAMBIA; ISSUED),false,,fable-architect-session,2026-07-19,proposed

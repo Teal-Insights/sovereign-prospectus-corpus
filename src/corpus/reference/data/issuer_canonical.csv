@@ -1,0 +1,269 @@
+raw_issuer_name,sources,docs_in_snapshot,canonical_issuer_id,needs_review,notes,proposed_by,proposed_date,status
+ADVANCE AGRO PUBLIC COMPANY LIMITED,luxse,1,advance-agro-public-company-limited,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+Angola,pdip,12,ago,false,,fable-architect-session,2026-07-19,proposed
+Angola (The Republic of),nsm,11,ago,false,,fable-architect-session,2026-07-19,proposed
+Republic of Angola,nsm,5,ago,false,,fable-architect-session,2026-07-19,proposed
+Republic of Angola (The),nsm,1,ago,false,,fable-architect-session,2026-07-19,proposed
+ALBANIA (THE REPUBLIC OF),luxse,3,alb,false,,fable-architect-session,2026-07-19,proposed
+Albania (The Republic of),nsm,1,alb,false,,fable-architect-session,2026-07-19,proposed
+Albania (The Republic of) ,nsm,2,alb,false,,fable-architect-session,2026-07-19,proposed
+ALDBURG PUBLIC S.A.,luxse,58,aldburg-public,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+Federal Government of UAE,nsm,1,are,false,,fable-architect-session,2026-07-19,proposed
+Emirate Of Abu Dhabi,nsm,2,are-abu-dhabi,false,,fable-architect-session,2026-07-19,proposed
+Emirate of Abu Dhabi,nsm,36,are-abu-dhabi,false,,fable-architect-session,2026-07-19,proposed
+ARGENTINA (THE REPUBLIC OF),luxse,104,arg,false,,fable-architect-session,2026-07-19,proposed
+Argentina,pdip,14,arg,false,,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF ARGENTINA,edgar,37,arg,false,,fable-architect-session,2026-07-19,proposed
+ARKEA PUBLIC SECTOR SCF,luxse,60,arkea-public-sector-scf,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+ARKÉA PUBLIC SECTOR SCF,luxse,120,arkea-public-sector-scf,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+Armenia (Republic of),nsm,1,arm,false,,fable-architect-session,2026-07-19,proposed
+AUSTRIA (REPUBLIC OF),luxse,78,aut,false,,fable-architect-session,2026-07-19,proposed
+Austria,pdip,2,aut,false,,fable-architect-session,2026-07-19,proposed
+Republic of Austria,nsm,2,aut,false,,fable-architect-session,2026-07-19,proposed
+AZOR MORTGAGES PUBLIC LIMITED COMPANY,luxse,6,azor-mortgages-public-limited-company,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+BANK OF CYPRUS HOLDINGS PUBLIC LIMITED COMPANY,luxse,31,bank-of-cyprus-holdings-public-limited-company,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+BANK OF CYPRUS PUBLIC COMPANY LIMITED,luxse,171,bank-of-cyprus-public-company-limited,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+BULGARIA (REPUBLIC OF),luxse,31,bgr,false,,fable-architect-session,2026-07-19,proposed
+Bahrain,pdip,8,bhr,false,,fable-architect-session,2026-07-19,proposed
+Kingdom of Bahrain-Ministry of Fin.,nsm,6,bhr,false,,fable-architect-session,2026-07-19,proposed
+Bosnia and Herzegovina,pdip,1,bih,false,,fable-architect-session,2026-07-19,proposed
+Bosnia and Herzegovina (Fedtn of.) ,nsm,1,bih,false,,fable-architect-session,2026-07-19,proposed
+Federalno Ministarstvo Finansija,nsm,1,bih-federation,false,Federation finance ministry,fable-architect-session,2026-07-19,proposed
+MINISTRY OF FINANCE OF REPUBLIC OF SRPSKA,nsm,2,bih-republika-srpska,false,Ministry filings collapse into the entity,fable-architect-session,2026-07-19,proposed
+Republic of Srpska,nsm,1,bih-republika-srpska,false,Entity of Bosnia and Herzegovina; distinct issuer from the state,fable-architect-session,2026-07-19,proposed
+Srpska (Republic of),nsm,1,bih-republika-srpska,false,,fable-architect-session,2026-07-19,proposed
+Belarus (Republic of),nsm,1,blr,false,,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF BELARUS,luxse,4,blr,false,,fable-architect-session,2026-07-19,proposed
+Republic of  Belarus,nsm,1,blr,false,,fable-architect-session,2026-07-19,proposed
+GOVERNMENT OF BELIZE,edgar,1,blz,false,,fable-architect-session,2026-07-19,proposed
+BNP PARIBAS PUBLIC SECTOR SCF,luxse,16,bnp-paribas-public-sector-scf,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+BOLIVIA (PLURINATIONAL STATE OF),luxse,10,bol,false,,fable-architect-session,2026-07-19,proposed
+Brazil,pdip,2,bra,false,,fable-architect-session,2026-07-19,proposed
+FEDERATIVE REPUBLIC OF BRAZIL,edgar;luxse,394,bra,false,,fable-architect-session,2026-07-19,proposed
+Barbados,pdip,5,brb,false,,fable-architect-session,2026-07-19,proposed
+CANADA,edgar,65,can,false,,fable-architect-session,2026-07-19,proposed
+Canada,pdip,2,can,false,,fable-architect-session,2026-07-19,proposed
+Government of Canada,nsm,2,can,false,,fable-architect-session,2026-07-19,proposed
+CASTANEA ONE PUBLIC LIMITED COMPANY,luxse,1,castanea-one-public-limited-company,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+CHILE (REPUBLIC OF),luxse,84,chl,false,,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF CHILE,edgar,186,chl,false,,fable-architect-session,2026-07-19,proposed
+CHINA (PEOPLE'S REPUBLIC OF),luxse,7,chn,false,,fable-architect-session,2026-07-19,proposed
+China,pdip,14,chn,false,,fable-architect-session,2026-07-19,proposed
+China (MoF of People's Republic of),nsm,2,chn,false,,fable-architect-session,2026-07-19,proposed
+Cameroon,pdip,8,cmr,false,,fable-architect-session,2026-07-19,proposed
+Republic of Cameroon,nsm,1,cmr,false,,fable-architect-session,2026-07-19,proposed
+Republic of Cameroon (The),nsm,1,cmr,false,,fable-architect-session,2026-07-19,proposed
+"MINISTRY OF FINANCE, THE DEMOCRATIC REPUBLIC OF THE CONGO",nsm,2,cod,false,,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF CONGO (THE),luxse,3,cog,false,,fable-architect-session,2026-07-19,proposed
+THE REPUBLIC OF CONGO,lse,3,cog,false,,fable-architect-session,2026-07-19,proposed
+COLOMBIA (REPUBLIC OF),luxse,214,col,false,,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF COLOMBIA,edgar,246,col,false,,fable-architect-session,2026-07-19,proposed
+COSTA RICA (REPUBLIC OF),luxse,6,cri,false,,fable-architect-session,2026-07-19,proposed
+Cyprus,pdip,8,cyp,false,,fable-architect-session,2026-07-19,proposed
+Cyprus (Republic of),nsm,1,cyp,false,,fable-architect-session,2026-07-19,proposed
+Republic Of Cyprus,nsm,22,cyp,false,,fable-architect-session,2026-07-19,proposed
+CYPRUS POPULAR BANK PUBLIC CO LTD,luxse,47,cyprus-popular-bank-public-co,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+CZECH REPUBLIC,luxse,11,cze,false,,fable-architect-session,2026-07-19,proposed
+DOMINICAN REPUBLIC (THE),luxse,60,dom,false,,fable-architect-session,2026-07-19,proposed
+BANCO DE RESERVAS DE LA REPUBLICA DOMINICANA,luxse,1,dom-banreservas,false,State-owned bank,fable-architect-session,2026-07-19,proposed
+CENTRAL BANK OF THE DOMINICAN REPUBLIC,luxse,1,dom-central-bank,false,,fable-architect-session,2026-07-19,proposed
+ECUADOR (REPUBLIC OF),luxse,56,ecu,false,,fable-architect-session,2026-07-19,proposed
+Ecuador,pdip,32,ecu,false,,fable-architect-session,2026-07-19,proposed
+ARAB REPUBLIC OF EGYPT,nsm,3,egy,false,,fable-architect-session,2026-07-19,proposed
+Arab Republic Of Egypt (The),nsm,1,egy,false,,fable-architect-session,2026-07-19,proposed
+Arab Republic of Egypt,nsm,25,egy,false,,fable-architect-session,2026-07-19,proposed
+Arab Republic of Egypt (The),nsm,1,egy,false,,fable-architect-session,2026-07-19,proposed
+EGYPT (THE ARAB REPUBLIC OF),luxse,32,egy,false,,fable-architect-session,2026-07-19,proposed
+Egypt,pdip,4,egy,false,,fable-architect-session,2026-07-19,proposed
+Egypt (Arab Republic of) (The),nsm,5,egy,false,,fable-architect-session,2026-07-19,proposed
+THE ARAB REPUBLIC OF EGYPT,nsm,4,egy,false,,fable-architect-session,2026-07-19,proposed
+ESTONIA (REPUBLIC OF),luxse,1,est,false,,fable-architect-session,2026-07-19,proposed
+Ethiopia,pdip,4,eth,false,,fable-architect-session,2026-07-19,proposed
+EUROBANK LIMITED,luxse,11,eurobank-limited,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+FINLAND (REPUBLIC OF),luxse,1,fin,false,,fable-architect-session,2026-07-19,proposed
+FINLAND REPUBLIC OF,edgar,3,fin,false,,fable-architect-session,2026-07-19,proposed
+Republic of Finland,nsm,28,fin,false,,fable-architect-session,2026-07-19,proposed
+Government Of The Republic Of Fiji,nsm,1,fji,false,,fable-architect-session,2026-07-19,proposed
+FRESENIUS FINANCE IRELAND PUBLIC LIMITED COMPANY,luxse,36,fresenius-finance-ireland-public-limited-company,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+Gabonese Republic (The),nsm,1,gab,false,,fable-architect-session,2026-07-19,proposed
+Ghana,pdip,28,gha,false,,fable-architect-session,2026-07-19,proposed
+Ghana (Republic of) (The),nsm,2,gha,false,,fable-architect-session,2026-07-19,proposed
+THE REPUBLIC OF GHANA,nsm,5,gha,false,,fable-architect-session,2026-07-19,proposed
+The Republic of Ghana,nsm,14,gha,false,,fable-architect-session,2026-07-19,proposed
+Guinea,pdip,1,gin,false,,fable-architect-session,2026-07-19,proposed
+GREECE (THE HELLENIC REPUBLIC),luxse,19,grc,false,,fable-architect-session,2026-07-19,proposed
+GUATEMALA (THE REPUBLIC OF),luxse,12,gtm,false,,fable-architect-session,2026-07-19,proposed
+Guyana,pdip,1,guy,false,,fable-architect-session,2026-07-19,proposed
+HELLENIC BANK PUBLIC COMPANY LIMITED,luxse,18,hellenic-bank-public-company-limited,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+The Govt of the Hong Kong Spl Adm Region of the People’s Republic of China,nsm,3,hkg,false,,fable-architect-session,2026-07-19,proposed
+HONDURAS (THE REPUBLIC OF),luxse,5,hnd,false,,fable-architect-session,2026-07-19,proposed
+CROATIA (REPUBLIC OF),luxse,25,hrv,false,,fable-architect-session,2026-07-19,proposed
+HUNGARY,edgar,30,hun,false,,fable-architect-session,2026-07-19,proposed
+Hungary,nsm;pdip,22,hun,false,,fable-architect-session,2026-07-19,proposed
+HYPO PUBLIC FINANCE BANK,luxse,27,hypo-public-finance-bank,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+INDONESIA (REPUBLIC OF),luxse,1,idn,false,,fable-architect-session,2026-07-19,proposed
+Indonesia,pdip,18,idn,false,,fable-architect-session,2026-07-19,proposed
+Republic of Indonesia,edgar,96,idn,false,,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF IRELAND,luxse,1,irl,false,,fable-architect-session,2026-07-19,proposed
+Government of The Republic of Iceland,nsm,8,isl,false,,fable-architect-session,2026-07-19,proposed
+ICELAND (REPUBLIC OF),luxse;nsm,8,isl,false,,fable-architect-session,2026-07-19,proposed
+Iceland,pdip,2,isl,false,,fable-architect-session,2026-07-19,proposed
+Republic of Iceland,nsm,12,isl,false,,fable-architect-session,2026-07-19,proposed
+Central Bank of Iceland,nsm,4,isl-central-bank,true,Distinct entity; REVIEW whether NSM filings are its own or on behalf of the Republic,fable-architect-session,2026-07-19,proposed
+"ISRAEL, STATE OF",edgar,1162,isr,false,,fable-architect-session,2026-07-19,proposed
+Israel,pdip,3,isr,false,,fable-architect-session,2026-07-19,proposed
+STATE OF ISRAEL,nsm,21,isr,false,,fable-architect-session,2026-07-19,proposed
+State Of Israel,nsm,34,isr,false,,fable-architect-session,2026-07-19,proposed
+State of Israel,nsm,85,isr,false,,fable-architect-session,2026-07-19,proposed
+State of Israel Ministry of Finance,nsm,4,isr,false,,fable-architect-session,2026-07-19,proposed
+ITALY (REPUBLIC OF),luxse,142,ita,false,,fable-architect-session,2026-07-19,proposed
+ITALY REPUBLIC OF,edgar,43,ita,false,,fable-architect-session,2026-07-19,proposed
+Italy,pdip,2,ita,false,,fable-architect-session,2026-07-19,proposed
+GOVERNMENT OF JAMICA,edgar,1,jam,false,,fable-architect-session,2026-07-19,proposed
+JAMAICA GOVERNMENT OF,edgar,43,jam,false,,fable-architect-session,2026-07-19,proposed
+Jamaica,pdip,20,jam,false,,fable-architect-session,2026-07-19,proposed
+Jordan,pdip,4,jor,false,,fable-architect-session,2026-07-19,proposed
+Jordan (Hashemite Kingdom of) (The),nsm,2,jor,false,,fable-architect-session,2026-07-19,proposed
+THE HASHEMITE KINGDOM OF JORDAN,nsm,1,jor,false,,fable-architect-session,2026-07-19,proposed
+The Hashemite Kingdom of Jordan,nsm,3,jor,false,,fable-architect-session,2026-07-19,proposed
+Japan,pdip,1,jpn,false,,fable-architect-session,2026-07-19,proposed
+Kazakhstan,pdip,7,kaz,false,,fable-architect-session,2026-07-19,proposed
+Kazakhstan (Republic of),nsm,5,kaz,false,,fable-architect-session,2026-07-19,proposed
+Republic of Kazakhstan,nsm,16,kaz,false,,fable-architect-session,2026-07-19,proposed
+The Republic Of Kazakhstan,nsm,1,kaz,false,,fable-architect-session,2026-07-19,proposed
+Kazakhstan Temir Zholy Finance BV,nsm,2,kaz-ktz-finance,false,Railway group finance subsidiary,fable-architect-session,2026-07-19,proposed
+Kenya,pdip,26,ken,false,,fable-architect-session,2026-07-19,proposed
+Kenya (The Republic of),nsm,3,ken,false,,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF KENYA,nsm,1,ken,false,,fable-architect-session,2026-07-19,proposed
+THE REPUBLIC OF KENYA,nsm,1,ken,false,,fable-architect-session,2026-07-19,proposed
+Kyrgyzstan,pdip,2,kgz,false,,fable-architect-session,2026-07-19,proposed
+KOREA (THE REPUBLIC OF),luxse,2,kor,false,,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF KOREA,edgar,55,kor,false,,fable-architect-session,2026-07-19,proposed
+Kuwait,pdip,5,kwt,false,,fable-architect-session,2026-07-19,proposed
+State Of Kuwait,nsm,2,kwt,false,,fable-architect-session,2026-07-19,proposed
+State of Kuwait (Ministry of Fin.),nsm,2,kwt,false,,fable-architect-session,2026-07-19,proposed
+LEBANESE REPUBLIC (THE),luxse,218,lbn,false,,fable-architect-session,2026-07-19,proposed
+Sri Lanka,pdip,1,lka,false,,fable-architect-session,2026-07-19,proposed
+Sri Lanka (G.D.S. Republic of),nsm,3,lka,false,,fable-architect-session,2026-07-19,proposed
+LITHUANIA (THE REPUBLIC OF),luxse,111,ltu,false,,fable-architect-session,2026-07-19,proposed
+LUNAR FUNDING V PUBLIC LIMITED COMPANY,luxse,11,lunar-funding-v-public-limited-company,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+LATVIA (REPUBLIC OF),luxse,158,lva,false,,fable-architect-session,2026-07-19,proposed
+Latvia,pdip,1,lva,false,,fable-architect-session,2026-07-19,proposed
+KINGDOM OF MOROCCO,nsm,1,mar,false,,fable-architect-session,2026-07-19,proposed
+Morocco,pdip,2,mar,false,,fable-architect-session,2026-07-19,proposed
+Morocco (Kingdom of),nsm,2,mar,false,,fable-architect-session,2026-07-19,proposed
+Moldova,pdip,5,mda,false,,fable-architect-session,2026-07-19,proposed
+UNITED MEXICAN STATES,edgar,269,mex,false,,fable-architect-session,2026-07-19,proposed
+MACEDONIA (FORMER YUGOSLAV REPUBLIC OF),luxse,1,mkd,false,,fable-architect-session,2026-07-19,proposed
+Montenegro,pdip,4,mne,false,,fable-architect-session,2026-07-19,proposed
+State Of Montenegro,nsm,4,mne,false,,fable-architect-session,2026-07-19,proposed
+State of Montenegro,nsm,1,mne,false,,fable-architect-session,2026-07-19,proposed
+"State of Montenegro (represented by the Government of Montenegro, acting by and through its Ministry of Finance and Social Welfare)",nsm,2,mne,false,,fable-architect-session,2026-07-19,proposed
+MOL HUNGARIAN OIL AND GAS PUBLIC LIMITED COMPANY,luxse,6,mol-hungarian-oil-and-gas-public-limited-company,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+MORGAN GUARANTY TRUST COMPANY OF NEW YORK,luxse,1,morgan-guaranty-trust-company-of-new-york,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+"BANK OF CYPRUS HOLDINGS PUBLIC LIMITED COMPANY, BANK OF CYPRUS PUBLIC COMPANY LIMITED",luxse,4,multi-bank-of-cyprus-holdings-public-limited-company-bank-of-cypru,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"BANK OF CYPRUS HOLDINGS PUBLIC LIMITED COMPANY, BANK OF CYPRUS PUBLIC COMPANY LIMITED (2 issuers)",luxse,413,multi-bank-of-cyprus-holdings-public-limited-company-bank-of-cypru,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"BELGACOM FINANCE S.A., PROXIMUS S.A. DE DROIT PUBLIC",luxse,4,multi-belgacom-finance-proximus-de-droit-public,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"BELGACOM FINANCE S.A., PROXIMUS S.A. DE DROIT PUBLIC (2 issuers)",luxse,7,multi-belgacom-finance-proximus-de-droit-public-2-issuers,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"FRESENIUS FINANCE IRELAND II PUBLIC LIMITED COMPANY, FRESENIUS FINANCE IRELAND PUBLIC LIMITED COMPANY, FRESENIUS SE & CO KGAA (3 issuers)",luxse,43,multi-fresenius-finance-ireland-ii-public-limited-company-freseniu,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"FRESENIUS FINANCE IRELAND PUBLIC LIMITED COMPANY, FRESENIUS SE & CO KGAA, FRESENIUS FINANCE IRELAND II PUBLIC LIMITED COMPANY (3 issuers)",luxse,17,multi-fresenius-finance-ireland-public-limited-company-fresenius-s,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"FRESENIUS FINANCE IRELAND PUBLIC LIMITED COMPANY, FRESENIUS SE & CO. KGAA, FRESENIUS FINANCE IRELAND II PUBLIC LIMITED COMPANY (3 issuers)",luxse,50,multi-fresenius-finance-ireland-public-limited-company-fresenius-s,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"GREECE (THE HELLENIC REPUBLIC), NATIONAL BANK OF GREECE S.A., NBG FINANCE PLC... (25 issuers)",luxse,1,multi-greece-the-hellenic-republic-national-bank-of-greece-nbg-fin,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"HELLENIC RAILWAYS, GREECE (THE HELLENIC REPUBLIC)",luxse,12,multi-hellenic-railways-greece-the-hellenic-republic,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"HELLENIC RAILWAYS, GREECE (THE HELLENIC REPUBLIC), NATIONAL BANK OF GREECE S.A.... (7 issuers)",luxse,1,multi-hellenic-railways-greece-the-hellenic-republic-national-bank,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+Albania; Andorra; Austria; Indonesia,pdip,1,multi-pdip-composite,true,PDIP multi-country agreement; REVIEW routing,fable-architect-session,2026-07-19,proposed
+"SG ISSUER, PORTUGAL (REPUBLIC OF)",luxse,1,multi-sg-issuer-portugal-republic-of,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"SG ISSUER, SOCIETE GENERALE, PORTUGAL (REPUBLIC OF)",luxse,1,multi-sg-issuer-societe-generale-portugal-republic-of,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"UNICREDIT BANK CZECH REPUBLIC AND SLOVAKIA, A.S.",luxse,106,multi-unicredit-bank-czech-republic-and-slovakia-a-s,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"UNICREDIT LUXEMBOURG FINANCE S.A., UNICREDIT BANK IRELAND PUBLIC LIMITED COMPANY",luxse,5,multi-unicredit-luxembourg-finance-unicredit-bank-ireland-public-l,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"UNICREDIT S.P.A., UNICREDIT BANK IRELAND PUBLIC LIMITED COMPANY (2 issuers)",luxse,177,multi-unicredit-unicredit-bank-ireland-public-limited-company-2-is,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"UNICREDIT S.P.A., UNICREDIT BANK IRELAND PUBLIC LIMITED COMPANY, ING BANK N.V., UNICREDIT INTERNATIONAL BANK (LUXEMBOURG) S.A.",luxse,1,multi-unicredit-unicredit-bank-ireland-public-limited-company-ing-,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+"UNICREDIT S.P.A., UNICREDIT BANK IRELAND PUBLIC LIMITED COMPANY, UNICREDIT INTERNATIONAL BANK (LUXEMBOURG) S.A. (3 issuers)",luxse,339,multi-unicredit-unicredit-bank-ireland-public-limited-company-unic,true,LuxSE joint filing by multiple issuers; do not collapse to one,fable-architect-session,2026-07-19,proposed
+Nigeria,pdip,11,nga,false,,fable-architect-session,2026-07-19,proposed
+Nigeria (Federal Republic of) (The),nsm,6,nga,false,,fable-architect-session,2026-07-19,proposed
+THE FEDERAL REPUBLIC OF NIGERIA,nsm,2,nga,false,,fable-architect-session,2026-07-19,proposed
+The Federal Republic of Nigeria,nsm,34,nga,false,,fable-architect-session,2026-07-19,proposed
+Netherlands,pdip,23,nld,false,,fable-architect-session,2026-07-19,proposed
+Oman (Government of Sultanate of),nsm,4,omn,false,,fable-architect-session,2026-07-19,proposed
+SULTANATE OF OMAN,nsm,1,omn,false,,fable-architect-session,2026-07-19,proposed
+The Government of the Sultanate of Oman,nsm,5,omn,false,,fable-architect-session,2026-07-19,proposed
+Oman Sovereign Sukuk S.A.O.C.,nsm,7,omn-sovereign-sukuk,false,Sukuk issuance vehicle of the Sultanate of Oman,fable-architect-session,2026-07-19,proposed
+OPUS (PUBLIC) CHARTERED ISSUANCE S.A.,luxse,21,opus-public-chartered-issuance,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+OPUS (PUBLIC) CHARTERED ISSUANCE SA,luxse,123,opus-public-chartered-issuance,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+PAKISTAN (THE ISLAMIC REPUBLIC OF),luxse,5,pak,false,,fable-architect-session,2026-07-19,proposed
+PANAMA (THE REPUBLIC OF),luxse,104,pan,false,,fable-architect-session,2026-07-19,proposed
+PANAMA REPUBLIC OF,edgar,126,pan,false,,fable-architect-session,2026-07-19,proposed
+PERU (THE REPUBLIC OF),luxse,98,per,false,,fable-architect-session,2026-07-19,proposed
+PERU REPUBLIC OF,edgar,85,per,false,,fable-architect-session,2026-07-19,proposed
+Peru,pdip,126,per,false,,fable-architect-session,2026-07-19,proposed
+PHILIPPINES (REPUBLIC OF THE),luxse,226,phl,false,,fable-architect-session,2026-07-19,proposed
+Philippines,pdip,52,phl,false,,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF THE PHILIPPINES,edgar,176,phl,false,,fable-architect-session,2026-07-19,proposed
+POLAND (THE REPUBLIC OF),luxse,87,pol,false,,fable-architect-session,2026-07-19,proposed
+PROXIMUS S.A. DE DROIT PUBLIC,luxse,51,proximus-de-droit-public,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+PORTUGAL (REPUBLIC OF),luxse,18,prt,false,,fable-architect-session,2026-07-19,proposed
+PARAGUAY (THE REPUBLIC OF),luxse,25,pry,false,,fable-architect-session,2026-07-19,proposed
+State Of Qatar,nsm,1,qat,false,,fable-architect-session,2026-07-19,proposed
+State of Qatar-Ministry of Finance,nsm,8,qat,false,,fable-architect-session,2026-07-19,proposed
+The State of Qatar,nsm,1,qat,false,,fable-architect-session,2026-07-19,proposed
+Global Sukuk Ventures (Q.P.J.S.C.),nsm,1,qat-global-sukuk-ventures,true,REVIEW: confirm relationship to the State of Qatar,fable-architect-session,2026-07-19,proposed
+Rwanda,pdip,55,rwa,false,,fable-architect-session,2026-07-19,proposed
+Rwanda (Republic of) (The),nsm,1,rwa,false,,fable-architect-session,2026-07-19,proposed
+The Republic of Rwanda,nsm,1,rwa,false,,fable-architect-session,2026-07-19,proposed
+Kingdom of Saudi Arabia,nsm,8,sau,false,,fable-architect-session,2026-07-19,proposed
+Kingdom of Saudi Arabia (The),nsm,11,sau,false,,fable-architect-session,2026-07-19,proposed
+Saudi Arabia,pdip,17,sau,false,,fable-architect-session,2026-07-19,proposed
+The Kingdom of Saudi Arabia acting through the Ministry of Finance,nsm,4,sau,false,,fable-architect-session,2026-07-19,proposed
+SECTEUR PUBLIC FRANCE 2012-1,luxse,3,secteur-public-france-2012-1,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+SENEGAL (THE REPUBLIC OF),luxse,4,sen,false,,fable-architect-session,2026-07-19,proposed
+Senegal,pdip,7,sen,false,,fable-architect-session,2026-07-19,proposed
+Sierra Leone,pdip,15,sle,false,,fable-architect-session,2026-07-19,proposed
+EL SALVADOR (THE REPUBLIC OF),luxse,27,slv,false,,fable-architect-session,2026-07-19,proposed
+SAN MARINO (REPUBLIC OF),luxse,6,smr,false,,fable-architect-session,2026-07-19,proposed
+Republic Of Serbia,nsm,1,srb,false,,fable-architect-session,2026-07-19,proposed
+Republic of Serbia,nsm,5,srb,false,,fable-architect-session,2026-07-19,proposed
+"Republic of Serbia (represented by the Government of the Republic of Serbia, acting by and through the Ministry of Finance)",nsm,7,srb,false,,fable-architect-session,2026-07-19,proposed
+SERBIA (THE REPUBLIC OF),luxse,4,srb,false,,fable-architect-session,2026-07-19,proposed
+Serbia,pdip,1,srb,false,,fable-architect-session,2026-07-19,proposed
+Serbia (Republic of),nsm,13,srb,false,,fable-architect-session,2026-07-19,proposed
+SURINAME (REPUBLIC OF),luxse,27,sur,true,REVIEW: no canonical display on file,fable-architect-session,2026-07-19,proposed
+SLOVAK REPUBLIC,luxse,4,svk,false,,fable-architect-session,2026-07-19,proposed
+SLOVENIA (REPUBLIC OF),luxse,33,svn,false,,fable-architect-session,2026-07-19,proposed
+Kingdom of Sweden,nsm,64,swe,false,,fable-architect-session,2026-07-19,proposed
+SWEDEN (KINGDOM OF),nsm,1,swe,false,,fable-architect-session,2026-07-19,proposed
+Sweden,pdip,8,swe,false,,fable-architect-session,2026-07-19,proposed
+THE STANDARD BANK OF SOUTH AFRICA LTD,luxse,2,the-standard-bank-of-south-africa,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF TAJIKISTAN,luxse,1,tjk,false,,fable-architect-session,2026-07-19,proposed
+TT&T PUBLIC COMPANY LIMITED,luxse,3,tt-and-t-public-company-limited,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+TRINIDAD AND TOBAGO (REPUBLIC OF),luxse,8,tto,false,,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF TURKEY,edgar;luxse,319,tur,false,,fable-architect-session,2026-07-19,proposed
+TURKEY (REPUBLIC OF),luxse,14,tur,false,,fable-architect-session,2026-07-19,proposed
+TÜRKIYE (THE REPUBLIC OF),luxse,196,tur,false,,fable-architect-session,2026-07-19,proposed
+Uganda,pdip,1,uga,false,,fable-architect-session,2026-07-19,proposed
+"Ukraine, represented by the Minister of Finance",nsm,2,ukr,false,,fable-architect-session,2026-07-19,proposed
+UNICREDIT BANK GMBH,luxse,7,unicredit-bank,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+UNICREDIT BANK IRELAND PUBLIC LIMITED COMPANY,luxse,154,unicredit-bank-ireland-public-limited-company,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+Eastern Republic of Uruguay,nsm,2,ury,false,,fable-architect-session,2026-07-19,proposed
+URUGUAY (REPUBLICA ORIENTAL DEL),luxse,131,ury,false,,fable-architect-session,2026-07-19,proposed
+URUGUAY REPUBLIC OF,edgar,150,ury,false,,fable-architect-session,2026-07-19,proposed
+Republic of Uzbekistan,nsm,1,uzb,false,,fable-architect-session,2026-07-19,proposed
+The Republic Of Uzbekistan,nsm,3,uzb,false,,fable-architect-session,2026-07-19,proposed
+The Republic of Uzbekistan,nsm,6,uzb,false,,fable-architect-session,2026-07-19,proposed
+Uzbekistan,pdip,2,uzb,false,,fable-architect-session,2026-07-19,proposed
+Uzbekistan (Republic of),nsm,10,uzb,false,,fable-architect-session,2026-07-19,proposed
+JSC National Bank for Foreign Economic Activity of the Republic of Uzbekistan,nsm,1,uzb-nbu,false,,fable-architect-session,2026-07-19,proposed
+Joint Stock Company National Bank for Foreign Economic Activity of the Republic of Uzbekistan,nsm,2,uzb-nbu,false,,fable-architect-session,2026-07-19,proposed
+National Investment Fund of the Republic of Uzbekistan;,nsm,2,uzb-nif,true,Raw name carries a stray semicolon,fable-architect-session,2026-07-19,proposed
+BOLIVARIAN REPUBLIC OF VENEZUELA,edgar,8,ven,false,,fable-architect-session,2026-07-19,proposed
+VENEZUELA (BOLIVARIAN REPUBLIC OF),luxse,60,ven,false,,fable-architect-session,2026-07-19,proposed
+Venezuela,pdip,39,ven,false,,fable-architect-session,2026-07-19,proposed
+VIETNAM (THE SOCIALISTIC REPUBLIC OF),luxse,2,vnm,false,,fable-architect-session,2026-07-19,proposed
+XXI CENTURY INVESTMENTS PUBLIC LIMITED,luxse,1,xxi-century-investments-public-limited,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+NATIONAL TREASURY OF THE REPUBLIC OF SOUTH AFRICA,luxse,3,zaf,true,TEAL GATE: as above,fable-architect-session,2026-07-19,proposed
+National Treasury of the Republic of South Africa,nsm,1,zaf,true,TEAL GATE: National Treasury filings mapped to the Republic as issuer of record,fable-architect-session,2026-07-19,proposed
+REPUBLIC OF SOUTH AFRICA,edgar,68,zaf,false,,fable-architect-session,2026-07-19,proposed
+SOUTH AFRICA (REPUBLIC OF),luxse,83,zaf,false,,fable-architect-session,2026-07-19,proposed
+South Africa (Government of),nsm,1,zaf,false,,fable-architect-session,2026-07-19,proposed
+ZELEZNICE SLOVENSKEJ REPUBLIKY,luxse,1,zeleznice-slovenskej-republiky,false,Display cleanup only; corporate issuer,fable-architect-session,2026-07-19,proposed
+Republic of Zambia,nsm,2,zmb,false,,fable-architect-session,2026-07-19,proposed
+Zambia (Republic of) (MoF),nsm,1,zmb,false,,fable-architect-session,2026-07-19,proposed

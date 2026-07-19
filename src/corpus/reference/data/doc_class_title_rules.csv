@@ -1,0 +1,20 @@
+rule_order,applies_to_source,pattern,doc_class,rationale,proposed_by,proposed_date,status
+1,pdip,restructuring agreement|rescheduling agreement|exchange offer|invitation memorandum,restructuring_document,Liability management / restructuring documents,fable-architect-session,2026-07-19,proposed
+2,pdip,prospectus supplement,supplement,Amends a base or shelf prospectus,fable-architect-session,2026-07-19,proposed
+3,pdip,supplementary prospectus,supplement,UK-style supplement,fable-architect-session,2026-07-19,proposed
+4,pdip,final terms|pricing supplement,final_terms,Completes a programme tranche,fable-architect-session,2026-07-19,proposed
+5,pdip,base (offering )?(prospectus|circular),base_prospectus,Programme base document,fable-architect-session,2026-07-19,proposed
+6,pdip,offering (circular|memorandum),prospectus,Standalone deal disclosure,fable-architect-session,2026-07-19,proposed
+7,pdip,admission particulars?,prospectus,Listing-particulars-style deal disclosure,fable-architect-session,2026-07-19,proposed
+8,pdip,prospectus,prospectus,Standalone deal disclosure,fable-architect-session,2026-07-19,proposed
+9,pdip,indenture|fiscal agency agreement|trust deed,bond_contract,Contractual machinery of a bond issue,fable-architect-session,2026-07-19,proposed
+10,pdip,underwriting agreement|dealer management agreement|subscription agreement,bond_contract,Deal execution contracts,fable-architect-session,2026-07-19,proposed
+11,pdip,global (bond |note )?certificate|global note,bond_contract,The security instrument itself,fable-architect-session,2026-07-19,proposed
+12,pdip,loan agreement|loan contract|credit agreement|facility agreement|financing agreement,loan_documentation,Loan contracts,fable-architect-session,2026-07-19,proposed
+13,pdip,general (terms and )?conditions,loan_documentation,"Lender standard terms (IBRD, AIIB, JICA)",fable-architect-session,2026-07-19,proposed
+14,pdip,guarantee,loan_documentation,Guarantee agreements,fable-architect-session,2026-07-19,proposed
+15,pdip,framework agreement,loan_documentation,Financing framework agreements,fable-architect-session,2026-07-19,proposed
+16,pdip,agreement between,loan_documentation,Bilateral intergovernmental financing agreements,fable-architect-session,2026-07-19,proposed
+17,pdip,development policy (financing|operation)|finance contract|\bida\b,loan_documentation,Official-lender policy financing and finance contracts,fable-architect-session,2026-07-19,proposed
+18,pdip,asian development bank|inter[- ]american development bank|\biadb\b|\bibrd\b|\baiib\b|\bjica\b|international bank for reconstruction|\badb\b,loan_documentation,Official-lender project documents titled by project name,fable-architect-session,2026-07-19,proposed
+19,pdip,\bloan\b,loan_documentation,Residual loan-titled documents,fable-architect-session,2026-07-19,proposed

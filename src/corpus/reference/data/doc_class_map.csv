@@ -1,0 +1,45 @@
+source,source_code,doc_class,confidence,mechanism,docs_in_snapshot,observed_meaning,notes,snapshot_evidence_date,proposed_by,proposed_date,status
+edgar,424B1,prospectus,medium,code,5,Prospectus filed per Rule 424(b)(1),n=5,2026-07-16,fable-architect-session,2026-07-19,proposed
+edgar,424B2,supplement,high,code,320,Prospectus filed per Rule 424(b)(2); prospectus supplements with pricing,,2026-07-16,fable-architect-session,2026-07-19,proposed
+edgar,424B3,supplement,medium,code,663,Prospectus filed per Rule 424(b)(3); mostly preliminary prospectus supplements,Some titles read PROSPECTUS ONLY; review candidates via title rules later,2026-07-16,fable-architect-session,2026-07-19,proposed
+edgar,424B4,prospectus,medium,code,8,Prospectus filed per Rule 424(b)(4),n=8; first-time prospectus after effectiveness,2026-07-16,fable-architect-session,2026-07-19,proposed
+edgar,424B5,supplement,high,code,730,Prospectus filed per Rule 424(b)(5); final prospectus supplements,Titles dominated by FINAL PROSPECTUS SUPPLEMENT,2026-07-16,fable-architect-session,2026-07-19,proposed
+edgar,FWP,free_writing_prospectus,high,code,1613,SEC free writing prospectus (Rule 433); pricing term sheets,"Titles: FREE WRITING PROSPECTUS, FINAL PRICING TERMS",2026-07-16,fable-architect-session,2026-07-19,proposed
+lse,offering_circular,prospectus,high,code,3,Adapter-emitted label; standalone offering circulars,,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D003,prospectus,high,code,4,Observed as LuxSE listing particulars,One title reads Final Prospectus Supplement; override shipped,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D005,base_prospectus,medium,code,1,Observed as registration document,Registration document is reusable issuer disclosure; Teal gate on placement,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D010,prospectus,high,code,734,LuxSE code observed as standalone/listing prospectus,One title reads cssf prospectus supplement; review via title rules later,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D060,base_prospectus,high,code,164,Observed as base prospectus / programme offering circular,,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D070,prospectus,high,code,1,Observed as LuxSE listing particulars,n=1,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D080,prospectus,high,code,1,Observed as unitary prospectus (programme tranche),n=1,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D090,final_terms,high,code,677,Observed as final terms / pricing supplements,,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D110,notice,medium,code,7,Observed as exchange offer notices (Avis offre echange),"Notices about an exchange offer, not the offer memorandum itself",2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D120,notice,low,code,3,Observed as supplements to exchange offer notices,n=3; REVIEW: may be supplements to offer documents,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D130,supplement,high,code,175,Observed as prospectus/base prospectus supplements,,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D140,notice,low,code,6,Observed as errata,n=6; REVIEW: an erratum may formally supplement a prospectus,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D290,notice,medium,code,108,Observed as press communiques and results announcements,A minority are financial reports; title rules later can reroute,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D318,annual_report,medium,code,1853,"Documents incorporated by reference; observed dominantly 18-K annual filings, annual reports, information statements",Largest LuxSE bucket (1853); heterogeneous tail; title rules later can reroute,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D455,notice,high,code,1210,"Observed as publications, results, press releases",,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,D500,annual_report,high,code,2,Observed as annual financial reports,n=2,2026-07-16,fable-architect-session,2026-07-19,proposed
+luxse,XOA1,other,low,code,19,"Mixed transparency filings: financial reports, home member state disclosures","n=19; REVIEW: genuinely mixed, do not force",2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,ACS,annual_report,high,code,12,Observed as annual financial reports incl. Form 18-K and amendments,,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,AGR,notice,high,code,1,Agreement in principle announcement,n=1,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,CIR,prospectus,high,code,6,Observed as publication of offering circular,,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,DOC,prospectus,low,code,2,"Observed mixed: one offering circular, one pricing supplement",n=2; REVIEW: override shipped for the pricing supplement,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,FCA01,base_prospectus,high,code,37,FCA submission category observed as base prospectus (debt),,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,FCA07,final_terms,medium,code,60,FCA submission category observed as final terms / pricing supplements,Titles mostly opaque (Issuer Document); informative ones are pricing supplements,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,FCA14,base_prospectus,medium,code,1,Observed as registration document,n=1; same Teal gate as luxse D005,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,IOD,notice,medium,code,8,Observed as issue-of-debt announcements,Two headlines announce OC/final terms publication; review candidates,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,LIS,notice,high,code,62,Observed as applications for admission to the Official List,,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,MSCL,notice,low,code,40,"Miscellaneous: admission forms, buybacks, powers of attorney, contact details",REVIEW: overrides shipped for an offering memorandum and a drawdown prospectus,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,ODP,base_prospectus,high,code,1,Observed as base offering circular for a GMTN programme,n=1,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,PDI,prospectus,high,code,113,FCA NSM headline: publication of a prospectus / offering circular,,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,PFT,final_terms,high,code,251,FCA NSM headline: publication of final terms / pricing supplement,,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,PRE,annual_report,medium,code,2,Observed as financial reports,n=2,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,PSP,supplement,high,code,67,FCA NSM headline: publication of supplementary prospectus,,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,STR,notice,high,code,1,Investor presentation slides,n=1,2026-07-16,fable-architect-session,2026-07-19,proposed
+nsm,TEN,notice,high,code,1,Tender offer announcement,n=1,2026-07-16,fable-architect-session,2026-07-19,proposed
+pdip,<NULL>,other,low,title_rules_only,664,PDIP rows carry no doc_type; classification is by title rules only,664 rows; unmatched rows stay unclassified and flagged for review,2026-07-16,fable-architect-session,2026-07-19,proposed
+pdip,Bond,prospectus,medium,title_rules_then_code,58,PDIP instrument label; observed as prospectuses and prospectus supplements,Title rules run first (supplements reroute); fallback prospectus,2026-07-16,fable-architect-session,2026-07-19,proposed
+pdip,Bond; Loan,other,low,title_rules_then_code,1,PDIP composite label; the single member is a restructuring agreement,n=1; title rules route it to restructuring_document,2026-07-16,fable-architect-session,2026-07-19,proposed
+pdip,Loan,loan_documentation,high,title_rules_then_code,100,PDIP instrument label; observed as loan agreements and related contracts,Title rules run first; this code is the fallback when no rule matches,2026-07-16,fable-architect-session,2026-07-19,proposed
