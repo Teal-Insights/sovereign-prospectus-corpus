@@ -12,13 +12,21 @@ The NORMATIVE spec:
 | Wave | Branches | Venue | Notes |
 |---|---|---|---|
 | 1, day one, parallel | D0 spike, D1 PDIP hashes, D2 contract core, D4 country refactor, D6 parquet policy | D0/D2/D4: Claude Code (D2 on Fable 5 xhigh, D0/D4 Opus 4.8 max). D1/D6: Codex, reasoning high | Separate worktrees, separate sessions. D2 merges first among code branches. |
-| 2 | D3 shims+parity, D5 filing_url (both after D2); D7 dedup (after D6; its audit task waits for D1); D8 allowlist (after D0) | D3/D5: Codex high. D7: Claude Code Fable 5 xhigh. D8: Claude Code Opus 4.8 max | D7 rehearses all DB steps on a copy first. D8 merge waits for Teal review (governance gate). |
-| 3 | D9 Dublin adapter | Claude Code, Opus 4.8 max | After D2+D8; rebase over D3 when it lands. Merges scheduled=false. |
+| 2 | D3 shims+parity, D5 filing_url (both after D2); D7 dedup (after D6; its audit task waits for D1 merged + rebased over); D8 allowlist (after D0 MERGED) | D3/D5: Codex high. D7: Claude Code Fable 5 xhigh. D8: Claude Code Opus 4.8 max | D7 rehearses all DB steps on a copy; its real-DB migration runs later as D10 task 0. D8 merge waits for Teal review (governance gate). |
+| 3 | D9 Dublin adapter | Claude Code, Opus 4.8 max | After D2+D3+D8 (D3 is a mandatory base). Merges scheduled=false. |
 | 4 | D10 skeleton + backfill | Claude Code, Opus 4.8 max | After D1, D3, D4, D5, D6, D7, D9 all merged. Local, long-running. |
 | 5 | D11 how-to + paper re-check | Claude Code, Opus 4.8 max | After D10. |
 
 Every branch merges via the Stage 4 review gate (fresh session, council
 code review), never by the executor. All handoff comments go on TEA-1035.
+
+**DATA MOUNT (applies to every operational branch: D1, D3, D4, D5, D7,
+D10):** fresh worktrees contain NO data/ (gitignored), and DuckDB
+silently auto-creates a missing DB file. Before any data step:
+`ln -s /Users/teal_emery/code/sovereign-prospectus-corpus/data data`,
+then the identity guard: `SELECT count(*) FROM documents` against
+data/db/corpus.duckdb must return roughly 9,795; ANY other number
+(especially 0) is a STOP, not a proceed.
 
 ---
 
@@ -74,11 +82,14 @@ docs/superpowers/plans/2026-07-19-source-onboarding-dublin-plan.md and
 the hash-coverage precondition paragraph of spec s5.8. Follow the tasks
 in order, test-first.
 
-HARD RULES: rehearse on a DB copy (/tmp/corpus-rehearsal.duckdb) before
-touching data/db/corpus.duckdb; data/ is never committed; the real run
-updates ONLY documents.file_hash (and file_size_bytes where NULL) for
-pdip rows; idempotent re-run proven. If more than ~5% of the 823
-originals are unresolvable, STOP before the real run. No em-dashes.
+HARD RULES: mount data/ and run the identity guard per the DATA MOUNT
+note above BEFORE any data step; rehearse on a DB copy
+(/tmp/corpus-rehearsal-d1.duckdb) before touching
+data/db/corpus.duckdb; data/ is never committed; the real run updates
+ONLY documents.file_hash for pdip rows (the documents table has NO
+file_size_bytes column; do not record sizes, do not add columns);
+idempotent re-run proven. If more than ~5% of the 823 originals are
+unresolvable, STOP before the real run. No em-dashes.
 
 DoD: coverage query pasted into
 docs/coverage/pdip-hash-backfill-2026-07.md (pdip missing == absent-list
@@ -119,10 +130,14 @@ values exactly as spec s6 assigns; docs/sources.md entries marked
 "pending Teal confirmation". No em-dashes.
 
 DoD (all of it): AC 1 toysource end-to-end test green through the REAL
-CLI; contract suite green; corpus source list prints six rows against
-real config; alarm/ESMA/pending-status config assertions (ACs 11, 12,
-19) green; full CI green; no legacy behavior change (prove with the
-existing per-source tests untouched and green).
+CLI; contract suite green; corpus source list prints FIVE rows against
+real config (four active tier-b + lse pending; dormant esma never
+prints); registry validation is TIERED per the plan (tier-a full
+protocol, tier-b importability-only until D3); alarm/ESMA/pending-status
+config assertions (ACs 11, 12, 19) green; full CI green; no legacy
+behavior change (prove with the existing per-source tests untouched and
+green); PR body requests Teal's ToS wording confirmation and records
+the #6/#18 issue dispositions per the plan.
 
 Handoff comment on TEA-1035 (Did/Why/Next/Pointer) + metrics line:
 | D2 | fable-5 xhigh | 1 | 0 | pending | <wall time> |
@@ -153,9 +168,14 @@ modules, then lock it with tests, then migrate.
 HARD RULES: behavior parity is the whole point: flags, defaults, NSM
 delay split, EDGAR CONTACT_EMAIL User-Agent and 660s sleep, abort exit
 codes (nsm/edgar 0+warning, pdip/luxse 1), manifest FORMAT unchanged.
-Status translation happens at the reporting boundary only. The live
-smoke (one migrated source, real run, expect mass skipped_exists) is
-DoD-blocking. LuxSE mini-spike timeboxed ~30 min. No em-dashes.
+Per-source cli_options are DECLARED in config.toml (in your file list),
+never hardcoded in cli.py. You also tighten the registry's tier-b
+validation from importability-only to shim shape. Status translation
+happens at the reporting boundary only. The live smoke (one migrated
+source, real run, expect mass skipped_exists) is DoD-blocking and
+REQUIRES the DATA MOUNT + identity guard first: Tier B skips are
+disk-keyed, and an unmounted worktree would re-download the window.
+LuxSE mini-spike timeboxed ~30 min. No em-dashes.
 
 DoD: parity tests + contract Tier B rows green; live smoke stats pasted
 in the PR; four command bodies collapsed into generic dispatch;
@@ -289,18 +309,26 @@ suppression, fixed-point equivalence class, forward-only. The plan pins
 the design-open points: documents.suppressed_at as the suppression
 predicate, the suppression_records table, advisory API names.
 
-HARD RULES: REHEARSE every schema/backfill/audit step on
-/tmp/corpus-rehearsal.duckdb before the real DB; data/ never committed;
-the audit run is READ-ONLY; no retroactive merges; scope_status is
-NEVER used for demotion; the invariant query (every non-demoted,
-non-suppressed document has exactly one original listing) must return
-zero violations. No em-dashes.
+HARD RULES: mount data/ + identity guard per the DATA MOUNT note; the
+schema migration and listings backfill are REHEARSAL-ONLY in this
+branch, on /tmp/corpus-rehearsal-d7.duckdb (the real-DB run is D10's
+task 0, post-review-gate); the ONLY real-DB touch you make is the
+READ-ONLY audit; data/ never committed; no retroactive merges;
+scope_status is NEVER used for demotion; suppressed_at and
+suppression_records are synchronized PROJECTIONS of the platform's
+suppressions ledger (ship apply_suppressions() per the plan); the
+invariant query (every non-demoted, non-suppressed document has exactly
+one original listing) plus the cardinality assertions must return clean
+on the rehearsal DB. No em-dashes.
 
-DoD: every named AC demonstrated by a named test; backfill executed on
-the real DB after rehearsal; docs/coverage/duplicate-audit-2026-07.md
-committed; decisions file + idempotent corpus dedup apply working;
-snapshot emits the additive duplicate_of column at SCHEMA_VERSION 1;
-full CI green; invariant query output pasted in the PR.
+DoD: every named AC demonstrated by a named test (including the dedup
+attach + idempotent re-ingest cases INSIDE tests/sources/
+test_contract.py and the listings-vs-documents counter test);
+docs/coverage/duplicate-audit-2026-07.md committed (read-only run,
+after rebasing over merged D1); decisions file + idempotent corpus
+dedup apply working; snapshot emits the additive duplicate_of column at
+SCHEMA_VERSION 1; full CI green; rehearsal invariant + cardinality
+output pasted in the PR.
 
 Handoff on TEA-1035 + metrics line:
 | D7 | fable-5 xhigh | 1 | 0 | pending | <wall time> |
@@ -351,7 +379,7 @@ D0's mechanism; classification confidence is low for a large fraction
 
 ---
 
-## D9 Dublin adapter. Claude Code, Opus 4.8 max. After D2 + D8 (Teal-approved).
+## D9 Dublin adapter. Claude Code, Opus 4.8 max. After D2 + D3 + D8 (Teal-approved).
 
 ```
 You are the EXECUTOR for branch D9 (TEA-1035): the Euronext Dublin
@@ -362,8 +390,9 @@ source adapter).
 
 Repo: /Users/teal_emery/code/sovereign-prospectus-corpus
 Worktree branch lte/tea-1035-d9-dublin-adapter off origin/main (must
-contain merged D2 and Teal-approved D8; rebase over D3 if it lands
-mid-branch). Read YOUR plan section "D9" and spec s7.2/7.3/7.5 + s5.13.
+contain merged D2, merged D3, and Teal-approved D8; D3 is a mandatory
+base, you ride its generic dispatch). Read YOUR plan section "D9" and
+spec s7.2/7.3/7.5 + s5.13.
 
 THE BAR (spec s5.13, enforced): your diff touches EXACTLY
 src/corpus/sources/dublin.py, tests/sources/test_dublin.py + fixtures,
@@ -372,8 +401,13 @@ docs/sources.md Dublin section (Teal-confirmed wording from D0). If you
 need to edit cli.py, the runner, the snapshot builder, or the schema,
 THE CONTRACT FAILED: stop and report the defect, do not work around it.
 Registration is not activation: scheduled = false. Adapters never write
-files and never sleep (the runner owns both). Review-lane items get
-STABLE detected dates. No em-dashes.
+ANYTHING outside state_dir/staged/<run-id>/ and never sleep (the runner
+owns both). Review-lane items go through the STAGED channel: read live
+review_lane.jsonl read-only, merge append-if-absent keyed on normalized
+name (first_detected stays stable), write the merged file to
+state_dir/staged/<run-id>/review_lane.jsonl; never write live state.
+Reach the allowlist ONLY via ReferenceData.table("dublin_issuers"). No
+em-dashes.
 
 DoD: contract suite green including Dublin (Tier A runner assertions
 now bind to a real source); end-to-end fixture run through the REAL CLI
@@ -407,11 +441,18 @@ section "D10", spec s13 (the skeleton, executed clause by clause), and
 spec s7.4 (dedup expectations).
 
 HARD RULES: no product code in this branch; any defect routes back as a
-stop-and-report. Run locally with politeness delay 1.0s, caffeinate for
-the long run, run id dublin-backfill-<date>, circuit breaker armed and
-never loosened. Pick the skeleton's dedup issuer EMPIRICALLY (query the
-post-D1 corpus for overlap candidates; Dublin-vs-PDIP is the spec's
-likelier pair). Local snapshot builds to an alternate dir only. No
+stop-and-report. Mount data/ + identity guard per the DATA MOUNT note,
+and apply the plan's canonical-state gate BEFORE any mutation. YOUR
+TASK 0 (new, post-review-gate execution of D7's rehearsed steps): dated
+backup copy of corpus.duckdb, apply the schema migration, run the
+original-listing backfill, paste the invariant + cardinality evidence;
+any violation is a STOP. Then run locally with politeness delay 1.0s,
+caffeinate for the long run, run id dublin-backfill-<date>, circuit
+breaker armed and never loosened. Pick the skeleton's dedup issuer via
+the READ-ONLY overlap scout (metadata-level against post-D1 holdings;
+Dublin-vs-PDIP is the spec's likelier pair); the cross-source
+attestation clause may close after the backfill if the scouted issuer
+yields no pair. Local snapshot builds to an alternate dir only. No
 em-dashes.
 
 THE STOP-AND-ASSESS RULE (spec s7.4, not waivable): if the backfill
@@ -459,8 +500,11 @@ Record either the explicit friction-delta list or "holds as specified"
 with checked items enumerated, in the PR body. (The architect posts the
 outcome to TEA-1053/TEA-1055; you do not touch those issues.)
 
-DoD: how-to merged from real artifacts; paper re-check recorded; full
-CI green (docs-only, run anyway).
+DoD: how-to merged from real artifacts; paper re-check recorded;
+docs/sources.md carries ZERO "pending Teal confirmation" markers (if
+any remain from D2/D9, obtain Teal's confirmation via this PR and clear
+them; this is the named close-out for spec s14's Teal-confirmed line);
+full CI green (docs-only, run anyway).
 
 Handoff on TEA-1035 + metrics line:
 | D11 | opus-4.8 max | 1 | 0 | pending | <wall time> |
