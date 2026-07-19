@@ -1,12 +1,12 @@
 doc_class,display_name,definition,proposed_by,proposed_date,status
-prospectus,Prospectus,"Standalone disclosure document for a specific offer or listing (incl. offering circulars/memoranda, listing particulars, drawdown and unitary prospectuses)",fable-architect-session,2026-07-19,proposed
-base_prospectus,Base prospectus,Programme-level disclosure under which tranches are issued later; no tranche pricing,fable-architect-session,2026-07-19,proposed
-supplement,Supplement,Amends or updates an existing prospectus or base prospectus,fable-architect-session,2026-07-19,proposed
-final_terms,Final terms,"Completes a base prospectus for one tranche; carries the tranche economics (final terms, pricing supplements)",fable-architect-session,2026-07-19,proposed
-free_writing_prospectus,Free writing prospectus,"SEC Rule 433 offering communications, mostly final pricing term sheets",fable-architect-session,2026-07-19,proposed
-annual_report,Annual report,"Periodic or standing issuer disclosure not tied to a specific offer (18-K family, annual/interim financial reports, information statements)",fable-architect-session,2026-07-19,proposed
-notice,Notice,Exchange or regulatory announcements about issuers or instruments,fable-architect-session,2026-07-19,proposed
-loan_documentation,Loan documentation,Loan contracts and related official-lender documentation,fable-architect-session,2026-07-19,proposed
-bond_contract,Bond contract,"Contracts of bond issuance and administration: indentures, fiscal agency agreements, trust deeds, global note certificates, underwriting and subscription agreements",fable-architect-session,2026-07-19,proposed
-restructuring_document,Restructuring document,"Documents proposing, executing, or contracting liability management: exchange offer and invitation memoranda, restructuring agreements, dealer management agreements",fable-architect-session,2026-07-19,proposed
-other,Other,Reviewed and does not fit any class; always review-flagged,fable-architect-session,2026-07-19,proposed
+prospectus,Prospectus,"Standalone disclosure document for a specific offer or listing (incl. offering circulars/memoranda, listing particulars, drawdown and unitary prospectuses)",fable-architect-session,2026-07-19,approved
+base_prospectus,Base prospectus,Programme-level disclosure under which tranches are issued later; no tranche pricing,fable-architect-session,2026-07-19,approved
+supplement,Supplement,Amends or updates an existing prospectus or base prospectus,fable-architect-session,2026-07-19,approved
+final_terms,Final terms,"Completes a base prospectus for one tranche; carries the tranche economics (final terms, pricing supplements)",fable-architect-session,2026-07-19,approved
+free_writing_prospectus,Free writing prospectus,"SEC Rule 433 offering communications, mostly final pricing term sheets",fable-architect-session,2026-07-19,approved
+annual_report,Annual report,"Periodic or standing issuer disclosure not tied to a specific offer (18-K family, annual/interim financial reports, information statements)",fable-architect-session,2026-07-19,approved
+notice,Notice,Exchange or regulatory announcements about issuers or instruments,fable-architect-session,2026-07-19,approved
+loan_documentation,Loan documentation,Loan contracts and related official-lender documentation,fable-architect-session,2026-07-19,approved
+bond_contract,Bond contract,"Contracts of bond issuance and administration: indentures, fiscal agency agreements, trust deeds, global note certificates, underwriting and subscription agreements",fable-architect-session,2026-07-19,approved
+restructuring_document,Restructuring document,"Documents proposing, executing, or contracting liability management: exchange offer and invitation memoranda, restructuring agreements, dealer management agreements",fable-architect-session,2026-07-19,approved
+other,Other,Reviewed and does not fit any class; always review-flagged,fable-architect-session,2026-07-19,approved

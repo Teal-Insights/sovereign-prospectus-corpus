@@ -75,6 +75,10 @@ from official source documentation.
 
 ## Decisions for Teal (the domain gate)
 
+**RULING (Teal, 2026-07-19):** decisions 1 through 9 approved as proposed;
+decision 10 resolved to `annual_report`. All table rows flipped to
+`status=approved` in the sign-off commit on PR #128.
+
 1. **Merge prospectus and offering circular/memorandum into one class.**
    Same function, regime difference stays in the raw code. (Reviewer
    endorsed.)

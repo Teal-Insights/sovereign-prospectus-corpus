@@ -19,10 +19,13 @@
   findings; all data claims re-verified against the parquet; v0.2 applies
   the dispositions (biggest: LuxSE D318 is not code-classifiable; 947
   title-opaque docs now honestly unclassified pending text sampling).
-- **Pending Teal (the domain gate):** the 10 numbered decisions in the
-  spec, then the sign-off PR flip of `status` proposed -> approved (that
-  flip is what activates the tables for consumers; everything ships
-  inert). Kweku builds consumers on Lane A Stage 2 branches after.
+- **SIGNED OFF by Teal 2026-07-19:** decisions 1 through 9 approved,
+  decision 10 resolved to `annual_report`. All 535 table rows flipped to
+  `status=approved` (taxonomy doc now v1.0); the vocabulary is live for
+  consumers. Kweku builds consumers on Lane A Stage 2 branches next
+  (browse filter, provenance line, dedup soft key, feeds, data
+  dictionary); the 947 title-opaque D318 docs are the standing
+  text-sampling backlog.
 - **Linear:** no issue existed (the roadmap section 9 Launch 0 batch is
   still unminted); fold this into that batch when minted.
 

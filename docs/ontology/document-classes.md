@@ -1,7 +1,9 @@
 # Document classes and issuer canonicalization (ontology pilots 1 and 2)
 
-**Version:** v0.2 (2026-07-19; revised after the external reviewer pass).
-**Status:** proposed, pending Teal sign-off.
+**Version:** v1.0 (2026-07-19; v0.2 revision approved by Teal same day:
+decisions 1 through 9 approved as proposed, decision 10 resolved to the
+class name `annual_report`).
+**Status:** approved; all table rows carry `status=approved`.
 **Tables:** `src/corpus/reference/data/` (doc_classes.csv, doc_class_map.csv,
 doc_class_title_rules.csv, doc_class_overrides.csv, issuer_canonical.csv,
 issuer_entities.csv, issuer_entity_members.csv).
@@ -99,10 +101,10 @@ map_row    = doc_class_map WHERE source = documents.source
 
 Contract details consumers MUST honor:
 
-- **Status gating:** consumers read rows with `status=approved` only. Every
-  row ships as `proposed`; Teal's sign-off PR flips statuses, which is the
-  activation switch. A consumer running against all-proposed tables
-  classifies nothing, by design.
+- **Status gating:** consumers read rows with `status=approved` only. New
+  rows enter as `proposed` and classify nothing until Teal's sign-off flips
+  them; the flip is the activation switch. The v1.0 rows were approved by
+  Teal on 2026-07-19.
 - **Join key:** `documents.doc_type` joins `doc_class_map.source_code` via
   the `coalesce(doc_type, '<NULL>')` expression above; `'<NULL>'` is the
   sentinel for SQL NULL.
