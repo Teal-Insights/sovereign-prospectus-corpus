@@ -1,6 +1,30 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-18 (Lane B Stage 1 architect session: self-running corpus spec, council-reviewed 3 rounds, signed off by Teal)
+**Last updated:** 2026-07-19 (ontology pilots 1+2 architect session: doc-class vocabulary + issuer canonicalization, spec-lite, PR #128 awaiting Teal sign-off)
+
+## Session 2026-07-19 (latest): ontology pilots 1+2 spec-lite (doc classes, issuers)
+
+- **PR #128** (`lte/ontology-pilots-doc-class-issuer`): document-class
+  taxonomy (10 classes + other + explicit unclassified) derived by
+  open-to-axial coding over the published snapshot (2026-07-16, 9,795
+  docs); versioned mapping tables under `src/corpus/reference/data/`
+  (code map, per-source title rules, overrides, class registry); issuer
+  canonicalization (268 raw names to 146 entities, members bridge, 41
+  LEIs from GLEIF exact-alias matches + NSM seeds with lei_status).
+  Taxonomy + normative consumer contract + governance in
+  `docs/ontology/document-classes.md`; spec-lite with method trail and
+  dispositions in `docs/superpowers/specs/2026-07-19-ontology-pilots-*`.
+- **Review:** spec-lite mode (one external pass, no council). Codex
+  (gpt-5.6-sol xhigh, read-only) returned NOT SOUND on v0.1 with 12
+  findings; all data claims re-verified against the parquet; v0.2 applies
+  the dispositions (biggest: LuxSE D318 is not code-classifiable; 947
+  title-opaque docs now honestly unclassified pending text sampling).
+- **Pending Teal (the domain gate):** the 10 numbered decisions in the
+  spec, then the sign-off PR flip of `status` proposed -> approved (that
+  flip is what activates the tables for consumers; everything ships
+  inert). Kweku builds consumers on Lane A Stage 2 branches after.
+- **Linear:** no issue existed (the roadmap section 9 Launch 0 batch is
+  still unminted); fold this into that batch when minted.
 
 ## Session 2026-07-18 (latest): Lane B Stage 1 spec (self-running corpus)
 
