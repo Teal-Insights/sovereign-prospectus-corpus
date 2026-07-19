@@ -1,6 +1,6 @@
 # SESSION-HANDOFF.md
 
-**Last updated:** 2026-07-19 (Lane B Stage 2 architect session: branch plan + executor prompts, council-reviewed 2 rounds)
+**Last updated:** 2026-07-19 (two Stage 2 architect sessions, both merged: Lane B branch plan LB0-LB11 + executor prompts; source-onboarding + Dublin branch plan D0-D11 + spec hygiene)
 
 ## Session 2026-07-19 (latest): Lane B Stage 2 branch plan + executor prompts
 
@@ -40,7 +40,40 @@
 - **Next:** merge the plan PR, then dispatch wave 0 (LB1-LB5 Claude
   Opus max sessions + LB0 Codex) per the prompts file's schedule.
 
-## Session 2026-07-19 (latest): source-onboarding pattern + Dublin Stage 1 spec
+## Session 2026-07-19 (latest): source-onboarding + Dublin Stage 2 branch plan
+
+- **Spec is SIGNED** (Teal, merged as PR #129) and this session's PR
+  carries the Stage 2 artifacts on `lte/tea-1035-stage2-plan`:
+  `docs/superpowers/plans/2026-07-19-source-onboarding-dublin-plan.md`
+  (branches D0-D11) and `...-executor-prompts.md` (paste-ready, with
+  dispatch schedule). Spec hygiene in the same PR: round-2 S10 row
+  annotated "(superseded by round-3 I5)"; PR #129's Codex P2 folded
+  into s5.8 (suppressed newcomers join the ingest skip set as a third
+  leg; disposition in s18); fresh-context re-verification of all seven
+  round-3 closures (7/7 present; four mechanical secondary-location
+  residuals fixed, recorded in s18); spec header now says signed.
+- **Branches:** D0 spike, D1 PDIP hash backfill (precondition), D2
+  contract core (L, Fable), D3 Tier B shims + parity + live smoke, D4
+  country/obligor refactor, D5 filing_url fallback, D6 parquet policy,
+  D7 dedup pass + audit (L, Fable; real-DB migration deferred to D10
+  task 0), D8 allowlist sweep (Teal review gate), D9 Dublin adapter
+  (merges scheduled=false), D10 skeleton + EXECUTED backfill (zero
+  cross-source pairs leaves it BLOCKED per s7.4), D11 how-to + ESMA/SGX
+  paper re-check. Wave 1 parallel: D0, D1, D2, D4, D6.
+- **Council PLAN review:** Codex xhigh NOT SOUND (4C/7I/3S) + fresh
+  Claude external SOUND WITH CHANGES (2C/6I/10S); convergent on the
+  worktree data-mount gap, the review-lane staged channel, and
+  suppression single-authority (projections of Lane B's ledger). All
+  accepted findings applied; one refuted with evidence; full
+  disposition table in the plan doc.
+- **Linear:** TEA-1035 reopened to In Progress (PR #129's merge had
+  auto-closed it) with the Stage 2 trail; seam deltas + the four Lane B
+  pins recorded on TEA-1042; pattern-planned pointers on
+  TEA-1053/TEA-1055.
+- **Pending:** merge this PR first (executors branch off a main that
+  has the plan), then dispatch wave 1 per the prompts doc's schedule.
+
+## Session 2026-07-19 (earlier): source-onboarding pattern + Dublin Stage 1 spec
 
 - **Spec at v3.1, AWAITING Teal sign-off**, on branch
   `feature/source-onboarding-dublin-spec`:
