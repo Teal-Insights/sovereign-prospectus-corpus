@@ -1,7 +1,7 @@
 # Self-Running Corpus: Lane B Stage 1 Spec
 
 **Date:** 2026-07-18 (v3; council rounds 1 and 2 applied)
-**Status:** Council round 1 (Codex xhigh NOT SOUND, Opus max SOUND WITH CHANGES, Sonnet max SOUND WITH CHANGES) fully triaged into v2; round 2 (Codex xhigh delta verification, NOT SOUND on five new seams) fully triaged into v3; round 3 final check (Codex xhigh): 11 of 12 closures CLOSED, zero new findings, one PARTIAL (publish/takedown activation race) closed in this v3.1, verdict SOUND WITH CHANGES. Awaiting Teal sign-off. Dispositions in section 22.
+**Status:** Council round 1 (Codex xhigh NOT SOUND, Opus max SOUND WITH CHANGES, Sonnet max SOUND WITH CHANGES) fully triaged into v2; round 2 (Codex xhigh delta verification, NOT SOUND on five new seams) fully triaged into v3; round 3 final check (Codex xhigh): 11 of 12 closures CLOSED, zero new findings, one PARTIAL (publish/takedown activation race) closed in this v3.1, verdict SOUND WITH CHANGES. **Signed off by Teal 2026-07-18.** Dispositions in section 22. Next: Stage 2 planning, separate session.
 **Owner:** Teal Emery. **Architect session:** Fable 5, Claude Code, per Project Shell Runbook v0.2 Stage 1
 **Linear:** TEA-1031 (supersedes TEA-906 when refresh.yml lands)
 **Grounding:** 2026-07-17 consolidation roadmap sections 4/6/9/10/11; 2026-07-06 council audit; code verified against `src/corpus/cli.py`, `src/corpus/db/{ingest,pages,markdown}.py`, `src/corpus/snapshot.py`, `src/corpus/parsers/`, `src/corpus/sources/*.py`, `prospectus-web-ti/scripts/{build.sh,upload-snapshot.sh,provision-data-host.sh}`, workflows in both repos; interview with Teal 2026-07-18 (five decisions in section 3); GitHub/AWS/Netlify doc claims web-verified where cited
