@@ -1,12 +1,12 @@
 # Self-Running Corpus: Lane B Stage 1 Spec
 
-**Date:** 2026-07-18
-**Status:** Draft for council SPEC review (Codex xhigh required + Opus max external + Gemini via agy)
+**Date:** 2026-07-18 (v2, revised same day after council round 1)
+**Status:** Council-revised draft. Round 1: Codex gpt-5.6-sol xhigh NOT SOUND; Opus 4.8 max SOUND WITH CHANGES; Sonnet 5 max SOUND WITH CHANGES. All CRITICALs and convergent IMPORTANTs applied; disposition table in section 22. Awaiting round 2 delta check and Teal sign-off.
 **Owner:** Teal Emery. **Architect session:** Fable 5, Claude Code, per Project Shell Runbook v0.2 Stage 1
 **Linear:** TEA-1031 (supersedes TEA-906 when refresh.yml lands)
-**Grounding:** 2026-07-17 consolidation roadmap sections 4/6/9/10/11; 2026-07-06 council audit tech-debt table; code verified against `src/corpus/cli.py`, `src/corpus/snapshot.py`, `src/corpus/parsers/`, `prospectus-web-ti/scripts/{build.sh,upload-snapshot.sh}`, `.github/workflows/` in both repos; interview with Teal 2026-07-18 (five decisions recorded in section 3)
+**Grounding:** 2026-07-17 consolidation roadmap sections 4/6/9/10/11; 2026-07-06 council audit; code verified against `src/corpus/cli.py`, `src/corpus/db/{ingest,pages,markdown}.py`, `src/corpus/snapshot.py`, `src/corpus/parsers/`, `prospectus-web-ti/scripts/{build.sh,upload-snapshot.sh,provision-data-host.sh}`, workflows in both repos; interview with Teal 2026-07-18 (five decisions in section 3); GitHub/AWS/Netlify doc claims web-verified where cited
 
-**BLUF:** A sovereign files a prospectus; within 48 hours it is on the site, rendered, and nobody at Teal Insights touched anything except one morning PR merge. This spec makes that real with a daily GitHub Actions refresh that is fail-closed at every seam: S3-canonical state so runs are incremental, a parse-path fix gated BEFORE the scheduler exists so automation cannot mint monospace documents, PR-gated publishing with MANIFEST-last activation and a new-slug smoke, alarms that reach Teal's inbox without vigilance, and a Mac mini feeder contract that keeps GHA the sole writer. Automation that creates cleanup work is worse than manual; every requirement below is testable against that bar.
+**BLUF:** A sovereign files a prospectus; within 48 hours it is on the site, rendered, and nobody at Teal Insights touched anything except one morning PR merge. The design: a daily GitHub Actions refresh builds an immutable candidate snapshot generation on a private bucket; a human-merged PR approves it; a publish workflow copies it to a public generation-addressed prefix, deploys the site against it, then activates it with a single compare-and-swap pointer write. Every mutable surface is a small pointer (state pointer, live MANIFEST); everything heavy is immutable and generation-addressed, so activation is atomic, rollback is a pointer restore plus a paired Netlify deploy restore, and no cache can be poisoned. Three correctness gates merge before the scheduler exists. Alarms reach Teal's inbox through GitHub issue notifications with a cross-repo dead-man check. Automation that creates cleanup work is worse than manual; every requirement is testable against that bar.
 
 ## 1. The user experience this buys
 
@@ -16,7 +16,7 @@
 | Teal | Runs the pipeline by hand, watches it | Merges one PR most mornings (~2 min); reads an alarm email when something breaks; nothing else recurring |
 | Funders / forkers | "Trust us, we run it" | Every refresh is a public Actions run on the open repo; the register commits itself |
 
-## 2. Locked decisions (inherited; this spec builds on them, does not reopen them)
+## 2. Locked decisions (inherited; built on, not reopened)
 
 1. Daily cadence (decided 2026-07-17).
 2. GHA spine; Mac mini feeder lane for bot-walled sources only.
@@ -26,15 +26,13 @@
 
 ## 3. Decisions made in the Stage 1 interview (2026-07-18)
 
-1. **State home: S3-canonical.** Pipeline state (DuckDB, manifests, originals archive) moves to a private S3 bucket; the Mac retires from the write path. Section 5.
+1. **State home: S3-canonical.** Pipeline state moves to a private S3 bucket; the Mac retires from the write path (section 5).
 2. **v1 source scope: EDGAR + NSM daily; LuxSE joins by spike outcome; PDIP weekly reconcile only; LSE excluded until TEA-1008, register row marked "adapter pending."**
-3. **Alert channel: email to lte@tealinsights.com**, delivered via GitHub issue notifications (section 10), no SMTP secret to rot.
-4. **Merge cadence: daily-ish.** Teal merges the refresh PR most mornings; the public SLO can honestly say 48 hours for API sources.
-5. **Non-goals: all eight confirmed** (section 13).
+3. **Alert channel: email to lte@tealinsights.com** via GitHub issue notifications (section 14).
+4. **Merge cadence: daily-ish**; the public SLO can honestly say 48 hours for API sources.
+5. **Non-goals: all eight confirmed** (section 16), with one council-driven carve-out recorded there (the generation-addressed data contract touches the explorer data layer and wrapper build script; UI untouched).
 
 ## 4. Architecture overview
-
-Two workflows in the corpus repo plus one changed workflow in the wrapper repo:
 
 ```mermaid
 flowchart LR
@@ -42,214 +40,273 @@ flowchart LR
     R[refresh.yml daily cron] --> PR[refresh PR on branch refresh/daily]
     PR -- Teal merges --> P[publish.yml on push to main]
     W[reconcile.yml weekly]
+    T[takedown.yml approval-gated dispatch]
   end
-  subgraph wrapper repo
+  subgraph wrapper repo private
     LS[live-smoke.yml 6h cron + freshness assertions]
   end
-  R -- stage generation --> S3D[(data bucket generations/)]
-  P -- MANIFEST-last copy --> S3L[(data bucket live prefix)]
-  P -- build hook --> N[Netlify rebuild] --> SM[new-slug smoke]
-  R <--> ST[(pipeline bucket state/)]
-  M[Mac mini feeder, future] -- incoming/ only --> ST
+  R -- immutable candidate --> PB[(pipeline bucket, private)]
+  P -- copy approved generation --> DG[(data bucket generations/, public immutable)]
+  P -- deploy against generation --> N[Netlify] --> F[CAS pointer flip: MANIFEST] --> SM[new-slug smoke]
+  R -- health.json only --> DH[(data bucket health/)]
+  M[Mac mini feeder, future] -- incoming/ only --> PB
 ```
 
-- **refresh.yml** (daily cron + dispatch): lock, restore state, discover/download/parse/ingest new documents, regenerate the coverage register, build the snapshot, stage a complete immutable generation on the data bucket, push state, commit register + run metadata to `refresh/daily`, open or update the single refresh PR.
-- **publish.yml** (on merge to main touching the refresh run file): copy the approved generation into the live prefix with MANIFEST last, fire the Netlify build hook, poll the deploy, run the new-slug smoke, auto-roll back MANIFEST + parquet on smoke failure, alarm on any failure.
-- **reconcile.yml** (weekly): full-window re-discovery, PDIP check, state integrity audit, generation pruning. Monthly deep sweep is the same workflow with `deep=true`.
-- **live-smoke.yml** (wrapper, exists): gains MANIFEST-age and per-source freshness assertions. It is the cross-repo dead-man switch: it alarms even when the corpus repo's automation is entirely dead.
+Core invariants, each load-bearing:
 
-Nothing publishes without a human merge. Every failure path ends in an alarm or a no-op, never a partially published site.
+1. **Everything heavy is immutable and generation-addressed.** Snapshot text, parquet, register, and ledger live at `prospectus/generations/<gen>/...` and are never overwritten. The live site is defined by one small mutable object, `prospectus/snapshot/MANIFEST.json` (no-store), which names the active generation. Stable-URL overwrites of parquet/text no longer exist, so the CDN cache-poisoning class (new bytes under an old token, or old bytes under a new token) is closed by construction, and rollback needs no CloudFront invalidation.
+2. **Candidates are private until merged.** refresh.yml stages candidates on the private pipeline bucket. Nothing publicly fetchable changes before the human merge (round-1 council catch: v1 staged candidates on the public bucket, defeating the gate).
+3. **Every mutable pointer write is fenced.** The state pointer, the run lock, and the live MANIFEST are updated with conditional writes (If-Match / If-None-Match), so racing writers fail loudly instead of interleaving.
+4. **refresh.yml never touches the public snapshot or generations prefixes.** Its only public write is `prospectus/health/refresh.json` (liveness beacon, no-store). publish.yml owns public data mutations; takedown.yml owns deletions.
 
-## 5. State: S3-canonical, single writer
+## 5. State: S3-canonical, immutable revisions, fenced single writer
 
-Today the refresh inputs exist only on Teal's Mac: `corpus.duckdb` 7.1 GB, `data/original` 7.9 GB, `data/manifests` 9.5 MB. A hosted runner starts empty, so state gets a canonical cloud home.
+Refresh inputs today exist only on Teal's Mac: `corpus.duckdb` 7.1 GB, `data/original` 7.9 GB, `data/parsed` 605 MB, `data/manifests` 9.5 MB. A hosted runner starts empty.
 
-**New private bucket `ti-sovtech-pipeline`** (separate from the public data host so no bucket-policy interaction can expose it; Block Public Access on; versioning on):
+**New private bucket `ti-sovtech-pipeline`** (separate from the public data host; Block Public Access on; versioning on with a 14-day noncurrent-version expiration lifecycle rule so daily DB pushes cannot silently accrue a terabyte of dead versions):
 
 ```
-state/corpus.duckdb.zst      the database, zstd-compressed
-state/manifests/*.jsonl      discovery/download manifests (the durable record of holdings)
-state/STATE.json             tiny commit pointer: db sha256, size, updated_at, schema rev
-originals/{storage_key}.{ext}  append-only archive of source documents
-incoming/{source}/...        Mini feeder staging (empty until a walled source needs it)
-locks/refresh.lock           single-writer lock object
+state/revisions/<run_id>/corpus.duckdb.zst   immutable per-run state revision
+state/revisions/<run_id>/manifests.tar.zst
+state/STATE.json                             pointer: revision id + sha256 of each artifact (hash of the compressed bytes) + updated_at + schema rev
+state/parsed/                                the parsed tree (jsonl + md sidecars), synced incrementally both ways
+state/suppressions.jsonl                     takedown ledger, consulted by snapshot build (section 12)
+originals/{storage_key}.{ext}                append-only source archive, streamed at download time, overwrite-tolerant PUTs (idempotent retries); watermarks advance only at state commit
+incoming/{source}/...                        Mini feeder staging (empty until a walled source needs it)
+candidates/<gen>/snapshot/                   staged snapshot generations awaiting merge
+locks/refresh.lock                           single-writer lease
 ```
 
-**Protocol.** A run reads `STATE.json` first; if the GitHub Actions cache already holds a DB with that sha, no download happens (daily runs stay warm; S3 egress only on cache miss or eviction). After ingest the run uploads `corpus.duckdb.zst`, then manifests, then `STATE.json` LAST: the pointer write is the commit, mirroring the MANIFEST-last discipline. Bucket versioning makes any torn or bad push recoverable by pointer rollback.
+**Commit protocol.** A run reads `STATE.json`, restores the named revision (Actions cache holds the DB keyed by its sha; S3 is the correctness path, cache the optimization). After ingest it uploads a NEW immutable revision under its own run id, then updates `STATE.json` with a conditional write. Because revisions are immutable and the pointer names exact keys and hashes, a cancellation mid-push leaves the old pointer naming intact old artifacts; there is no torn state to repair (round-1 fix: v1 overwrote mutable state keys before the pointer moved). Reconcile prunes state revisions, keeping the last 7.
 
-**Single writer.** The GHA `concurrency` group serializes workflow runs; the lock object guards against non-GHA writers. A local run becomes a documented takeover: acquire the lock, pull state, run, push, release (runbook section, section 15). The Mini feeder never touches `state/`; it writes `incoming/` only.
+**Fenced lock.** Acquire `locks/refresh.lock` with a conditional PUT (If-None-Match) carrying run id + timestamp. Before the `STATE.json` commit, re-read the lock and abort without committing if it no longer names this run (the zombie-takeover fence: a suspended laptop takeover that wakes after its lease was broken must not overwrite a day of fresher state). Release is owner-checked (conditional delete) in an `if: always()` step. A lock older than 7 hours may be broken only after an API check that the holding workflow run is no longer in progress. Local takeover is a documented runbook procedure using the same protocol.
 
-**Cutover (one-time, from the Mac).** Compact the DB first (7.1 GB against a 2.5 GB snapshot suggests bloat; record before/after sizes), then upload DB + manifests + the originals archive, then write STATE.json. From that moment the Mac is a consumer; a documented pull recipe refreshes the local mirror on demand.
+**Cutover (one-time, from the Mac).** Compact the DB first (`build-pages` currently drops and recreates the FTS index over the whole corpus, the likely source of the 7.1 GB vs 2.5 GB gap; record before/after sizes), upload revision 0 + parsed tree + originals archive, write STATE.json, and record the baseline counts (documents, manifests, originals objects). A cutover acceptance run on a hosted runner must restore from S3 alone and reproduce the recorded counts exactly. From then on the Mac is a consumer with a documented pull recipe.
 
 ## 6. Gate 0: the parse-path fix (merges before refresh.yml exists)
 
-**The defect, code-verified.** `cli.py:751-756` routes `.pdf` to Docling (which emits the markdown sidecar at `cli.py:867-874`), but `.htm/.html` to BeautifulSoup and `.txt` to a plain-text parser, neither of which produces markdown. `snapshot.py:_fetch_text` then serves those documents as `text_source='pages'`, which the explorer renders as raw monospace. Every future EDGAR HTML ingest would mint this defect daily; the roadmap council rated it CRITICAL. It merges as its own PR, green and deployed to the standard parse path, before any scheduler work begins.
+**The defect, code-verified.** `cli.py:751-756` routes `.pdf` to Docling (markdown sidecar at `cli.py:867-874`), but `.htm/.html` to BeautifulSoup and `.txt` to plain text, neither of which produces markdown; `snapshot.py:_fetch_text` then serves `text_source='pages'` (raw monospace). Every future EDGAR HTML ingest would mint this daily. Fix merges as its own PR before any scheduler work.
 
 **The fix.**
 
-- `.htm/.html`: keep the existing BeautifulSoup lane for page-segmented JSONL (page-break CSS splitting preserves page citations), and ADD a Docling HTML conversion producing the markdown sidecar. Docling's HTML backend is the no-ML path; Gate 0 CI asserts it runs on a bare runner with no model download.
-- `.txt`: stays plaintext by decision, not neglect. These are typewriter-era SGML filings; honest monospace is the correct rendering. Recorded here so the council and future sessions do not reopen it as a bug.
-- **Output-dir reconciliation:** the standard lane owns `data/parsed/` (`{storage_key}.jsonl` + `{storage_key}.md`). `data/parsed_docling/` (4.2 GB, the one-time reparse trees) is declared a read-only legacy archive; nothing in the refresh path reads or writes it. `build-markdown` and ingest continue to read sidecars from `parsed_dir` only.
-- Scope boundary: this gate fixes the RECURRING path for new ingests. Re-parsing the existing 51 pages-source documents is Lane A's one-off batch, out of scope here (non-goal 3).
+- `.htm/.html`: keep the BeautifulSoup lane for page-segmented JSONL (page-break CSS splitting preserves page citations) and ADD a Docling HTML conversion producing the markdown sidecar. Docling's HTML path uses its SimplePipeline, no ML models (council-confirmed credible; CI asserts no model download on a bare runner).
+- **Provenance for the dual lane:** the parsed record carries both `parse_tool`/`parse_version` (pages lane) and `markdown_tool`/`markdown_version` (sidecar lane), so a future Docling reparse campaign can identify exactly which documents which Docling version converted.
+- **Degradation, not quarantine:** if Docling HTML conversion throws on one file, the document ships pages-only with a register note; a document with usable page text is never quarantined over a missing sidecar.
+- `.txt`: stays plaintext by decision, not neglect (typewriter-era SGML filings; honest monospace). Recorded so nobody reopens it as a bug.
+- **Output-dir reconciliation:** the standard lane owns `data/parsed/`. `data/parsed_docling/` (4.2 GB legacy reparse trees) is a read-only archive; nothing in the refresh path reads or writes it.
+- Scope boundary: this fixes the RECURRING path. Re-parsing the existing 51 pages-source documents is Lane A's one-off (non-goal 3).
 
 **Acceptance (Gate 0).**
-- When the parse command processes a fixture EDGAR `.htm` with headings and a table, then `data/parsed/` contains both the JSONL and a non-empty `.md` sidecar, and the markdown contains heading syntax.
+- When the parse command processes a fixture EDGAR `.htm` with headings and a table, then `data/parsed/` contains the JSONL and a non-empty `.md` sidecar containing heading syntax, and the record names both tool/version pairs.
 - When a snapshot is built over that document, then its text JSON has `text_source='markdown'` and a non-empty TOC.
-- When the HTML lane runs in CI on a bare runner, then no Hugging Face model download occurs (assert the cache directory stays absent).
-- When a `.txt` fixture is parsed, then behavior is unchanged from today (pages lane, no sidecar).
+- When the HTML lane runs in CI on a bare runner, then no model download occurs.
+- When Docling HTML conversion fails on a fixture, then the document ships pages-only and the failure is recorded, not quarantined.
+- When a `.txt` fixture is parsed, then behavior is unchanged from today.
 
-## 7. refresh.yml: the daily run
+## 7. Gate 1: incremental-content correctness (merges before refresh.yml exists)
 
-**Trigger:** cron at an off-peak minute (e.g. `23 9 * * *` UTC) plus `workflow_dispatch` with inputs: `sources` (default `edgar,nsm`, extended to include `luxse` when the spike passes), `since` (discovery window override), `dry_run`.
-**Concurrency:** group `refresh`, cancel-in-progress true (safe: nothing in this workflow touches the live prefix).
-**Permissions:** explicit per job; `contents: write` and `pull-requests: write` for the PR job; `id-token: write` for AWS OIDC. Repo-level default stays read-only.
+Round-1 council (all three seats, independently) proved the current pipeline cannot run incrementally on a stateless runner:
 
-**Steps, in order (each step's failure alarms and aborts; no step leaves the site half-changed because this workflow never touches the live prefix):**
+1. **`corpus ingest` loads manifests only**; `build-pages` and `build-markdown` are separate commands (`cli.py:1262`, `cli.py:1297`) that populate `document_pages`, the FTS index, and `document_markdown`. A refresh sequence omitting them publishes documents with NO text at all. The canonical sequence is now explicit: ingest, content update, build-pages, build-markdown, snapshot.
+2. **Ingest never updates**: `_insert_document` skips any existing `storage_key` unconditionally. A sovereign re-filing a corrected supplement under the same native id would be re-downloaded, re-parsed, and then silently discarded at the door, serving superseded text forever. Gate 1 adds an update path: when a document's stored source hash (`file_hash`, which already exists in download records; the spec's `source_sha256` is this field, named once) differs, ingest transactionally replaces the document row and its derived `document_pages`/`document_markdown` rows.
+3. **Parse-skip is local-file-existence-based** (`cli.py:801-803`); with the parsed tree absent it would re-parse the entire corpus. Resolved twice over: the parsed tree lives in state (`state/parsed/`, synced incrementally), and the 200-document budget applies only to documents that are new or hash-changed.
+4. **`build-pages` gains a `--skip-fts` flag**: the daily run skips the full-corpus FTS drop-and-recreate (nothing in the snapshot consumes it; it is the main DB-bloat source); weekly reconcile rebuilds it.
+5. **Slug-collision quarantine:** `build_snapshot` raises on slug collisions today, which in a daily loop would abort every run forever while burning API budget. Gate 1 detects collisions at ingest, quarantines the second document with a distinct register reason and alarm, and lets the run proceed.
+
+**Acceptance (Gate 1).**
+- When a fixture document's source bytes change, then ingest replaces its row and derived rows, and the rebuilt snapshot serves the new text (restated AC for the old inert "source-hash change detection").
+- When the same source bytes are seen again, then no re-download, no re-parse, and no derived-row churn occur.
+- When two distinct storage keys normalize to one slug, then the second is quarantined with its own register reason and the run completes green.
+- When the daily sequence runs on a fixture corpus, then `document_pages` and `document_markdown` are populated for new documents and the FTS index is untouched.
+
+## 8. Gate 2: generation-addressed data contract (merges before refresh.yml exists)
+
+The MANIFEST gains `data_base` (the generation prefix URL) and the snapshot client and wrapper `build.sh` resolve parquet/text URLs from it, falling back to legacy stable URLs when absent (backward compatible; SCHEMA_VERSION handling per the parquet-as-API contract: additive field, coordinated bump). This is the one council-driven scope carve-out beyond Lane B's original perimeter: a data-layer change in `explorer-web` and the wrapper build script, no UI change. It is what makes activation a single pointer write and closes the cache-poisoning class, so it gates the scheduler.
+
+**Acceptance (Gate 2).** When the deployed site reads a MANIFEST with `data_base`, then all parquet and text fetches go to the generation prefix; when it reads one without, legacy URLs still work; the fixture CI covers both.
+
+## 9. refresh.yml: the daily run
+
+**Trigger:** cron at an off-peak minute (e.g. `23 9 * * *` UTC; GHA cron is UTC, no DST exposure) plus `workflow_dispatch` with inputs `sources` (default `edgar,nsm`; `luxse` added when the spike passes), `since`, `dry_run`.
+**Concurrency:** group `refresh`, `cancel-in-progress: false` (queued, never cancelled: cancelling a lock-holder mid-run orphans the lease; round-1 fix).
+**Permissions:** explicit per job; `contents: write`, `pull-requests: write`, `actions: write` (to dispatch CI), `id-token: write` for AWS OIDC. Repo default read-only.
+
+**Steps (failure at any step alarms and aborts; nothing public changes except the health beacon):**
 
 1. Checkout (SHA-pinned actions), `uv sync --frozen`.
-2. Acquire `locks/refresh.lock` via conditional PUT with run id + timestamp; a lock older than 7 hours is stale and may be broken with a logged warning.
-3. Restore state per section 5 (cache-first, sha-verified).
-4. Discover per source with an incremental window from the state watermark. One API call per LEI/CIK per the NSM lessons; circuit breakers and rate limits from `config.toml` apply unchanged.
-5. Consume `incoming/` (validate hash, size, extension allowlist, source enum; ingest through the same path; archive consumed fragments). No-op while the feeder lane is unbuilt.
-6. Download new documents to the originals archive layout; append manifest records including `source_sha256` of the fetched bytes.
-7. Parse only documents that are new or whose `source_sha256` changed (section 12). Docling PDF weights come from an actions cache keyed on the Docling version; the HTML lane needs none. Per-run parse budget: at most 200 documents; overflow carries to the next run and the register reports `parse_backlog` (alarm at threshold 500, meaning three-plus runs behind).
-8. Ingest to DuckDB. Documents that fail parsing are ingested with a quarantine status, listed in the register, and excluded from the snapshot; they never block the run (fail-closed, not fail-loud-and-stop).
-9. Regenerate the coverage register (JSON + markdown table): per source, last successful discovery timestamp, last new document date, document counts, quarantine list with reasons, known-gap rows (LSE: "adapter pending, TEA-1008"; walled sources later: "feeder pending"). The register states holdings and known gaps; it never claims completeness (roadmap coverage-language discipline).
-10. Build the snapshot (full local regeneration; MANIFEST.json written last locally, existing discipline). The snapshot copies `register.json` alongside MANIFEST so freshness is publicly readable and the wrapper smoke can assert it.
-11. Stage a complete immutable generation at `prospectus/generations/<generated_at>/snapshot/` on the data bucket: gzip-stage locally (`gzip -n`, existing), list the live prefix once, then per text object either server-side copy from live (unchanged: local gzip MD5 equals live ETag) or upload (new/changed). Parquet, MANIFEST, and register always upload. Assert generation object count equals manifest document count plus fixed files. This is the incremental-upload fix: daily transfer is the delta, yet every generation is a complete, activatable, rollbackable snapshot.
-12. Push state (DB, manifests, STATE.json last), release the lock.
-13. Commit the regenerated register (`docs/coverage/register.json` + `docs/coverage/register.md`; NOT under `data/`, which pre-commit blocks from git) and `docs/refresh/RUN.json` (generation id, counts by source and country, sampled new slugs, hashes) to branch `refresh/daily` (force-push; the workflow rebuilds this branch from main each run). Open the PR if none is open, else the force-push updates it: **supersede-not-stack** means there is never more than one open refresh PR and it always describes the newest generation. Superseded generations are pruned by reconcile after 7 days; nothing is lost because ingested state already holds the documents and the next generation includes them.
-14. PR body: counts by source and country, register delta, three sampled new documents with links to their source filing URLs and staged text JSONs, the generation id, and the exact rollback command.
+2. Acquire the fenced lock (section 5).
+3. Restore state from the STATE.json revision (cache-first, sha-verified); sync `state/parsed/` down incrementally.
+4. Discover per source with incremental windows from state watermarks. Circuit breakers and rate limits from `config.toml` unchanged.
+5. Consume `incoming/` (validate hash, size, extension allowlist, source enum; ingest through the identical path; delete consumed fragments under GHA's incoming delete scope, keyed idempotently by fragment id recorded in state). No-op until the feeder exists.
+6. Download new documents; stream originals to `originals/` (overwrite-tolerant); record `file_hash` in manifests.
+7. Parse new or hash-changed documents through the Gate 0 path. Docling PDF weights from an Actions cache keyed on Docling version. Budget: 200 documents/run; overflow carries over and the register reports `parse_backlog`.
+8. Ingest + content update per Gate 1. Parse failures quarantine (register reason, excluded from snapshot, never block the run).
+9. Regenerate the coverage register: per source, last successful discovery, last new document date, counts, `parse_backlog` (not yet attempted) and `quarantine` (attempted, failed) as SEPARATE metrics, known-gap rows ("adapter pending, TEA-1008"; "feeder pending"). The register states holdings and known gaps, never completeness.
+10. `build-pages --skip-fts`, `build-markdown`, then snapshot build (MANIFEST written last locally; suppressions ledger consulted: suppressed documents are excluded).
+11. Compute the generation ledger: slug to sha256 of UNCOMPRESSED text JSON, plus parquet/register hashes. Diff against the ACTIVE generation's ledger (fetched by its immutable URL, so there is no read-from-mutable-live race). No delta at all: skip candidate creation entirely; the day is register-only.
+12. Stage the candidate at `candidates/<gen>/snapshot/` on the PRIVATE pipeline bucket: upload changed/new objects, server-side copy unchanged objects from the prior immutable public generation. Completeness assertion: object count equals `text_file_count` + enumerated fixed files (parquet, MANIFEST, register, ledger), and every ledger slug is present (round-1 fix: `document_count` would abort every run, since no-text documents have no text object).
+13. Upload the new state revision, fenced-commit STATE.json, release the lock.
+14. Write `prospectus/health/refresh.json` (run id, timestamp, per-source outcomes; no-store): the liveness beacon that is deliberately outside the merge gate, so pipeline death and human merge cadence alarm separately.
+15. Push the branch FIRST, then upsert the PR (round-1 fix for the merge race): rebuild `refresh/daily` from main, commit `docs/coverage/register.{json,md}` and `docs/refresh/RUN.json` (candidate generation id, counts, sampled slugs, ledger hash), force-push, then idempotently create-or-update the single PR by head branch, retrying once if it was merged mid-operation. **Supersede-not-stack:** never more than one open refresh PR, always describing the newest candidate.
+16. Dispatch the CI workflow against the `refresh/daily` head SHA (`workflow_dispatch`; GITHUB_TOKEN-created pushes do not trigger `on: push`/`on: pull_request` runs, and bot PRs can sit in approval-required states, so CI is dispatched explicitly and its checks land on the PR SHA with no human action; verified in the walking skeleton).
+17. PR body: counts by source and country, register delta, three sampled new documents with their SOURCE filing URLs and short inline markdown excerpts (candidates are private, so no candidate links), the generation id, and the exact rollback command.
 
-**No-change days:** the register still updates (last-verified timestamps), the branch still gets its daily commit (keepalive, section 11), and the PR notes "no new documents." Merging it is optional; freshness of the SITE only lags when real documents wait.
+**No-change days:** register-only commit on the branch (keepalive for the public corpus repo, the locked mechanism), PR notes "no new documents," no candidate exists, and a merge is a publish no-op by construction (publish checks RUN.json's generation id against the active one).
 
-## 8. publish.yml: activation on merge
+## 10. publish.yml: deploy-first activation on merge
 
-Trigger: push to main with `docs/refresh/RUN.json` in the changeset. Reads RUN.json for the generation id, then:
+Trigger: push to main with `docs/refresh/RUN.json` changed. Concurrency: group `publish`, queued. Reads RUN.json for the candidate generation. If the generation equals the active one (register-only merge), exit green.
 
-1. Copy generation to the live prefix, ETag-diff so only changed objects move: text objects first, then `documents.parquet`, then `register.json`, then **MANIFEST.json LAST** (no-store). The mid-upload cache-poisoning reasoning in `upload-snapshot.sh` carries over verbatim; the long-window variant (a merged-but-not-yet-activated generation must never overwrite live parquet under the old version token) is exactly why the refresh stages to a generation prefix instead of writing live directly.
-2. Fire the Netlify build hook (secret URL). Netlify's build fetches the NEW live MANIFEST + parquet (existing `build.sh` behavior) and regenerates every per-document page.
-3. Poll the Netlify API for the triggered deploy until `ready` (timeout 20 minutes).
-4. **New-slug smoke:** for a sampled slug from RUN.json (preferring a markdown-source NEW document), assert the live doc page returns HTTP 200, the live text JSON has `text_source != 'pages'`, and the site's browse payload reflects the new MANIFEST `generated_at`. Plus the existing live-smoke assertions.
-5. On smoke failure: auto-restore the previous generation's MANIFEST.json and documents.parquet to the live prefix (both retained in generations/), then alarm with the failing evidence. The site returns to its pre-merge state; the 404 exposure is bounded to minutes.
-6. On success: comment the outcome on the merged PR (counts, deploy id, smoke evidence) and close the loop on the run.
+1. Copy the approved candidate from the private bucket to `prospectus/generations/<gen>/snapshot/` on the public data bucket (delta by ledger diff against the prior public generation; server-side copies for unchanged objects). Generations are public the moment they are copied, which is correct: the merge WAS the approval.
+2. Read the current live MANIFEST and record its ETag and generation (the CAS baseline and the rollback target). Record the current Netlify production deploy id (the paired rollback target).
+3. Deploy the site against the NEW generation before activating it (the wrapper README's documented deploy-first-for-additive-releases procedure, automated): set `BUILD_DATA_FETCH_BASE` to the new generation URL via the Netlify API, trigger a deploy through the authenticated API (which returns the exact deploy id; bare build hooks do not, round-1 fix), poll THAT id to `ready` (timeout 20 min). Runtime `PUBLIC_DATA_BASE_URL` is unchanged; the new build simply pre-renders every page including the new documents.
+4. **Activate: one conditional write.** PUT the live MANIFEST (naming the new generation in `data_base`) with If-Match on the ETag from step 2. A concurrent mutation fails the CAS and the run aborts with an alarm instead of interleaving (round-1 fix: no cross-workflow activation transaction existed).
+5. **New-slug smoke, conditional by candidate type:** markdown-source sample asserts HTTP 200 + `text_source='markdown'` + non-empty TOC; a `.txt`-only day asserts `text_source='pages'` (correct by decision); plus MANIFEST-parity and the standing live-smoke assertions.
+6. **On smoke failure, roll back the PAIR:** restore the previous MANIFEST pointer (CAS again) and republish the previous Netlify deploy recorded in step 2. Both generations remain intact and immutable; no invalidation is needed because nothing was overwritten. Alarm with evidence.
+7. On success: comment the outcome on the merged PR (counts, deploy id, smoke evidence).
 
-**Accepted risk, in writing:** between MANIFEST activation (step 1) and the Netlify deploy going live (step 3), the already-deployed site's runtime parquet fetch can show new rows whose pages 404. The window is minutes, bounded by the Netlify build, and ends in a verified state or an auto-rollback. Eliminating it entirely requires build-against-staging plus coordinated deploy activation (`BUILD_DATA_FETCH_BASE` exists for this); that refinement is deliberately deferred until evidence shows the window matters.
+A torn publish (runner dies between steps) is recoverable by re-running publish.yml: every step is idempotent (copies are ledger-driven, activation is CAS-guarded), and until step 4 executes the live site is untouched. **Accepted residual risk:** an unrelated wrapper-repo push (dependency bump) can trigger an independent Netlify build mid-window; it would build against the CURRENT live MANIFEST, which is always internally consistent under this model, so the exposure is a briefly stale-but-coherent site. Documented in the runbook.
 
-## 9. reconcile.yml: weekly and monthly hygiene
+The old accepted-404-window risk from v1 is retired: deploy-first means new pages exist before the pointer exposes new rows. The brief inverse window (new site live seconds before the pointer flips) shows old rows with extra pages present, which is benign.
 
-Weekly (cron, plus dispatch): full-window re-discovery per source to catch anything incremental windows missed; PDIP check (its only scheduled touch, per the interview decision); state integrity audit (DB counts vs manifests vs originals object counts); generation pruning: keep the last 7 daily generations plus the first of each month, delete the rest using the scoped delete permission. Monthly `deep=true` adds: live-prefix object sweep against the current MANIFEST (stale-object report; no automatic deletion, takedown stays deliberate) and a full ETag reconciliation.
+## 11. reconcile.yml: weekly and monthly hygiene
 
-## 10. Alarms: email to lte@, via GitHub issues, zero new secrets
+Weekly (cron + dispatch), under the same fenced state lock: full-window re-discovery per source (catches incremental-window misses AND provides the independent cross-check for the silent-zero-finds alarm, section 14); **PDIP full cycle** (discover/download/parse/ingest, state-writing; its results ride the next daily candidate; this is PDIP's only scheduled touch); quarantine retry (each quarantined document retried, max 3 attempts, then permanent with reason; `dequarantine` dispatch input forces a retry); FTS rebuild; state integrity audit (DB vs manifests vs originals counts vs cutover baseline); pruning with PINS: never delete the generation named by the live MANIFEST, its predecessor, or the open PR's candidate; otherwise keep the last 7 daily generations plus the first of each month; prune state revisions to the last 7. Monthly `deep=true` adds a full ledger-vs-objects sweep of retained generations and a stale-object report (no automatic deletion).
 
-**Mechanism.** Every workflow's failure handler (and every explicit staleness check) creates or comments on a single pinned issue labeled `alarm` in the corpus repo. GitHub emails issue activity to lte@tealinsights.com reliably (subscription confirmed once during the walking skeleton). This gives email delivery with no SMTP credential to rot, plus a public, timestamped alarm history for free. Default Actions failure emails remain as backstop.
+## 12. takedown.yml: designed, gated, durable
 
-**Per-source freshness thresholds (from the register, enforced in two places):**
+These are legal documents; takedown must be executable, named, fast, and durable (a delete that the next refresh silently reintroduces is not a takedown; round-1 convergent finding).
+
+- **Trigger:** `workflow_dispatch` with `storage_key` + `reason`, protected by a GitHub Environment requiring Teal's approval, so no repo-write actor can trigger an unreviewed deletion.
+- **Mechanism:** append a suppression record to `state/suppressions.jsonl` (under the state lock). The snapshot builder excludes suppressed documents, so every FUTURE generation omits the document by construction. Then delete the document's text objects from all RETAINED public generations, issue a CloudFront invalidation for those paths (they were immutable-cached), and record the takedown in the register. The parquet row disappears with the next daily publish; the runbook documents the dispatch-a-refresh-now option when same-hour metadata removal matters.
+- **IAM:** its own role; `s3:DeleteObject` scoped to `prospectus/generations/*/snapshot/text/*` plus `cloudfront:CreateInvalidation` scoped to the distribution ARN. Reconcile's pruning role deletes only whole non-pinned generation prefixes and state revisions; GHA's incoming cleanup deletes only `incoming/*`. Three delete scopes, three roles, no overlap with publish's write scope.
+
+## 13. Secrets and supply chain
+
+- **AWS via OIDC only** (no long-lived AWS keys in Actions). Distinct roles: refresh (pipeline bucket RW + `health/` write, NO public snapshot/generations write), publish (public generations write + live MANIFEST write, no delete), reconcile (pruning deletes as scoped above), takedown (as scoped above). **Trust-policy acceptance:** each role's trust condition requires `aud=sts.amazonaws.com` and the exact repository + `refs/heads/main` subject; verified at cutover.
+- **Netlify:** `NETLIFY_AUTH_TOKEN` (deploy trigger + poll + env set + deploy restore) with scope, expiry, and rotation recorded in the runbook; replaces the bare build-hook URL.
+- All actions SHA-pinned; no `pull_request_target` anywhere; fork PRs get neither secrets nor a write token (platform default, kept).
+- **Dependabot in the same PR as refresh.yml,** honestly scoped: `github-actions` ecosystem automated; Python dependencies resolve through `uv.lock`, which Dependabot's pip ecosystem does not manage, so Python bumps stay deliberate and manual, and Docling moves ONLY via a minted reparse-campaign issue (round-1 fix: the previous "Dependabot ignore rule for docling" guarded a file Dependabot never touches).
+- Mini feeder credential (future): IAM user limited to `s3:PutObject` on `incoming/*`, deny-tested.
+
+## 14. Alarms: email to lte@, per-repo issues, zero new secrets
+
+**Mechanism.** Each repo's workflows create or comment on their OWN pinned `alarm` issue (a workflow's GITHUB_TOKEN cannot write another repo's issues; round-1 fix). Teal subscribes to both issues once (verified in the walking skeleton). Alarm lifecycle: a firing condition comments with evidence; the next fully green run of the same workflow comments "clear" and closes; a reopened issue is therefore always a live condition.
+
+**Signals:**
 
 | Signal | Threshold | Where checked |
 |---|---|---|
-| Discovery last succeeded, per active source | > 3 days red | refresh.yml (self) AND wrapper live-smoke (independent) |
-| Live MANIFEST `generated_at` age | > 8 days red | wrapper live-smoke |
-| Parse quarantine backlog | > 500 red | refresh.yml |
+| Pipeline liveness: `health/refresh.json` age | > 2 days red | wrapper live-smoke (independent dead-man) |
+| Publication lag: live MANIFEST `generated_at` age | > 4 days nudge, > 8 days red | wrapper live-smoke |
+| Discovery last succeeded, per active source | > 3 days red | refresh.yml self-check + live-smoke via live register |
+| Silent zero-finds regression | active source with 0 new docs for 21 consecutive days AND weekly full-window reconcile also 0 | reconcile.yml |
+| `parse_backlog` (not yet attempted) | > 500 red | refresh.yml |
+| `quarantine` (attempted, failed) | any growth week-over-week red | reconcile.yml |
 | Walled-source incoming age (once feeder exists) | > 7 days red | live-smoke via register |
 
-**Dead-man principle.** The corpus repo cannot alarm its own total death (disabled cron, revoked credentials). The wrapper's live-smoke reads the PUBLIC live `register.json` and MANIFEST age, so a silently dead refresh pipeline turns red from a different repo on a different schedule within 8 days worst case. Register rows marked "adapter pending" or "feeder pending" are exempt from the per-source threshold so known gaps do not cry wolf.
+The liveness/lag split (round-1 fix) means Teal traveling does not fire the "pipeline is dead" alarm: health stays fresh, only the lag nudge escalates. `register.json` and `health/refresh.json` are written with explicit `Cache-Control: no-store` (metadata replacement on copy; server-side copies preserve metadata by default and would otherwise freeze the freshness the alarms read). "Adapter pending" / "feeder pending" register rows are exempt from per-source thresholds.
 
-## 11. Keepalive, without ritual
+## 15. Keepalive, without ritual
 
-GitHub disables scheduled workflows in repos with no activity for 60 days. The refresh workflow's daily register commit to `refresh/daily` is repo activity, so the corpus repo's clock resets every run even when nothing merges (the locked keepalive decision, implemented). The WRAPPER repo has the same clock and rarely gets commits: its live-smoke workflow therefore force-pushes a one-line heartbeat file to a non-main branch (`smoke-heartbeat`) once a week. Non-main, because wrapper main pushes trigger Netlify deploys. Both keepalives are workflow-owned artifacts, not remembered chores; both are asserted in the acceptance criteria.
+GitHub auto-disables scheduled workflows after 60 days of repository inactivity IN PUBLIC REPOSITORIES ONLY (web-verified against GitHub docs this session). The corpus repo (public) is covered by the locked mechanism: the daily register commit to `refresh/daily` is repository activity every run, merged or not. The wrapper repo is private, so its live-smoke cron is not subject to the rule and needs no heartbeat (v1's wrapper heartbeat branch is dropped as unnecessary; round-1 correction).
 
-## 12. Determinism: pinning and change hashing
+## 16. Non-goals (confirmed by Teal 2026-07-18; changes go through the pivot ceremony)
 
-- **Docling pinned by uv.lock** (pyproject carries a floor, `docling>=2.86.0`; the lock is the authority and refresh runs `uv sync --frozen`). Each parsed record stores `parse_tool` + `parse_version` (already in ParseResult). PDF model weights are cached keyed on the Docling version.
-- **Change detection hashes source bytes, never markdown.** `source_sha256` of the fetched artifact is recorded at download; a document re-parses only when its source hash changes or a deliberate reparse campaign says so. Docling output nondeterminism across versions therefore cannot cause churn: same source bytes, no re-parse, byte-identical snapshot text, and the ETag-diff upload moves nothing.
-- **Docling upgrades are deliberate:** bumping the lock requires a reparse-campaign decision (a minted issue), never a side effect of a routine dependency PR. The Dependabot config carries an ignore rule for docling so version bumps arrive only through those deliberate issues.
-- `gzip -n` staging (existing) keeps compressed bytes stable so the ETag-diff mechanism works at all.
+1. **grep/extract clause steps in the daily run.**
+2. **New source adapters** (Dublin, ESMA, SGX, LSE/TEA-1008): the next Stage 1 spec.
+3. **Lane A items:** 51-doc reparse, 19 no-text recoveries, new-this-month view, feeds, vocabulary, issuer canonicalization.
+4. **Lane C items:** docs site, quickstart CI, Zenodo releases. Lane B publishes the register; Lane C surfaces it.
+5. **Auto-merge flip** (separate issue; locked DoD).
+6. **Corpus-wide search and clause views.**
+7. **MotherDuck migration.**
+8. **The e2e suite itself** (Lane D; auto-merge precondition, not v1's).
 
-## 13. Non-goals (confirmed by Teal, 2026-07-18; changes go through the pivot ceremony)
+Carve-out recorded: v1 of this spec also excluded "any change to the explorer," which round 1 proved untenable. Gate 2 touches the explorer DATA LAYER (MANIFEST field + URL resolution) and the wrapper build script; the UI remains untouched. Also still excluded: Prefect/Dagster/Luigi, Selenium in the GHA lane.
 
-1. **grep/extract clause steps in the daily run.** The snapshot consumes documents, pages, markdown only; extraction reruns when the clause track needs it.
-2. **New source adapters** (Dublin, ESMA, SGX, LSE/TEA-1008). Dublin and the onboarding pattern are the next Stage 1 spec.
-3. **Lane A items:** the 51-document one-off reparse, 19 no-text recoveries, new-this-month view, feeds, vocabulary, issuer canonicalization. Gate 0 fixes the recurring path only.
-4. **Lane C items:** docs site, quickstart CI, Zenodo releases. Lane B publishes `register.json`; Lane C surfaces it.
-5. **Auto-merge flip** (separate issue; e2e suite + real-data smoke + clean cycles as DoD; locked).
-6. **Corpus-wide search and clause views** (parked, unchanged).
-7. **MotherDuck migration.** State is S3-canonical by decision; revisit only if the shuttle mechanics fail in practice.
-8. **The e2e suite itself** (Lane D; precondition for auto-merge, not for v1).
+## 17. Mini feeder contract (specified now, built when the first walled source needs it)
 
-Also explicitly not here: Prefect/Dagster/Luigi (Makefile-and-Actions only, ratified decision 9), Selenium anywhere in the GHA lane, and any change to the explorer UI.
+Unchanged from v1 except the cleanup scope: launchd on the Mini, one job per walled source, fetch-and-stage only (discover + download with the repo's adapter code), writing originals + manifest-fragment JSONL to `incoming/<source>/<run-ts>/`; credential is PutObject on `incoming/*` and nothing else; GHA validates (hash, size, extension, source enum) and ingests through the identical path, then deletes consumed fragments under its own incoming scope, idempotently keyed by fragment id in state. Deliberately NOT a self-hosted runner. Health observed via the register's walled-source staleness, no Mini-side monitoring. v1 ships the contract and the no-op consumption step.
 
-## 14. Mini feeder contract (specified now, built when the first walled source needs it)
+## 18. LuxSE hosted-runner spike (early; gates the source list, ordered before cron-on)
 
-- Runs on the Mac mini under launchd, one job per walled source, reusing the repo's adapter code in fetch-only mode: discover + download, then write originals plus a manifest-fragment JSONL to `incoming/<source>/<run-ts>/` on the pipeline bucket.
-- Credentials: a dedicated IAM user whose ONLY permission is `s3:PutObject` on `incoming/*`. No reads of state, no deletes, no data-bucket access. Key rotation noted in the runbook.
-- **GHA remains the sole ingester and publisher** (locked): the refresh run validates and ingests incoming artifacts through the identical parse/ingest path; nothing the Mini writes reaches the site without passing the same gates.
-- The Mini is deliberately NOT a self-hosted runner (public-repo fork-PR exposure, named in the roadmap).
-- Health is observed, not monitored: a dead Mini shows up as walled-source staleness in the register and trips the live-smoke threshold. No heartbeat infrastructure on the Mini itself.
-- v1 ships this contract on paper and the `incoming/` consumption step in refresh.yml as a no-op scan. The first implementation lands with whichever walled source arrives first (LuxSE if the spike fails; SGX with wave 2 otherwise).
+Unchanged from v1: from plain `ubuntu-latest`, real discovery queries + two document downloads with production headers and rate limits; pass = LuxSE enters the daily list, fail = Mini feeder job 1 with a "feeder pending" register row. Also measures Docling PDF cold/warm cache parse time (budget evidence) and asserts the HTML no-model claim. Records the LuxSE ToS conclusion on its issue. Its outcome is a DoD line item and is sequenced BEFORE the cron-on DoD item.
 
-## 15. LuxSE hosted-runner spike (early task, timeboxed to one session)
+## 19. Walking skeleton (slice 1: one new real document, end to end)
 
-From a plain `ubuntu-latest` runner: execute real LuxSE discovery queries and download two known documents with production headers and rate limits; record HTTP outcomes. Pass: LuxSE enters the daily source list from GHA. Fail (403 or challenge): LuxSE becomes Mini feeder job 1 and the register marks it "feeder pending" until then. The spike also measures a Docling PDF parse cold vs warm weights cache (runtime budget evidence) and asserts the HTML lane's no-model claim (feeds Gate 0 CI). Its one-line LuxSE terms-of-use conclusion is recorded on the spike issue per the roadmap's per-source ToS gate. Spike output: a comment on its Linear issue plus a one-line addendum to this spec's section 3.
+Gates 0-2 merged. refresh.yml exists with EDGAR only, dispatch-triggered, cron off, state bootstrapped by cutover. One dispatch: fenced lock, state restore, discover a real new EDGAR filing (`since` override permitted), download, parse via Gate 0, ingest via Gate 1, register, snapshot, ledger diff, private candidate staged (transfer log shows delta behavior: a handful of uploads, thousands of server-side copies), state revision committed, health beacon written, branch pushed, PR upserted, CI dispatched and green on the PR. Teal merges. publish.yml copies the public generation, deploys against it, polls the exact deploy id, CAS-flips the MANIFEST, and the smoke passes: the new document's live page returns 200 with `text_source='markdown'`. Then two drills: a forced failure on a scratch branch fires the corpus alarm issue and Teal confirms the email; a rehearsed publish rollback (pointer + Netlify deploy pair) restores the prior site state and the smoke re-verifies it.
 
-## 16. Walking skeleton (slice 1: one new real document, end to end)
+Proves: fenced state shuttle, both gates in the production path, ledger delta, private candidacy, PR + dispatched CI, deploy-first activation, CAS flip, conditional smoke, paired rollback, alarm. Everything after (NSM, LuxSE, cron-on, reconcile, pruning, takedown drill) is addition, not architecture.
 
-The smallest daily run that publishes one new real document with zero manual steps beyond the merge:
+## 20. Definition of done (whole build)
 
-refresh.yml exists with EDGAR only, dispatch-triggered (cron stays off), state bootstrapped by the cutover. One dispatch run: acquires the lock, restores state, discovers a real new EDGAR filing (`since` override permitted to guarantee one), downloads, parses through the Gate 0 path (markdown sidecar present), ingests, regenerates the register, builds the snapshot, stages a complete generation whose transfer log shows the delta mechanism worked (a handful of uploads, thousands of server-side copies), pushes state, opens the PR with counts and sampled links. Teal merges. publish.yml activates MANIFEST-last, fires the Netlify rebuild, polls the deploy, and the new-slug smoke passes against production: the new document's page returns 200 with `text_source='markdown'`. Separately, a forced failure on a scratch branch fires the alarm issue and Teal confirms the email landed.
+- Gates 0, 1, and 2 merged first, each with its acceptance criteria green.
+- Cutover executed with recorded baselines; hosted-runner restore reproduces the counts; pipeline bucket public-access check passes; OIDC trust-policy assertions pass.
+- Walking skeleton executed against production with a real document (link on TEA-1031), including the alarm drill and the paired rollback drill.
+- LuxSE spike run and dispositioned (before cron-on).
+- Cron on; five consecutive scheduled runs with zero manual intervention besides PR merges; at least one published a real new document; Netlify credit burn for the window recorded against plan limits.
+- Takedown drill: suppression ledger + generation deletes + invalidation executed against a test object; register records it.
+- `docs/refresh-runbook.md` written: local takeover, state-revision recovery, publish rollback (the pair), torn-publish re-run, takedown, secret rotation (Netlify token; future Mini key), spike outcomes.
+- TEA-906 closed as superseded; auto-merge flip issue minted with its locked DoD.
+- Build metrics line per branch in `docs/build-metrics.md`.
 
-The skeleton proves: state shuttle, lock, Gate 0 in the production path, incremental staging, PR gate, activation ordering, rebuild, smoke, alarm. Everything after (NSM, LuxSE, cron-on, reconcile, pruning) is addition, not architecture.
+## 21. Acceptance criteria (testable, when/then)
 
-## 17. Definition of done (whole build)
+1. When refresh runs on a day with no new filings, then it completes green, commits a register whose timestamps moved, maintains exactly one PR, creates NO candidate, and a merge of that PR is a publish no-op.
+2. When a new EDGAR `.htm` filing appears, then the next run's PR lists it, the private candidate's text JSON has `text_source='markdown'`, and after merge its live page returns 200 with rendered text under the new generation URL.
+3. When a second refresh triggers while one runs, then it queues (never cancels the lock holder); when a non-GHA writer holds an unexpired lock, then the run aborts with an alarm touching nothing; when a broken-lease zombie writer resumes, then its fenced STATE commit fails and fresher state survives.
+4. When a refresh run dies at any step, then the public site is byte-identical to before the run and the next run proceeds normally from the last committed state revision; when a publish run dies at any step, then re-running publish.yml converges to the same activated generation with no manual repair.
+5. When a parse fails, then the document lands in `quarantine` with a reason, is excluded from the snapshot, is retried by reconcile at most 3 times, and the run stays green; when quarantine grows week-over-week, then the alarm fires.
+6. When a document's source bytes change at the same storage key, then ingest replaces its row and derived rows and the next candidate's ledger shows exactly that slug changed; when bytes are unchanged, then the ledger diff is empty for it and it is server-side copied, never uploaded.
+7. When a refresh PR is unmerged and a new run completes, then the PR describes the newest candidate, exactly one refresh PR exists, and pruning never touches the live generation, its predecessor, or the open PR's candidate.
+8. When Teal merges, then publish deploys against the new generation BEFORE the CAS pointer flip, and the conditional smoke passes, or the MANIFEST pointer and the Netlify deploy are BOTH restored with an alarm.
+9. When `health/refresh.json` is older than 2 days, or discovery for an active source has not succeeded for 3 days, or live MANIFEST age exceeds 8 days, then the wrapper live-smoke turns red and its alarm issue emails lte@; when an active source reports zero new documents for 21 days and the weekly full-window reconcile also finds zero, then the regression alarm fires.
+10. When any workflow fails, then its repo's alarm issue receives a comment naming the workflow, run URL, and failing step; when the condition clears, then the issue is closed with a clear comment.
+11. When any scheduled run completes, then the corpus repo received a commit within that run (keepalive by register), asserted per-run rather than waiting out 60 days.
+12. When takedown runs with an approved dispatch, then the suppression ledger gains the record, the document's text objects are deleted from all retained generations, the CloudFront invalidation is issued, the register records it, and the NEXT candidate contains no trace of the document.
+13. When refresh.yml, publish.yml, reconcile.yml, and takedown.yml are inspected, then every third-party action is SHA-pinned, AWS access is OIDC-only with the four scoped roles, no workflow uses `pull_request_target`, and the Dependabot config (github-actions ecosystem) landed in the same PR as refresh.yml.
+14. When the Mini feeder lane is later built, then its credential can write `incoming/*` and nothing else (deny-tested), and GHA ingestion validates hash, size, and extension before ingest.
+15. When the cutover completes, then a hosted runner restoring from S3 alone reproduces the recorded Mac baseline counts exactly.
 
-- Gate 0 merged first, all its acceptance criteria green.
-- Walking skeleton executed against production with a real document (link recorded on TEA-1031).
-- Cron on; five consecutive scheduled runs with zero manual intervention besides PR merges; at least one published a real new document.
-- One forced-failure drill: alarm issue created, email received, confirmed by Teal.
-- Freshness assertions live in the wrapper smoke; both keepalives observed working (register commit; wrapper heartbeat).
-- Takedown drill: the scoped-delete workflow removes a test object from the live prefix and the runbook records the procedure.
-- `docs/refresh-runbook.md` written: takeover procedure, rollback, takedown, secret rotation, spike outcomes.
-- TEA-906 closed as superseded; the auto-merge flip issue minted with its locked DoD; Mini feeder and LuxSE outcomes recorded.
-- Build metrics line per branch in `docs/build-metrics.md` (shell discipline).
+## 22. Council round 1 disposition (2026-07-18)
 
-## 18. Acceptance criteria (testable, when/then)
+Three seats: Codex gpt-5.6-sol xhigh (mechanism lens, NOT SOUND), Opus 4.8 max (completeness lens, SOUND WITH CHANGES), Sonnet 5 max (crash/data-loss lens, SOUND WITH CHANGES; fielded because the Gemini/agy lane refused headless file reads; fix noted for next council). Convergence-triaged; every code-level claim chair-verified against the repos before acceptance; the one external factual dispute (60-day rule scope) web-verified against GitHub docs.
 
-1. When refresh.yml runs on a day with no new filings, then it completes green, commits a register whose timestamps moved, updates or opens exactly one PR, and transfers at most the parquet, MANIFEST, and register to the generation (text delta zero).
-2. When a new EDGAR `.htm` filing appears, then the next run's PR lists it, its staged text JSON has `text_source='markdown'`, and after merge its live page returns 200 with rendered text.
-3. When two refresh runs are triggered concurrently, then the concurrency group cancels one; when a non-GHA writer holds the lock, then the run aborts with an alarm and touches nothing.
-4. When a run is killed mid-flight at any step, then the live site is byte-identical to before the run, and the next run creates a fresh generation; partial generations are inert and pruned by reconcile.
-5. When a parse fails, then the document is quarantined with a reason in the register, the run stays green, and the document does not appear in the snapshot.
-6. When the same source bytes are re-downloaded, then no re-parse occurs and the generation's text delta for that document is zero (source-hash change detection).
-7. When a refresh PR is unmerged and a new run completes, then the old PR content is superseded in place, exactly one refresh PR exists, and the superseded generation is pruned only after 7 days.
-8. When Teal merges the PR, then publish.yml activates the generation with MANIFEST last, and the new-slug smoke passes or MANIFEST + parquet auto-roll back with an alarm.
-9. When discovery for an active source has not succeeded for 3 days, or live MANIFEST age exceeds 8 days, then the wrapper live-smoke turns red and the alarm issue emails lte@.
-10. When any workflow fails, then the alarm issue receives a comment naming the workflow, run URL, and failing step.
-11. When 60 days pass with no human commits, then scheduled workflows in BOTH repos remain enabled (register commits; wrapper heartbeat branch).
-12. When the takedown workflow runs with a slug input, then exactly that object set is deleted from the live prefix using the scoped permission, and the register records the takedown.
-13. When refresh.yml is inspected, then every third-party action is SHA-pinned, AWS access is via OIDC role assumption (no long-lived AWS keys in Actions secrets), no workflow uses `pull_request_target`, and Dependabot config for github-actions + pip landed in the same PR that created refresh.yml.
-14. When the Mini feeder lane is later built, then its IAM credential can write `incoming/*` and nothing else (deny-tested), and GHA ingestion validates hash, size, and extension before ingest.
+**Accepted CRITICALs (all):** missing build-pages/build-markdown in the sequence (Opus + Codex + Sonnet, now section 7 and Gate 1); ingest discards re-parsed content (Sonnet + Codex, Gate 1); parse-skip statelessness (Sonnet, Gate 1 + state/parsed); mutable-live activation, CDN old-token poisoning, rollback unsoundness, TOCTOU copy race, and missing activation CAS (Codex x4 + Opus CloudFront finding, now the generation-addressed model, sections 4/8/10); pruning unpinned (Opus + Codex, section 11); STATE.json non-atomic commit (Codex, immutable state revisions); completeness assertion aborts on no-text docs (Codex, ledger-based assert); PR identity / CI never runs (Opus + Codex, dispatched CI); public candidate leak (Codex, private staging); zombie lock fencing (Sonnet, fenced commit); slug-collision permanent abort (Sonnet, ingest quarantine); takedown undesigned (all three, section 12).
 
-## 19. Risks (each mitigated or accepted, in writing)
+**Accepted IMPORTANTs:** deploy-first ordering per the wrapper's own runbook (Opus); paired Netlify rollback + drill (Opus + Sonnet); ETag/multipart unreliability, replaced by the content ledger (Codex + Opus); cancel-in-progress orphaning (Opus + Codex); Netlify build hooks return no deploy id, API trigger instead (Codex); cross-repo alarm 403, per-repo issues (Codex); register/health cache-control metadata (Codex); PDIP reconcile disposition (Codex); quarantine/backlog metric split + retry + growth alarm (Opus + Sonnet); liveness vs merge-cadence split via the health beacon (Opus); silent zero-finds heuristic (Sonnet); originals streaming semantics (Sonnet); OIDC trust-policy assertions (Codex); dual-parser provenance + degradation (Opus); FTS daily skip + budgets (Opus + Sonnet); versioning lifecycle expiry (Opus); AC13 broadened (Sonnet).
+
+**Accepted SUGGESTIONs:** supersede merge race, push-first upsert (Codex); conditional smoke by candidate type (Codex); wrapper heartbeat dropped after web verification (Codex); .gitignore-not-pre-commit wording (Sonnet); STATE sha names the compressed artifact (Sonnet); runbook splits state-recovery vs publish-rollback (Sonnet); Netlify credit acknowledgment in DoD (Sonnet + Opus); cutover AC + parsed-tree disposition + spike-before-cron ordering (Opus); Dependabot uv-ecosystem honesty (Opus).
+
+**Declined, with reasons:** Opus's optional RSS/source-count spot-check as a second zero-finds signal (adds a new scraping surface for marginal signal; the reconcile cross-check achieves the alarm with existing code; revisit if the heuristic false-negatives in practice). Codex's immutable owner/repo IDs in OIDC subjects (recorded as recommended hardening in the runbook, not an acceptance criterion; standard repo+branch subjects meet the bar for a solo-operator public repo).
+
+## 23. Risks (each mitigated or accepted, in writing)
 
 | # | Risk | Disposition |
 |---|---|---|
-| 1 | GHA cron delayed (5-30 min) or silently disabled | Mitigated: off-peak minute; keepalive commits both repos; cross-repo dead-man freshness alarm; dispatch always available |
-| 2 | State push torn mid-upload corrupts the DB | Mitigated: STATE.json-last commit pointer; bucket versioning; sha verification on restore; weekly integrity audit |
-| 3 | DB (7.1 GB) outgrows the 10 GB Actions cache | Mitigated: compaction at cutover with recorded sizes; zstd; size in run metrics; pure-S3 pull works (slower) as fallback |
-| 4 | Docling version drift re-parses the world or changes bytes | Mitigated: source-hash change detection; uv.lock pin; upgrades only via deliberate reparse-campaign issue |
-| 5 | Big filing day blows the 6h job cap | Mitigated: 200-doc parse budget with carryover; backlog metric alarms at 500 |
-| 6 | Minutes-long 404 window after activation before rebuild is live | Accepted: bounded by Netlify build time, ends in verified state or auto-rollback; build-against-staging refinement deferred until evidence |
-| 7 | Source API changes break discovery | Mitigated: circuit breakers exist; failure alarms rather than corrupts (fail-closed); quarantine absorbs partial damage |
-| 8 | Secrets on a public repo | Mitigated: OIDC (no stored AWS keys); scoped roles per workflow; SHA-pinned actions; no pull_request_target; secrets absent in fork PRs by platform default |
-| 9 | State bucket accidentally public | Mitigated: separate bucket, Block Public Access on, acceptance check in cutover |
-| 10 | Netlify build hook fires but deploy fails | Mitigated: publish polls deploy state; timeout alarms; MANIFEST rollback restores coherence |
-| 11 | LuxSE spike fails with no feeder built | Accepted: LuxSE stays manual with a "feeder pending" register row and a minted feeder issue; EDGAR/NSM freshness unaffected |
-| 12 | Teal stops merging (travel, illness) | Accepted: site goes stale, staleness alarms fire by design; data keeps accumulating in state; nothing breaks. The SLO is a target, not a promise, until auto-merge is earned |
+| 1 | GHA cron delayed or (public repo) auto-disabled | Mitigated: off-peak minute; per-run keepalive assertion; independent wrapper dead-man on the health beacon; dispatch fallback |
+| 2 | State corruption in the shuttle | Mitigated: immutable revisions + fenced pointer commit; sha-verified restore; bucket versioning with 14-day noncurrent expiry; weekly integrity audit vs cutover baseline |
+| 3 | DB outgrows the 10 GB Actions cache | Mitigated: FTS out of the daily path + cutover compaction (root cause addressed); per-run size metric with 9 GB alarm; pure-S3 restore is the correctness path regardless |
+| 4 | Docling drift re-parses the world or changes bytes | Mitigated: hash-gated re-parse; uv.lock authority; upgrades only via reparse-campaign issues; ledger diff means unchanged content moves zero bytes |
+| 5 | Big filing day blows the job cap | Mitigated: 200-doc budget with carryover; backlog alarm at 500; spike measures per-doc parse cost |
+| 6 | Stale-but-coherent site window from an independent wrapper build mid-publish | Accepted: the generation model makes any MANIFEST the build reads internally consistent; residual is brief staleness; runbook note |
+| 7 | Source API changes break discovery loudly | Mitigated: circuit breakers; failure alarms; quarantine absorbs partial damage |
+| 8 | Source API changes break discovery SILENTLY (empty results) | Mitigated: 21-day zero-finds heuristic cross-checked by weekly full-window reconcile |
+| 9 | Secrets on a public repo | Mitigated: OIDC-only with per-workflow roles and trust-policy assertions; SHA-pinned actions; no pull_request_target; Netlify token scoped and rotation-documented |
+| 10 | State bucket accidentally public | Mitigated: separate bucket, Block Public Access, cutover check |
+| 11 | Netlify deploy fails or hangs | Mitigated: exact-deploy-id polling with timeout; failure aborts BEFORE the pointer flip, so the live site never references a missing build |
+| 12 | LuxSE spike fails with no feeder built | Accepted: LuxSE stays manual with "feeder pending" and a minted feeder issue; EDGAR/NSM unaffected |
+| 13 | Teal stops merging (travel) | Accepted: publication lags and the lag nudge escalates by design; pipeline liveness stays green; data accumulates in state; SLO is a target until auto-merge is earned |
+| 14 | Netlify credit exhaustion mid-month from daily deploys | Mitigated: ~30 builds/month checked against plan limits at skeleton; burn recorded in DoD; publish failure is fail-closed and alarmed either way |
 
-## 20. Explainer principles (adopted / skipped on purpose)
+## 24. Budgets
 
-From `building-big-things.md`: walking skeleton (section 16), pre-mortem framing (section 19), small batches (Gate 0 as its own PR before any scheduler), modularity via the feeder contract's one-way interface. Skipped: reference-class calendar forecasting (the shell plans in dependency order, never weeks). From `writing-for-busy-readers.md`: BLUF, skim-test headings, tables for enumerable facts. `interface-design-for-small-data-tools.md`: skipped (no human interface in this lane) except status visibility, which the PR body and register implement.
+Typical daily run: under 30 minutes wall-clock (no FTS rebuild, ledger-delta upload, warm caches); hard job timeout 5h30m. Storage: generations ~2.5 GB each, 7 daily + 12 monthly retained ≈ 50 GB ≈ low single-digit dollars/month; state revisions 7 × ~2-3 GB compressed; noncurrent versions expire at 14 days. Requests and transfer: delta-driven, cents. Netlify: ~30 production builds/month at roughly 5 min each, within plan; verified at skeleton. All figures recorded per run in the metrics so drift is visible, not discovered.
 
-## 21. Licensing and terms posture
+## 25. Explainer principles (adopted / skipped on purpose)
 
-No new components; the pipeline and workflows stay MIT in the open repo, and public Actions runs are themselves the open-core proof. EDGAR and NSM are documented public APIs used within their published fair-access rules (rate limits and User-Agent already enforced from config.toml). LuxSE gets its one-line terms-of-use conclusion recorded on the spike issue before it enters the daily loop, per the roadmap's per-source ToS gate. The register and snapshot remain public data; the pipeline bucket is private infrastructure, not a publication.
+From `building-big-things.md`: walking skeleton (section 19); pre-mortem framing (sections 22-23); small batches (three gates as separate PRs before the scheduler); modularity (feeder contract, four-role IAM separation). Skipped: reference-class calendar forecasting (dependency order, never weeks). From `writing-for-busy-readers.md`: BLUF, skim-test headings, tables for enumerable facts. `interface-design-for-small-data-tools.md`: skipped (no human interface) except status visibility (PR body, register, health beacon).
+
+## 26. Licensing and terms posture
+
+No new components; pipeline and workflows stay MIT in the open repo; public Actions runs are the open-core proof. EDGAR and NSM are documented public APIs used within their published fair-access rules (rate limits and User-Agent from config.toml). LuxSE's one-line ToS conclusion lands on the spike issue before it enters the daily loop. The register and snapshot generations are public data; the pipeline bucket is private infrastructure, not a publication.
