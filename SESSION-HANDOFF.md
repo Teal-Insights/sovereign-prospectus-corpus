@@ -26,8 +26,9 @@
   (browse filter, provenance line, dedup soft key, feeds, data
   dictionary); the 947 title-opaque D318 docs are the standing
   text-sampling backlog.
-- **Linear:** no issue existed (the roadmap section 9 Launch 0 batch is
-  still unminted); fold this into that batch when minted.
+- **Linear:** the Launch 0 batch is minted and verified (milestone
+  "Consolidation: self-running flagship", TEA-1032..1056); the vocabulary
+  and canonicalization issues in that batch carry this work forward.
 
 ## Session 2026-07-18 (latest): Lane B Stage 1 spec (self-running corpus)
 
@@ -40,13 +41,13 @@
   blocked on headless read permissions), round 2 (Codex NOT SOUND on
   five revision seams), round 3 (Codex SOUND WITH CHANGES, 11/12
   closed, final race closed in v3.1). Full dispositions in spec s22.
-- **Linear:** TEA-1031 minted, claimed, closed Done (the roadmap
-  section 9 Launch 0 batch was never minted; still to mint). Supersedes
+- **Linear:** TEA-1031 minted, claimed, closed Done. The roadmap
+  section 9 Launch 0 batch is minted and verified (milestone
+  "Consolidation: self-running flagship", TEA-1032..1056). Supersedes
   TEA-906 when refresh.yml lands.
 - **Pending:** Stage 2 planning session (separate, per the shell);
-  mint the Launch 0 consolidation batch; Teal fix-when-convenient:
-  `agy` headless permissions.allow (walkthrough given in-session) and
-  `mgrep login`.
+  Teal fix-when-convenient: `agy` headless permissions.allow
+  (walkthrough given in-session) and `mgrep login`.
 
 ## Session 2026-07-10: Stage 5 integration audit of the pre-Monday batch
 
